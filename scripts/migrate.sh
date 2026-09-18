@@ -2,18 +2,11 @@
 # migrate.sh — goose over /migrations, plain SQL up/down, no model diffing
 # (SPEC §3.1, BUILD task 0.3). Subcommands: up | down | status | updown-up
 #
-# goose is a pinned release binary in bin/ (gitignored), fetched on first use
-# and verified against its published sha256. Override with GOOSE=/path/to/goose.
-# When go.mod acquires its dependencies (task 0.8), switch this to
-# `go tool goose` so the pin lives in go.mod and the license gate sees it.
+# goose is a pinned release binary in bin/ (gitignored), fetched and sha256-
+# verified by scripts/tool.sh. Override with GOOSE=/path/to/goose. See tool.sh
+# for why these two tools are pinned binaries rather than `go tool` entries.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-
-GOOSE_VERSION=v3.28.0
-declare -A GOOSE_SHA=(
-  [linux_x86_64]=ab073515b78ef345f64f018c0d79aa7db50106806efc686dda7181253765ae13
-  [linux_arm64]=3968855c11b4093af271c5226909789ea294468f6e50203d738b7504995b6247
-)
 
 load_dotenv() {
   local file=$1 line key val
@@ -32,20 +25,9 @@ load_dotenv .env
 die() { echo "migrate.sh: $*" >&2; exit 1; }
 [[ -n ${DATABASE_URL:-} ]] || die "DATABASE_URL is unset (see .env.example)"
 
-ensure_goose() {
-  if [[ -n ${GOOSE:-} ]]; then return 0; fi
-  GOOSE=bin/goose
-  if [[ -x $GOOSE ]] && [[ $("$GOOSE" --version 2>/dev/null) == *"$GOOSE_VERSION"* ]]; then return 0; fi
-  local arch; arch=$(uname -m)
-  case $arch in x86_64|amd64) arch=x86_64 ;; aarch64|arm64) arch=arm64 ;; *) die "no goose pin for arch $arch" ;; esac
-  local key=linux_$arch url=https://github.com/pressly/goose/releases/download/$GOOSE_VERSION/goose_linux_$arch
-  mkdir -p bin
-  echo "fetching goose $GOOSE_VERSION ($key) ..."
-  curl -fsSL -o "$GOOSE.tmp" "$url"
-  echo "${GOOSE_SHA[$key]}  $GOOSE.tmp" | sha256sum -c --quiet - || die "goose checksum mismatch — refusing to run it"
-  chmod +x "$GOOSE.tmp" && mv "$GOOSE.tmp" "$GOOSE"
-}
-ensure_goose
+# shellcheck source=scripts/tool.sh
+source scripts/tool.sh
+GOOSE=${GOOSE:-$(tool_path goose)}
 
 goose() { "$GOOSE" -dir migrations -table goose_db_version postgres "$DATABASE_URL" "$@"; }
 sql()   { psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }

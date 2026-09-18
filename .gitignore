@@ -16,3 +16,11 @@ coverage*
 .vscode/
 *.swp
 .DS_Store
+
+# sqlc-diff scratch config (scripts/sqlc.sh)
+.sqlc-diff.yaml
+.sqlc-diff-out/
+
+# compiled binaries built into the repo root by `go build ./...`
+/sierx
+/sierxctl

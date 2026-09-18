@@ -25,6 +25,22 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-12, tasks 0.3/0.7: goose and sqlc are pinned release binaries
+  (version + per-arch sha256 in `scripts/tool.sh`, fetched into gitignored
+  `bin/`) rather than `go tool` entries. Both pull large dependency trees —
+  database drivers, a SQL parser — that would enter `go.mod` and
+  `gate-license`'s scope without a line of them shipping in the binary. This
+  supersedes the earlier note that said to switch to `go tool goose` at 0.8.
+- 2026-09-12, environment: the agent sandbox cannot reach `proxy.golang.org`,
+  `sum.golang.org`, `golang.org` or `gopkg.in`, but can reach `github.com`. Go
+  modules were resolved with `GOPROXY=file:///<local>,direct GOSUMDB=off`,
+  where the local filesystem proxy holds `golang.org/x/text`,
+  `golang.org/x/sync`, `gopkg.in/yaml.v3` and `gopkg.in/check.v1` mirrored from
+  their GitHub repositories. **Nothing in the repository depends on this** — no
+  `replace` directives, no vendored fork, and `go.sum` carries the real
+  hashes. On a normal network `go mod download` works unmodified. Re-run
+  `go mod verify` on the dev host to confirm.
+
 - 2026-09-12, task 0.3: goose runs as a pinned release binary (v3.28.0,
   sha256-verified into gitignored `bin/`) rather than `go tool goose`, because
   the agent's sandbox cannot reach the Go module proxy. Switch to `go tool
@@ -199,16 +215,8 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       (§5.5) commits without `SET CONSTRAINTS ... DEFERRED`. The decision
       (DEFERRABLE) stands and the deferral step is harmless belt-and-braces;
       the ADR's "checked per row" rationale describes the non-deferrable case.
-- [ ] 0.6 Sequence counter and partition maintenance — **SQL half green; Go
-      half unverified.** `0009_seq.sql` (seq_counter row created by trigger
-      alongside each workspace, backfilled; `change_event_ensure_partitions(n)`
-      idempotent creator, no drop), the timer + oneshot service units, and
-      `cmd/sierxctl/partitions.go` (a thin `pgx` caller of that function) are
-      written. `pgx` cannot be added to go.mod from the agent sandbox (module
-      proxy blocked), so `sierxctl` has not been compiled. On the dev host:
-      `go get github.com/jackc/pgx/v5@latest && go mod tidy && go mod vendor
-      && go build ./cmd/sierxctl && make gate-license` (§0.4: record the
-      addition here), then re-run the acceptance and check this box.
+- [x] 0.6 Sequence counter and partition maintenance — 2026-09-12 (Go half
+      closed in the same session once module egress was worked around)
       ```
       $ make test-partitions
       NOTICE:  ok   ensure(1): first run created 0, second run created 0, change_event_2026_10 present
@@ -216,20 +224,30 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       NOTICE:  ok   every workspace has a seq_counter row (1)
       NOTICE:  ok   event routed to the current-month partition
       NOTICE:  test-partitions: passed
-      $ make migrate-updown-up && make schema-snapshot && make schema-diff && make test-sql
-      ... 9 versions / clean at zero / 9 versions
-      schema-snapshot: wrote docs/schema.sql (24 CREATE TABLE statements)
-      schema-diff: from-scratch migration matches docs/schema.sql
-      NOTICE:  test-sql: 24 checks passed
+      $ go build ./cmd/... && go run ./cmd/sierxctl partitions ensure --months-ahead 1
+      partitions ensure: 0 created, months-ahead=1
+      $ go run ./cmd/sierxctl partitions ensure --months-ahead 3
+      created change_event_2026_12
+      partitions ensure: 1 created, months-ahead=3
+      $ go run ./cmd/sierxctl partitions ensure --months-ahead 3
+      partitions ensure: 0 created, months-ahead=3
       ```
-- [ ] 0.7 sqlc wiring — not started. **Session boundary (2026-09-12):** every
-      task from here on needs Go modules (`pgx/v5`, sqlc's generated code,
-      goose as a tool, property-test libraries), and the agent's sandbox cannot
-      reach the Go module proxy, `golang.org`, `gopkg.in`, or `sum.golang.org`.
-      Resume on the dev host, or with those hosts allowlisted.
-      Verified for task 0.8 step 6: Go 1.27.1 ships a stdlib `uuid` package
-      (`go doc uuid` → RFC 9562, `NewV7` present) — no `google/uuid` dependency
-      needed. **high (verified)**
+- [x] 0.7 sqlc wiring — 2026-09-12
+      ```
+      $ make sqlc-diff && go build ./...
+      sqlc-diff: checked-in generated code matches fresh output
+      ```
+      sqlc v1.31.1, `sql_package: pgx/v5`, schema read from `migrations/` so
+      there is no second schema definition. Queries limited to what 0.8–0.9
+      need: workspace/seq allocation, item CRUD + one-statement subtree
+      reparent, rollup insert/recompute/verify, events, config and links.
+      `ltree` is overridden to `string` (no pgx type; the store passes text and
+      lets Postgres cast). Also proven: renaming a query without regenerating
+      turns `sqlc-diff` red.
+      Note: `models.go` contains structs for the three `change_event`
+      partitions declared in 0006. Partitions created later at runtime by
+      `change_event_ensure_partitions` do not appear, because sqlc reads
+      `migrations/`, so the generated output stays stable month to month.
 - [ ] 0.8 `store.Mutate`: the unit of work
 - [ ] 0.9 Seed generator
 - [ ] 0.10 Property tests
