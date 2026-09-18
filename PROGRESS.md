@@ -916,7 +916,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.15 Comments.
 - [x] 1.16 Hierarchy reads.
 - [x] 1.17 Item history.
-- [ ] 1.18 Saved views.
+- [x] 1.18 Saved views.
 - [ ] 1.19 Preferences.
 - [ ] 1.20 Delta sync.
 - [x] 1.21 sxq subset.
@@ -1378,6 +1378,23 @@ $ make test-api
 PASS (including TestSXQItems and all existing API tests)
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.443s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.18 acceptance - 2026-09-18
+
+Added saved-view creation with full SXQ parse/type validation and the parser's
+own suggestions. Listing enforces workspace and private/shared ownership before
+pagination. Goldens cover create/list/invalid queries; a second member cannot
+see a private view but can see a shared one.
+
+```text
+$ make test-api
+PASS (including TestViews)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.383s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
