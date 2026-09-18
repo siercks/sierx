@@ -1,0 +1,10 @@
+{
+  "query": "project = SRX and status.category != done and assignee = me() order by rank",
+  "where": "(((p.key_prefix = $1) AND (s.category \u003c\u003e $2)) AND (i.assignee_id = $3::text::uuid))",
+  "order": "i.rank",
+  "params": [
+    "SRX",
+    "done",
+    "01994ed4-0000-7000-8000-000000000001"
+  ]
+}

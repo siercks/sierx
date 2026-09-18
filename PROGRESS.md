@@ -919,7 +919,7 @@ or acceptance is claimed by this closeout.
 - [ ] 1.18 Saved views.
 - [ ] 1.19 Preferences.
 - [ ] 1.20 Delta sync.
-- [ ] 1.21 sxq subset.
+- [x] 1.21 sxq subset.
 - [ ] 1.22 Caching and compression.
 - [ ] 1.23 Concurrent cursor/race tests.
 - [ ] 1.24 Endpoint golden files.
@@ -1356,3 +1356,29 @@ All three gates OK.
 Task ordering note: 1.18 explicitly requires the parser from 1.21. Implementing
 1.21 next as that prerequisite, then returning to 1.18-1.20; no parser bypass or
 placeholder view validation is introduced.
+
+### Task 1.21 acceptance - 2026-09-18 (prerequisite for 1.18)
+
+Added bounded lexer/parser, case-insensitive keywords and JQL aliases, typed
+parameterized compilation, project-aware custom fields, date arithmetic,
+full-text matching and field completion. All SPEC examples are golden cases;
+future hierarchy/sprint functions explain their phase. Item lists now execute
+sxq and page by the requested sort plus ID, with nulls last and now() frozen
+in the authenticated cursor. Integration tests exposed an untyped unused
+first-page parameter; explicitly typing it fixed all default and sorted reads.
+
+```text
+$ make test-sxq
+ok github.com/siercks/sierx/internal/sxq 0.033s
+$ make fuzz-sxq
+fuzz: execs: 25599, new interesting: 83 (total: 89)
+PASS
+ok github.com/siercks/sierx/internal/sxq 6.022s
+$ make test-api
+PASS (including TestSXQItems and all existing API tests)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.443s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```

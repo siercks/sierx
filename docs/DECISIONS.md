@@ -1005,3 +1005,11 @@ author can edit; authors and workspace administrators can delete. The owning
 item's If-Match version protects all three operations. Comment history uses
 `field_changed` with `field: comment` and before/after comment envelopes. Deleted
 comment reads retain the tombstone and attribution but return a null body.
+
+SXQ bounds input to 4096 bytes, nesting to 64 and lists to 200 values. Empty
+queries select all visible live items. Sorts use nulls last and an ascending ID
+tiebreak; the cursor freezes now() in UTC for the traversal. Custom field SQL
+checks the defining project before extracting its typed value. Conflicting
+custom types across projects require a project constraint. Multiselect fields
+support null checks in Phase 1; membership syntax is intentionally not inferred.
+Completion returns legal grammar/field token replacements, not SQL.

@@ -1,0 +1,10 @@
+{
+  "query": "assignee = currentUser() OR (assignee = EMPTY AND NOT status IN (done, dropped))",
+  "where": "((i.assignee_id = $1::text::uuid) OR ((i.assignee_id IS NULL) AND (NOT (s.key IN ($2,$3)))))",
+  "order": "i.id",
+  "params": [
+    "01994ed4-0000-7000-8000-000000000001",
+    "done",
+    "dropped"
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "query": "due_date \u003c endOfSprint()",
+  "error": "endOfSprint is not available until phase 4"
+}
