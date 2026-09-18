@@ -23,9 +23,6 @@ func fixtureSession(t *testing.T, s *Server, email string) *http.Cookie {
 func assertGolden(t *testing.T, name string, got []byte, replacements map[string]string) {
 	t.Helper()
 	text := string(got)
-	for from, to := range replacements {
-		text = strings.ReplaceAll(text, from, to)
-	}
 	want, err := os.ReadFile(filepath.Join("..", "..", "test", "golden", "api", name+".json"))
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +31,7 @@ func assertGolden(t *testing.T, name string, got []byte, replacements map[string
 	if err = json.Unmarshal([]byte(text), &a); err != nil {
 		t.Fatal(err)
 	}
+	a = normalizeGolden(a, replacements)
 	if err = json.Unmarshal(want, &b); err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +40,24 @@ func assertGolden(t *testing.T, name string, got []byte, replacements map[string
 	if string(aa) != string(bb) {
 		t.Fatalf("golden %s\nwant %s\ngot %s", name, bb, aa)
 	}
+}
+
+func normalizeGolden(value any, replacements map[string]string) any {
+	switch v := value.(type) {
+	case string:
+		if replacement, ok := replacements[v]; ok {
+			return replacement
+		}
+	case map[string]any:
+		for k, child := range v {
+			v[k] = normalizeGolden(child, replacements)
+		}
+	case []any:
+		for i, child := range v {
+			v[i] = normalizeGolden(child, replacements)
+		}
+	}
+	return value
 }
 
 func TestProjects(t *testing.T) {
