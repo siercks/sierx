@@ -998,3 +998,10 @@ Link creation accepts `{to: item_key, kind}`; unlink uses the source item's
 version. Link reads include inbound and outbound edges. Phase 1 target lookup is
 workspace-local; cross-project edges work, and nested endpoint summaries retain
 an extension point for the later cross-workspace visibility policy.
+
+Comments accept `{item: item_key, body: markdown}`. PATCH/DELETE on
+`/comments/{id}` support the required edit and soft-delete lifecycle. Only the
+author can edit; authors and workspace administrators can delete. The owning
+item's If-Match version protects all three operations. Comment history uses
+`field_changed` with `field: comment` and before/after comment envelopes. Deleted
+comment reads retain the tombstone and attribution but return a null body.

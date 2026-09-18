@@ -44,6 +44,7 @@ type change struct {
 	update  *ItemUpdate
 	reparen *ItemReparent
 	link    *LinkChange
+	comment *CommentChange
 	hard    bool
 }
 
@@ -57,6 +58,7 @@ const (
 	changeHardDelete
 	changeLink
 	changeUnlink
+	changeComment
 )
 
 // Mutation accumulates row changes and their events inside one Mutate call.
@@ -140,6 +142,44 @@ type LinkChange struct {
 	FromItemID uuid.UUID
 	ToItemID   uuid.UUID
 	Kind       string
+}
+
+type CommentChange struct {
+	ID      uuid.UUID
+	ItemID  uuid.UUID
+	Action  string
+	Body    string
+	OldBody *string
+}
+
+// Comment changes share the owning item's version and sequence ordering.
+func (m *Mutation) Comment(c CommentChange) *Mutation {
+	if c.Action != "create" && c.Action != "edit" && c.Action != "delete" {
+		m.fail(fmt.Errorf("store: invalid comment action"))
+		return m
+	}
+	if !m.hasActor {
+		m.fail(fmt.Errorf("store: comment requires an actor"))
+		return m
+	}
+	if c.ID == (uuid.UUID{}) {
+		c.ID = uuid.NewV7()
+	}
+	var old any
+	if c.OldBody != nil {
+		old = map[string]any{"id": c.ID.String(), "body": *c.OldBody}
+	}
+	newValue := map[string]any{"id": c.ID.String(), "body": c.Body, "deleted": c.Action == "delete"}
+	if c.Action == "delete" {
+		newValue["body"] = nil
+	}
+	ev, err := m.fieldEvent(c.ItemID, FieldChange{Field: "comment", Old: old, New: newValue})
+	if err != nil {
+		m.fail(err)
+		return m
+	}
+	m.changes = append(m.changes, change{kind: changeComment, itemID: c.ItemID, comment: &c, events: []event{ev}})
+	return m
 }
 
 func (m *Mutation) fail(err error) {
