@@ -959,3 +959,22 @@ Local endpoints are POST `/auth/totp/enroll` (password), `/auth/totp/verify`
 Login accepts an optional `code` carrying either factor. Enrollment and
 verification require an authenticated session. These routes mutate account
 security, not versioned items, and do not require an item If-Match header.
+
+## ADR-023 - Phase 1 API representation and pagination defaults
+
+**Status:** owner authorized documented, tested defaults on 2026-09-18.
+
+Collection responses contain `data` and nullable `next_cursor`. Cursors are
+versioned JSON authenticated with HMAC-SHA-256 and base64url encoded, bound to
+the requesting user/workspace, path and filters. They carry the last sort value,
+stable identifier and an upper boundary chosen on the first page. Invalid,
+tampered or differently scoped cursors return 400. Limits default to 50; values
+outside 1–200 and all offset parameters are rejected. Inserts beyond the initial
+upper boundary appear after refreshing the collection. This is keyset traversal,
+not a persisted database snapshot; mutable sort/filter changes are reconciled
+through the change feed. Stable ID ordering is the default when no order is given.
+
+Item detail allows optional fields; items/children/descendants require them.
+Fixed-shape project, link, comment, history, view, config and rollup responses
+reject fields. Dotted selection preserves the containing JSON object; a whole
+composite makes any requested leaf redundant. Unconfigured custom fields fail.

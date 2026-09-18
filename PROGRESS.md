@@ -906,7 +906,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.5 TOTP.
 - [x] 1.6 Operator bootstrap.
 - [x] 1.7 Projection registry.
-- [ ] 1.8 Cursor pagination.
+- [x] 1.8 Cursor pagination.
 - [ ] 1.9 Projects.
 - [ ] 1.10 Resolved configuration.
 - [ ] 1.11 Item create/read/update/delete with optimistic concurrency.
@@ -1138,3 +1138,27 @@ gate-notopology: OK (no topology in committable files)
 ```
 
 The full API suite passed in the same isolated PostgreSQL container run.
+
+### Task 1.8 acceptance - 2026-09-18
+
+Added signed opaque cursors with stable tiebreak and upper boundary, request
+scope binding, limits and offset rejection. ADR-023 documents traversal and
+collection response defaults, including the limits of mutable sorting.
+The database test inserts additional rows between page requests and observes
+each original bounded row once. Cursor tests reject tampering and scope reuse.
+
+```text
+$ make test-api
+=== RUN   TestCursor
+--- PASS: TestCursor (0.00s)
+=== RUN   TestCursorConcurrentInsert
+--- PASS: TestCursorConcurrentInsert (0.01s)
+PASS
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+All other API tests passed in that isolated-container run.
