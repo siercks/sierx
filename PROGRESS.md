@@ -910,7 +910,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.9 Projects.
 - [x] 1.10 Resolved configuration.
 - [x] 1.11 Item create/read/update/delete with optimistic concurrency.
-- [ ] 1.12 Transitions.
+- [x] 1.12 Transitions.
 - [ ] 1.13 Move and reparent.
 - [ ] 1.14 Links.
 - [ ] 1.15 Comments.
@@ -1233,6 +1233,25 @@ $ make test-api
 ok github.com/siercks/sierx/internal/api 7.601s
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.437s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (10 modules allowed)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.12 acceptance - 2026-09-18
+
+Implemented current-config transitions with atomic editable-field patches,
+required-field errors, version checks and status_changed events. Golden errors
+name to_status and missing assignee. Tests cover every seeded wildcard source,
+terminal dropped, and config-version advancement only on transition.
+
+```text
+$ make test-api
+PASS (including TestTransitions and TestWildcardTransitions)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.403s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 gate-license: OK (10 modules allowed)
