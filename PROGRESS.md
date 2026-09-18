@@ -915,7 +915,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.14 Links.
 - [x] 1.15 Comments.
 - [x] 1.16 Hierarchy reads.
-- [ ] 1.17 Item history.
+- [x] 1.17 Item history.
 - [ ] 1.18 Saved views.
 - [ ] 1.19 Preferences.
 - [ ] 1.20 Delta sync.
@@ -1334,3 +1334,25 @@ $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
 ```
+
+### Task 1.17 acceptance - 2026-09-18
+
+Added newest-first event history with signed sequence cursors, actor attribution,
+and field before/after values. Golden history distinguishes moves, transitions
+and ordinary edits. Backdated events preserve timestamps; events arriving after
+the first page do not enter that bounded traversal.
+
+```text
+$ make test-api
+--- PASS: TestItemHistory (0.38s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.425s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+Task ordering note: 1.18 explicitly requires the parser from 1.21. Implementing
+1.21 next as that prerequisite, then returning to 1.18-1.20; no parser bypass or
+placeholder view validation is introduced.
