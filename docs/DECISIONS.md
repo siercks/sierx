@@ -941,3 +941,21 @@ identify an active, pre-provisioned member with a NULL password hash. No user
 is created implicitly. Proxy mode does not accept local login or logout;
 sign-out is handled by the authenticating proxy. Local mode ignores identity
 headers. The operational health endpoint remains unauthenticated.
+
+TOTP uses RFC 6238 SHA-1, six digits, 30-second periods and at most one period
+of clock skew. Enrollment requires the current password, expires after ten
+minutes and becomes active only after code verification. The existing
+totp_secret bytea stores an AES-GCM encrypted state envelope bound to the user
+ID, using a domain-separated SHA-256 derivation of SIERX_SESSION_KEY. Keep this
+key with protected backups; changing it requires re-enrollment. Eight random
+128-bit recovery codes are shown once, stored hashed and consumed once.
+TOTP step replay and recovery reuse are prevented under a database row lock;
+code consumption and login session creation commit together. Enabling or
+disabling TOTP revokes existing sessions. Disable requires the password and a
+fresh TOTP or recovery code. Proxy mode delegates second factors to the proxy.
+
+Local endpoints are POST `/auth/totp/enroll` (password), `/auth/totp/verify`
+(code), and `/auth/totp/disable` (password and code), under `/api/v1`.
+Login accepts an optional `code` carrying either factor. Enrollment and
+verification require an authenticated session. These routes mutate account
+security, not versioned items, and do not require an item If-Match header.

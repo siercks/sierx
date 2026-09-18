@@ -36,10 +36,13 @@ type authState struct {
 }
 
 func (s *Server) ConfigureAuth(c config.Env) {
-	s.auth = &authState{service: auth.New(s.Pool), cfg: c, attempts: map[string]attemptWindow{}, passwordWork: make(chan struct{}, 1)}
+	s.auth = &authState{service: auth.New(s.Pool, c.SessionKey), cfg: c, attempts: map[string]attemptWindow{}, passwordWork: make(chan struct{}, 1)}
 	s.Router.Post("/api/v1/auth/login", s.login)
 	s.Router.With(s.requireAuth).Post("/api/v1/auth/logout", s.logout)
 	s.Router.With(s.requireAuth).Get("/api/v1/me", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, Identity(r)) })
+	s.Router.With(s.requireAuth).Post("/api/v1/auth/totp/enroll", s.totpEnroll)
+	s.Router.With(s.requireAuth).Post("/api/v1/auth/totp/verify", s.totpConfirm)
+	s.Router.With(s.requireAuth).Post("/api/v1/auth/totp/disable", s.totpDisable)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -118,6 +121,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Code     string `json:"code"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -134,7 +138,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, RateLimited())
 		return
 	}
-	token, err := s.auth.service.Login(r.Context(), input.Email, input.Password)
+	token, err := s.auth.service.Login(r.Context(), input.Email, input.Password, input.Code)
 	if errors.Is(err, auth.ErrCredentials) {
 		WriteProblem(w, Unauthorized())
 		return

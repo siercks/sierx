@@ -903,7 +903,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.2 Error model.
 - [x] 1.3 Local authentication.
 - [x] 1.4 Proxy authentication.
-- [ ] 1.5 TOTP.
+- [x] 1.5 TOTP.
 - [ ] 1.6 Operator bootstrap.
 - [ ] 1.7 Projection registry.
 - [ ] 1.8 Cursor pagination.
@@ -1046,3 +1046,34 @@ gate-license: OK (every dependency on the §15.1 allowlist)
 gate-nodirect: OK (governed tables written only through internal/store)
 gate-notopology: OK (no topology in committable files)
 ```
+
+### Task 1.5 acceptance - 2026-09-18
+
+Added password-confirmed TOTP enrollment, verification and disable endpoints,
+encrypted account-bound secret storage, single-use hashed recovery codes and
+transactional step replay prevention. Enabling/disabling revokes all sessions.
+ADR-022 records the API, cryptography and recovery defaults. No extra dependency
+or schema column was required. Router, login integration and tests are required
+supporting files. RFC 6238 Appendix B supplies the independent code vectors.
+
+Actual local isolated-container output:
+
+```text
+$ make test-api
+--- PASS: TestTOTP (1.14s)
+PASS
+ok      github.com/siercks/sierx/internal/api 3.621s
+=== RUN   TestTOTPVectors
+--- PASS: TestTOTPVectors (0.00s)
+=== RUN   TestTOTPEncryption
+--- PASS: TestTOTPEncryption (0.00s)
+PASS
+ok      github.com/siercks/sierx/internal/api/auth 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+The earlier auth, proxy, boot and problem tests also passed in this run.
