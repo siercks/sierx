@@ -248,7 +248,48 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       partitions declared in 0006. Partitions created later at runtime by
       `change_event_ensure_partitions` do not appear, because sqlc reads
       `migrations/`, so the generated output stays stable month to month.
-- [ ] 0.8 `store.Mutate`: the unit of work
+- [x] 0.8 `store.Mutate`: the unit of work — 2026-09-12
+      ```
+      $ make test-store
+      --- PASS: TestMutateAllocatesOneSeqPerEvent (0.02s)
+      --- PASS: TestMutateRejectsChangeWithoutEvents (0.01s)
+      --- PASS: TestMutateEmptyIsAnError (0.01s)
+      --- PASS: TestMutateCallbackErrorRollsBack (0.01s)
+      --- PASS: TestMutatePathAndKey (0.02s)
+      --- PASS: TestMutateRollupsAreMaintained (0.02s)
+      --- PASS: TestMutateReparentRewritesSubtreeAndRollups (0.03s)
+      --- PASS: TestMutateRejectsSelfAncestryAndCrossProject (0.02s)
+      --- PASS: TestMutateSoftAndHardDelete (0.02s)
+      --- PASS: TestMutateVersionIncrements (0.02s)
+      --- PASS: TestMutateConfigVersionOnlyOnCreateAndTransition (0.02s)
+      --- PASS: TestMutateSeqGapFreeUnderConcurrency (0.11s)
+      --- PASS: TestMutateRankOrderAndRebalance (0.04s)
+      ok      github.com/siercks/sierx/internal/store 0.364s
+      $ make gate-nodirect && make prove-nodirect
+      gate-nodirect: OK (governed tables written only through internal/store)
+      prove: INSERT INTO item from internal/api: gate went red — OK
+      prove: lowercase multi-line UPDATE item: gate went red — OK
+      prove: DELETE FROM comment: gate went red — OK
+      prove: INSERT INTO sprint_item: gate went red — OK
+      prove: TRUNCATE item_link: gate went red — OK
+      prove: item_type/item_rollup writes and a plain SELECT stay green — OK
+      prove: clean tree: gate GREEN — OK
+      ```
+      The §5.1 requirement is met: 8 concurrent writers, 48 events, a cursor
+      polled throughout the run, every seq value observed exactly once and no
+      gaps. `Mutation` has no way to register a row change without its events
+      (ADR-001 as a type property), and no event-count parameter — the seq
+      block is sized from the accumulated events (ADR-002).
+      Three implementation notes worth keeping:
+      - `item.fields` is `jsonb NOT NULL DEFAULT '{}'`; an explicit NULL in an
+        INSERT bypasses the default, so inserts send `{}` and updates send NULL
+        to mean "leave alone".
+      - item reads and RETURNING clauses name their columns instead of `*`:
+        `search_tsv` is a generated tsvector pgx cannot scan, and `path` is
+        ltree and needs `::text` to land in the Go string the sqlc override
+        declares. Adding a column to `item` means adding it to those lists.
+      - `SET CONSTRAINTS` is transaction control, not a query sqlc can model,
+        so the rebalance issues it through the connection directly.
 - [ ] 0.9 Seed generator
 - [ ] 0.10 Property tests
 - [ ] 0.11 Backup and restore harness (all steps runnable; dev target is local)

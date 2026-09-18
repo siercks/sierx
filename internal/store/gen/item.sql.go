@@ -13,15 +13,52 @@ import (
 
 const getItem = `-- name: GetItem :one
 
-SELECT id, workspace_id, project_id, key, item_type_id, status_id, config_version, parent_id, path, title, body, assignee_id, points, start_date, due_date, rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at, deleted_at, search_tsv FROM item WHERE id = $1
+
+SELECT id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
+FROM item WHERE id = $1
 `
 
+type GetItemRow struct {
+	ID            pgtype.UUID
+	WorkspaceID   pgtype.UUID
+	ProjectID     pgtype.UUID
+	Key           string
+	ItemTypeID    pgtype.UUID
+	StatusID      pgtype.UUID
+	ConfigVersion int32
+	ParentID      pgtype.UUID
+	Path          string
+	Title         string
+	Body          *string
+	AssigneeID    pgtype.UUID
+	Points        pgtype.Numeric
+	StartDate     pgtype.Date
+	DueDate       pgtype.Date
+	Rank          string
+	Fields        []byte
+	Version       int32
+	ChangeSeq     int64
+	OriginID      pgtype.UUID
+	OriginSeq     *int64
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeletedAt     pgtype.Timestamptz
+}
+
+// item's column list is written out rather than `*` in every read and
+// RETURNING clause for two reasons: `search_tsv` is a generated tsvector that
+// pgx cannot scan, and `path` is ltree, which needs an explicit ::text so it
+// lands in the Go string the sqlc override declares. Adding a column to the
+// table means adding it here.
 // Item reads and writes for the unit of work (task 0.8) and the seed (0.9).
 // Every write here is called only from internal/store — gate-nodirect enforces
 // that no other package writes these tables.
-func (q *Queries) GetItem(ctx context.Context, id pgtype.UUID) (Item, error) {
+func (q *Queries) GetItem(ctx context.Context, id pgtype.UUID) (GetItemRow, error) {
 	row := q.db.QueryRow(ctx, getItem, id)
-	var i Item
+	var i GetItemRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -47,18 +84,48 @@ func (q *Queries) GetItem(ctx context.Context, id pgtype.UUID) (Item, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.SearchTsv,
 	)
 	return i, err
 }
 
 const getItemForUpdate = `-- name: GetItemForUpdate :one
-SELECT id, workspace_id, project_id, key, item_type_id, status_id, config_version, parent_id, path, title, body, assignee_id, points, start_date, due_date, rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at, deleted_at, search_tsv FROM item WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
+FROM item WHERE id = $1 FOR UPDATE
 `
 
-func (q *Queries) GetItemForUpdate(ctx context.Context, id pgtype.UUID) (Item, error) {
+type GetItemForUpdateRow struct {
+	ID            pgtype.UUID
+	WorkspaceID   pgtype.UUID
+	ProjectID     pgtype.UUID
+	Key           string
+	ItemTypeID    pgtype.UUID
+	StatusID      pgtype.UUID
+	ConfigVersion int32
+	ParentID      pgtype.UUID
+	Path          string
+	Title         string
+	Body          *string
+	AssigneeID    pgtype.UUID
+	Points        pgtype.Numeric
+	StartDate     pgtype.Date
+	DueDate       pgtype.Date
+	Rank          string
+	Fields        []byte
+	Version       int32
+	ChangeSeq     int64
+	OriginID      pgtype.UUID
+	OriginSeq     *int64
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeletedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) GetItemForUpdate(ctx context.Context, id pgtype.UUID) (GetItemForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, getItemForUpdate, id)
-	var i Item
+	var i GetItemForUpdateRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -84,7 +151,6 @@ func (q *Queries) GetItemForUpdate(ctx context.Context, id pgtype.UUID) (Item, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.SearchTsv,
 	)
 	return i, err
 }
@@ -145,7 +211,10 @@ INSERT INTO item (
   $15, $16, $17, $18,
   $19, $20
 )
-RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version, parent_id, path, title, body, assignee_id, points, start_date, due_date, rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at, deleted_at, search_tsv
+RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
 `
 
 type InsertItemParams struct {
@@ -171,7 +240,34 @@ type InsertItemParams struct {
 	OriginSeq     *int64
 }
 
-func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (Item, error) {
+type InsertItemRow struct {
+	ID            pgtype.UUID
+	WorkspaceID   pgtype.UUID
+	ProjectID     pgtype.UUID
+	Key           string
+	ItemTypeID    pgtype.UUID
+	StatusID      pgtype.UUID
+	ConfigVersion int32
+	ParentID      pgtype.UUID
+	Path          string
+	Title         string
+	Body          *string
+	AssigneeID    pgtype.UUID
+	Points        pgtype.Numeric
+	StartDate     pgtype.Date
+	DueDate       pgtype.Date
+	Rank          string
+	Fields        []byte
+	Version       int32
+	ChangeSeq     int64
+	OriginID      pgtype.UUID
+	OriginSeq     *int64
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeletedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (InsertItemRow, error) {
 	row := q.db.QueryRow(ctx, insertItem,
 		arg.ID,
 		arg.WorkspaceID,
@@ -194,7 +290,7 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (Item, e
 		arg.OriginID,
 		arg.OriginSeq,
 	)
-	var i Item
+	var i InsertItemRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -220,7 +316,6 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (Item, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.SearchTsv,
 	)
 	return i, err
 }
@@ -332,7 +427,10 @@ const softDeleteItem = `-- name: SoftDeleteItem :one
 UPDATE item SET deleted_at = now(), change_seq = $1,
                 version = version + 1, updated_at = now()
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version, parent_id, path, title, body, assignee_id, points, start_date, due_date, rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at, deleted_at, search_tsv
+RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
 `
 
 type SoftDeleteItemParams struct {
@@ -340,9 +438,36 @@ type SoftDeleteItemParams struct {
 	ID        pgtype.UUID
 }
 
-func (q *Queries) SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) (Item, error) {
+type SoftDeleteItemRow struct {
+	ID            pgtype.UUID
+	WorkspaceID   pgtype.UUID
+	ProjectID     pgtype.UUID
+	Key           string
+	ItemTypeID    pgtype.UUID
+	StatusID      pgtype.UUID
+	ConfigVersion int32
+	ParentID      pgtype.UUID
+	Path          string
+	Title         string
+	Body          *string
+	AssigneeID    pgtype.UUID
+	Points        pgtype.Numeric
+	StartDate     pgtype.Date
+	DueDate       pgtype.Date
+	Rank          string
+	Fields        []byte
+	Version       int32
+	ChangeSeq     int64
+	OriginID      pgtype.UUID
+	OriginSeq     *int64
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeletedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) (SoftDeleteItemRow, error) {
 	row := q.db.QueryRow(ctx, softDeleteItem, arg.ChangeSeq, arg.ID)
-	var i Item
+	var i SoftDeleteItemRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -368,7 +493,6 @@ func (q *Queries) SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.SearchTsv,
 	)
 	return i, err
 }
@@ -389,7 +513,10 @@ UPDATE item SET
   version        = version + 1,
   updated_at     = now()
 WHERE id = $17
-RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version, parent_id, path, title, body, assignee_id, points, start_date, due_date, rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at, deleted_at, search_tsv
+RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
 `
 
 type UpdateItemFieldsParams struct {
@@ -412,10 +539,37 @@ type UpdateItemFieldsParams struct {
 	ID            pgtype.UUID
 }
 
+type UpdateItemFieldsRow struct {
+	ID            pgtype.UUID
+	WorkspaceID   pgtype.UUID
+	ProjectID     pgtype.UUID
+	Key           string
+	ItemTypeID    pgtype.UUID
+	StatusID      pgtype.UUID
+	ConfigVersion int32
+	ParentID      pgtype.UUID
+	Path          string
+	Title         string
+	Body          *string
+	AssigneeID    pgtype.UUID
+	Points        pgtype.Numeric
+	StartDate     pgtype.Date
+	DueDate       pgtype.Date
+	Rank          string
+	Fields        []byte
+	Version       int32
+	ChangeSeq     int64
+	OriginID      pgtype.UUID
+	OriginSeq     *int64
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeletedAt     pgtype.Timestamptz
+}
+
 // The generic field update. version is bumped here and nowhere else (§5.4);
 // config_version moves only on create/transition/promote (ADR-006), so it is
 // passed through unchanged unless the caller supplies a new one.
-func (q *Queries) UpdateItemFields(ctx context.Context, arg UpdateItemFieldsParams) (Item, error) {
+func (q *Queries) UpdateItemFields(ctx context.Context, arg UpdateItemFieldsParams) (UpdateItemFieldsRow, error) {
 	row := q.db.QueryRow(ctx, updateItemFields,
 		arg.Title,
 		arg.SetBody,
@@ -435,7 +589,7 @@ func (q *Queries) UpdateItemFields(ctx context.Context, arg UpdateItemFieldsPara
 		arg.ChangeSeq,
 		arg.ID,
 	)
-	var i Item
+	var i UpdateItemFieldsRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -461,7 +615,6 @@ func (q *Queries) UpdateItemFields(ctx context.Context, arg UpdateItemFieldsPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.SearchTsv,
 	)
 	return i, err
 }

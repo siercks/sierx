@@ -8,7 +8,7 @@ SHELL := /usr/bin/env bash
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \
         schema-snapshot schema-diff test-sql test-partitions \
-        sqlc-gen sqlc-diff
+        sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -77,3 +77,13 @@ sqlc-gen: ## Regenerate internal/store/gen from the migrations and queries (task
 
 sqlc-diff: ## Fail if the checked-in generated code differs from fresh output
 	@bash scripts/sqlc.sh diff
+
+gate-nodirect: ## Governed tables written only through internal/store (task 0.8)
+	@bash scripts/gate-nodirect.sh
+
+prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goes red
+	@bash scripts/gate-nodirect.sh --prove
+
+test-store: ## store.Mutate unit-of-work tests against the dev database (task 0.8)
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@go test ./internal/store/... -count=1

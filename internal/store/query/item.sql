@@ -1,12 +1,26 @@
+-- item's column list is written out rather than `*` in every read and
+-- RETURNING clause for two reasons: `search_tsv` is a generated tsvector that
+-- pgx cannot scan, and `path` is ltree, which needs an explicit ::text so it
+-- lands in the Go string the sqlc override declares. Adding a column to the
+-- table means adding it here.
+
 -- Item reads and writes for the unit of work (task 0.8) and the seed (0.9).
 -- Every write here is called only from internal/store — gate-nodirect enforces
 -- that no other package writes these tables.
 
 -- name: GetItem :one
-SELECT * FROM item WHERE id = $1;
+SELECT id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
+FROM item WHERE id = $1;
 
 -- name: GetItemForUpdate :one
-SELECT * FROM item WHERE id = $1 FOR UPDATE;
+SELECT id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at
+FROM item WHERE id = $1 FOR UPDATE;
 
 -- name: InsertItem :one
 INSERT INTO item (
@@ -21,7 +35,10 @@ INSERT INTO item (
   sqlc.narg(due_date), sqlc.arg(rank), sqlc.arg(fields), sqlc.arg(change_seq),
   sqlc.arg(origin_id), sqlc.narg(origin_seq)
 )
-RETURNING *;
+RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at;
 
 -- name: UpdateItemFields :one
 -- The generic field update. version is bumped here and nowhere else (§5.4);
@@ -42,13 +59,19 @@ UPDATE item SET
   version        = version + 1,
   updated_at     = now()
 WHERE id = sqlc.arg(id)
-RETURNING *;
+RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at;
 
 -- name: SoftDeleteItem :one
 UPDATE item SET deleted_at = now(), change_seq = sqlc.arg(change_seq),
                 version = version + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL
-RETURNING *;
+RETURNING id, workspace_id, project_id, key, item_type_id, status_id, config_version,
+  parent_id, path::text AS path, title, body, assignee_id, points, start_date, due_date,
+  rank, fields, version, change_seq, origin_id, origin_seq, created_at, updated_at,
+  deleted_at;
 
 -- name: HardDeleteItem :exec
 -- §5.8: reachable only from the admin CLI path, and only after a terminal
@@ -88,3 +111,4 @@ WHERE id = sqlc.arg(id);
 -- The dirty ancestor set: every item whose path is a prefix of any touched path.
 SELECT id, path::text AS path, parent_id FROM item
 WHERE path @> ANY (sqlc.arg(paths)::ltree[]);
+

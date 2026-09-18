@@ -24,11 +24,16 @@ type Querier interface {
 	// seq_counter is created by trigger (migration 0009).
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteLink(ctx context.Context, id pgtype.UUID) error
+	// item's column list is written out rather than `*` in every read and
+	// RETURNING clause for two reasons: `search_tsv` is a generated tsvector that
+	// pgx cannot scan, and `path` is ltree, which needs an explicit ::text so it
+	// lands in the Go string the sqlc override declares. Adding a column to the
+	// table means adding it here.
 	// Item reads and writes for the unit of work (task 0.8) and the seed (0.9).
 	// Every write here is called only from internal/store — gate-nodirect enforces
 	// that no other package writes these tables.
-	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
-	GetItemForUpdate(ctx context.Context, id pgtype.UUID) (Item, error)
+	GetItem(ctx context.Context, id pgtype.UUID) (GetItemRow, error)
+	GetItemForUpdate(ctx context.Context, id pgtype.UUID) (GetItemForUpdateRow, error)
 	// The dirty ancestor set: every item whose path is a prefix of any touched path.
 	GetItemsByPaths(ctx context.Context, paths []string) ([]GetItemsByPathsRow, error)
 	GetProject(ctx context.Context, id pgtype.UUID) (Project, error)
@@ -45,7 +50,7 @@ type Querier interface {
 	// transaction as the state change — not event sourcing: no projections, no
 	// replay, no versioned event schemas.
 	InsertEvent(ctx context.Context, arg InsertEventParams) error
-	InsertItem(ctx context.Context, arg InsertItemParams) (Item, error)
+	InsertItem(ctx context.Context, arg InsertItemParams) (InsertItemRow, error)
 	InsertItemType(ctx context.Context, arg InsertItemTypeParams) (ItemType, error)
 	InsertLink(ctx context.Context, arg InsertLinkParams) (ItemLink, error)
 	InsertProjectConfig(ctx context.Context, arg InsertProjectConfigParams) (ProjectConfig, error)
@@ -71,11 +76,11 @@ type Querier interface {
 	// new_parent_path is '' for a move to the root.
 	ReparentSubtree(ctx context.Context, arg ReparentSubtreeParams) ([]ReparentSubtreeRow, error)
 	SetItemChangeSeq(ctx context.Context, arg SetItemChangeSeqParams) error
-	SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) (Item, error)
+	SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) (SoftDeleteItemRow, error)
 	// The generic field update. version is bumped here and nowhere else (§5.4);
 	// config_version moves only on create/transition/promote (ADR-006), so it is
 	// passed through unchanged unless the caller supplies a new one.
-	UpdateItemFields(ctx context.Context, arg UpdateItemFieldsParams) (Item, error)
+	UpdateItemFields(ctx context.Context, arg UpdateItemFieldsParams) (UpdateItemFieldsRow, error)
 	UpdateItemRank(ctx context.Context, arg UpdateItemRankParams) error
 	// ADR-005 control 2: recompute every rollup in SQL and return the rows that
 	// disagree with the stored value. Used by `sierxctl rollup --verify` and by the

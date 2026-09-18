@@ -11,8 +11,8 @@ RETURNING *;
 -- counter so two concurrent creates cannot take the same number.
 UPDATE project SET next_key_num = next_key_num + 1
 WHERE id = sqlc.arg(project_id)
-RETURNING key_prefix || '-' || (next_key_num - 1)::text AS key,
-          next_key_num - 1 AS num;
+RETURNING (key_prefix || '-' || (next_key_num - 1)::text)::text AS key,
+          (next_key_num - 1)::int AS num;
 
 -- name: GetProject :one
 SELECT * FROM project WHERE id = $1;

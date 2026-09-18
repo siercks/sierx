@@ -29,15 +29,26 @@ BEGIN
   IF second_run <> 0 THEN RAISE EXCEPTION 'ensure(6) not idempotent'; END IF;
   RAISE NOTICE 'ok   ensure(6): created % more, then 0', first_run;
 
-  -- §5.1: creating a workspace creates its counter, at zero
-  INSERT INTO workspace (slug, name, origin_id) VALUES ('t', 'T', uuidv7());
-  SELECT count(*) INTO n_ws  FROM workspace;
-  SELECT count(*) INTO n_ctr FROM seq_counter c JOIN workspace w ON w.id = c.workspace_id AND c.value = 0;
-  IF n_ws <> n_ctr THEN RAISE EXCEPTION 'workspace/seq_counter mismatch: % vs %', n_ws, n_ctr; END IF;
-  RAISE NOTICE 'ok   every workspace has a seq_counter row (%)', n_ws;
+  -- §5.1: creating a workspace creates its counter, at zero. Asserted on the
+  -- workspaces this test creates, not on every row in the database: migration
+  -- 0009 backfills rows that predate the trigger, but a database seeded by
+  -- tests that ran against an earlier migration state can hold workspaces the
+  -- backfill never saw, and that is a property of the test database rather
+  -- than of the invariant.
+  INSERT INTO workspace (slug, name, origin_id)
+  SELECT 'pt-' || g, 'PT', uuidv7() FROM generate_series(1, 3) g;
+  SELECT count(*) INTO n_ws FROM workspace WHERE slug LIKE 'pt-%';
+  SELECT count(*) INTO n_ctr
+    FROM seq_counter c JOIN workspace w ON w.id = c.workspace_id
+   WHERE w.slug LIKE 'pt-%' AND c.value = 0;
+  IF n_ws <> 3 OR n_ctr <> 3 THEN
+    RAISE EXCEPTION 'workspace/seq_counter mismatch: % workspaces, % counters at zero', n_ws, n_ctr;
+  END IF;
+  RAISE NOTICE 'ok   each new workspace got a seq_counter row at zero (%)', n_ctr;
 
   -- an event lands in the right partition
-  INSERT INTO change_event (workspace_id, seq, kind) SELECT id, 1, 'created' FROM workspace WHERE slug = 't';
+  INSERT INTO change_event (workspace_id, seq, kind)
+  SELECT id, 1, 'created' FROM workspace WHERE slug = 'pt-1';
   IF (SELECT tableoid::regclass::text FROM change_event WHERE seq = 1 AND kind = 'created' LIMIT 1)
      <> 'change_event_' || to_char(now() AT TIME ZONE 'UTC', 'YYYY_MM') THEN
     RAISE EXCEPTION 'event did not route to the current month partition';

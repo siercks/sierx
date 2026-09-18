@@ -372,12 +372,12 @@ func (q *Queries) ListStatuses(ctx context.Context, projectID pgtype.UUID) ([]St
 const nextItemKey = `-- name: NextItemKey :one
 UPDATE project SET next_key_num = next_key_num + 1
 WHERE id = $1
-RETURNING key_prefix || '-' || (next_key_num - 1)::text AS key,
-          next_key_num - 1 AS num
+RETURNING (key_prefix || '-' || (next_key_num - 1)::text)::text AS key,
+          (next_key_num - 1)::int AS num
 `
 
 type NextItemKeyRow struct {
-	Key interface{}
+	Key string
 	Num int32
 }
 
