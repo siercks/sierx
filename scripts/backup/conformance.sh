@@ -78,10 +78,24 @@ event_max() {
   psql "$1" -X -q -At -v ON_ERROR_STOP=1 -c "SELECT coalesce(max(seq),0) FROM change_event"
 }
 
+# A restore comparison over an empty database passes trivially: equal row
+# counts of zero, equal empty checksums, zero rollups to disagree. Refuse
+# rather than report OK — BUILD §0.4's "a green claim without evidence is
+# treated as red" applies to the harness too.
+assert_source_not_empty() {
+  local n
+  n=$(psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM item") \
+    || die "cannot read the source database"
+  [[ ${n:-0} -gt 0 ]] \
+    || die "the source database has no items — run 'make seed' first; restoring nothing proves nothing"
+  echo "source: $n item(s)"
+}
+
 run_one() {
   local d=$1 scratch_dsn id
   scratch_dsn=$(url_for_db "$SCRATCH")
   echo "=== conformance: $d"
+  assert_source_not_empty
   echo "--- describe"
   bash scripts/backup/driver.sh "$d" describe
 

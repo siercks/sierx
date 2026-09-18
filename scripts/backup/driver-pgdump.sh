@@ -108,7 +108,7 @@ verb_retention() {
 
 verb_describe() {
   local v
-  v=$(pg_dump --version 2>/dev/null | awk '{print $NF}') || v=unknown
+  v=$(pg_dump --version 2>/dev/null | awk '{print $3}') || v=unknown
   # No hostname or path that could name real topology (§3.7, gate-notopology).
   echo "pgdump driver; pg_dump $v; target dir $(basename "$DUMP_DIR"), keep $KEEP"
 }

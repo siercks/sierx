@@ -25,6 +25,24 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-17, defect six, found by reading a GREEN gate-0 rather than a
+  failure: **gate-0 ran backup conformance and the benchmarks against an empty
+  database.** `migrate.sh updown-up` leaves the schema at zero rows, and
+  nothing seeded before those two steps, so the restore comparison compared
+  nothing against nothing (equal counts of zero, equal empty checksums, zero
+  rollups to disagree) and every benchmark scenario skipped for want of data.
+  Both printed OK. The first real gate-0 GREEN was therefore a weaker claim
+  than it looked, and the log shows it plainly: `max(seq) = 0`, an empty
+  checksum line, `items=0 rollups=0`, and nine skipped scenarios.
+  Fixed two ways: gate-0 seeds before conformance and bench, and
+  `conformance.sh` now refuses a source database with no items instead of
+  reporting a trivial pass. BUILD §0.4's "a green claim without evidence is
+  treated as red" applies to the harness, not just to the checkboxes.
+  Also: the pgdump driver's `describe` printed `pg_dump 18.6-1.pgdg24.04+2)`
+  on a Debian-packaged client — `$NF` picked up the packaging string and its
+  bracket. That line is restore attribution under ADR-017, so it now reads
+  `pg_dump 18.6`.
+
 - 2026-09-17, defect five, and the root cause of defect four's symptom: the
   Quadlet unit's `Environment=POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8`
   was **unquoted**. systemd's `Environment=` takes space-separated VAR=VALUE

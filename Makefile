@@ -181,6 +181,11 @@ gate-0: ## The phase-0 gate: every check that must pass before phase 1
 	@bash scripts/gate-notopology.sh
 	@bash scripts/gate-nobackupleak.sh
 	@$(MAKE) --no-print-directory seed-determinism
+# Seed BEFORE conformance and bench. migrate.sh updown-up leaves the schema at
+# zero rows, so without this the restore comparison compares nothing against
+# nothing and every benchmark scenario skips for want of data — both reported
+# OK. A gate that passes on an empty database is not asserting what it claims.
+	@$(MAKE) --no-print-directory seed
 	@bash scripts/backup/conformance.sh
 	@bash scripts/bench.sh smoke
 	@GOOS=linux GOARCH=amd64 go build -trimpath -o /dev/null ./cmd/...
