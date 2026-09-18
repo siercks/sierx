@@ -225,60 +225,40 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
 
-- [ ] 0.1 Repository skeleton and toolchain pins — **implemented; acceptance
-      pending on the dev host.** The agent's sandbox had no Go, no Podman, and
-      Node 22, so `make bootstrap-check` cannot go green there. Run the
-      acceptance on the RHEL/Podman dev host, paste its output here, check
-      the box, and amend this commit (one task, one commit — BUILD §3.3).
+- [x] 0.1 Repository skeleton and toolchain pins — 2026-09-17, on the dev host
+      (arm64, DGX Spark, Ubuntu 24.04)
       ```
-      $ make gate-notopology
-      gate-notopology: OK (no topology in committable files)
-      $ make prove-notopology
-      prove: rfc1918 192.168/16: gate went red — OK
-      prove: rfc1918 10/8: gate went red — OK
-      prove: rfc1918 172.16/12: gate went red — OK
-      prove: .lan hostname: gate went red — OK
-      prove: .internal hostname: gate went red — OK
-      prove: .env value leak: gate went red — OK
-      prove: .env == example: gate GREEN — OK
-      prove: clean tree: gate GREEN — OK
-      $ make bootstrap-check          # sandbox, dev .env present — expected red
-      go         FAIL  go not found; go.mod pins 1.27.1
-      node       FAIL  v22.22.2 is not the major pinned in .nvmrc (24)
-      podman     FAIL  podman not found (BUILD §1: rootless Podman, no Docker)
-      psql       FAIL  psql not found and no podman to containerize it
+      $ make bootstrap-check
+      go         OK    go1.27.1 (go.mod pins 1.27.1)
+      node       OK    v24.21.0 (.nvmrc pins 24)
+      podman     OK    podman version 4.9.3
+      psql       OK    psql 18.6
+      database   OK    encoding UTF8, collation C
       signoff    INFO  ADR-010 **deployment** repository target — set at task 2.16 in the host
       backup     OK    repository type posix, path set, SIERX_ENV=dev
-      $ SIERX_ENV=staging make bootstrap-check | grep backup   # ADR-010 guard
-      backup     FAIL  PGBACKREST_REPO_TYPE=posix is a dev fixture; SIERX_ENV is 'staging' (ADR-010)
-      $ test -f LICENSE && test -f NOTICE && test -f docs/SPEC.md && echo files-ok
-      files-ok
+      $ make gate-notopology && make prove-notopology
+      gate-notopology: OK (no topology in committable files)
+      ... 9 proof cases, all OK (see the phase-0 exit block)
       ```
-- [ ] 0.2 Dev database — **implemented; ⚠ partially BLOCKED: acceptance needs
-      the dev host.** (1) No Podman in the agent sandbox, so `make db-up` was not
-      run. (2) The `postgres:18` image digest cannot be resolved without registry
-      access; the unit carries a placeholder that `db.sh` refuses to start, and
-      `make db-pin` resolves and writes it — run that first on the dev host.
-      What was verified: `bash -n` on `scripts/db.sh`; `db-reset` refuses when
-      `SIERX_ENV=staging` and refuses before dropping anything while unpinned;
-      the `make db-psql -- -c "..."` argument path via a stub podman; and a
-      native PostgreSQL 18.6 started with the unit's exact initdb args and
-      `-c` flags:
+- [x] 0.2 Dev database — 2026-09-17, on the dev host
       ```
-      $ SIERX_ENV=staging make db-reset
-      db.sh: db-reset refused: SIERX_ENV is 'staging', not dev
-      $ psql "$DATABASE_URL" -Atc "select version()" -c "select datcollate from pg_database where datname=current_database()" \
-          -c "show shared_preload_libraries" -c "show log_min_duration_statement" -c "select extname from pg_extension order by 1"
-      PostgreSQL 18.6 on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
-      C
-      pg_stat_statements
-      200ms
-      plpgsql
+      $ make db-reset
+      db-reset will DESTROY:
+        container : sierx-postgres
+        volume    : sierx-pgdata (the entire PGDATA — every database in this cluster)
+        database  : sierx on localhost:5432
+      dropped volume sierx-pgdata
+      waiting for postgres ...
+      db-up: sierx-postgres ready on 127.0.0.1:5432
+      $ make bootstrap-check | grep database
+      database   OK    encoding UTF8, collation C
       ```
-      Deviation: the acceptance's `show lc_collate` errors on PostgreSQL 18
-      (`unrecognized configuration parameter`; the GUC was removed in PG 16).
-      `select datcollate from pg_database where datname = current_database()`
-      is the equivalent check.
+      The cluster is UTF8 and C as §4.4 requires. Getting there took two fixes
+      recorded under deviations: the Quadlet unit's unquoted
+      `POSTGRES_INITDB_ARGS` (which silently produced SQL_ASCII) and the
+      encoding assertion that now catches it at `db-up` and in
+      `bootstrap-check`. The acceptance's `show lc_collate` does not exist on
+      PostgreSQL 18; the `pg_database` query above is the equivalent.
 - [x] 0.3 Migration tooling and extensions — 2026-09-12, against PostgreSQL
       18.6 (native, sandbox; see 0.2 note)
       ```
@@ -497,7 +477,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       also correct for restoring a soft-deleted item, which must keep a unique
       rank. No randomized sequence in the earlier unit tests had produced that
       interleaving.
-- [ ] 0.11 Backup and restore harness — **steps 1–4 and 6 green; steps 5 and 7
+- [~] 0.11 Backup and restore harness — **steps 1–4 and 6 green; steps 5 and 7
       left as ⚠ blocked, exactly as the task prescribes.** pgBackRest is not
       installed here and there is no repository target, so
       `driver-pgbackrest.sh`, `render-conf.sh` and the major-upgrade runbook are
@@ -570,7 +550,24 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         Rakefile names a dump tool). All three
         content gates now exclude `vendor/`: third-party source is not this
         project's configuration and is not edited here.
-- [ ] 0.12 CI skeleton, proven to fail
+- [~] 0.12 CI skeleton, proven to fail — **workflows, prove-gates, gate-0 and
+      ci-local all green; `docs/ci-portability.md` outstanding.**
+      ```
+      $ make prove-gates
+      prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
+      prove-gates: OK
+      ```
+      Every `gate-*` target has a proof or a recorded exemption; the two
+      exemptions are `gate-0` (composite — proving it means proving each of
+      its parts again) and `gate-bench` (advisory under ADR-016 until
+      reference hardware exists, with its one testable behaviour asserted
+      directly).
+      **Blocked from a first CI run:** `.github/workflows/ci.yml`'s postgres
+      service still carries the `sha256:PIN-ME-WITH-make-db-pin` placeholder.
+      `make db-pin` now writes the resolved digest into both the Quadlet unit
+      and the workflow, so run it on a machine with registry access and commit
+      the result before pushing, or the first run fails on an unpullable
+      image.
 - [~] 0.13 License gate, SBOM, supply chain — **license gate green; SBOM
       outstanding.** Done out of order, before 0.10: BUILD requires a
       property-testing library be cleared through `make gate-license` before
@@ -638,17 +635,70 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
 
 ### Phase 0 exit
 
-- gate-0: `<paste the tail of make gate-0>`
+- gate-0: **GREEN** on the dev host (arm64, DGX Spark), 2026-09-18
+  ```
+  $ make gate-0
+  ... bootstrap-check: all OK, database UTF8/C
+  ... migrate updown-up: 9 versions / clean at zero / 9 versions
+  schema-diff: from-scratch migration matches docs/schema.sql
+  NOTICE:  test-sql: 24 checks passed
+  NOTICE:  test-partitions: passed
+  sqlc-diff: checked-in generated code matches fresh output
+  ok      github.com/siercks/sierx/internal/store
+  ok      github.com/siercks/sierx/test/property
+  licenses.sh: 7 Go module(s) checked
+  gate-license: OK (every dependency on the §15.1 allowlist)
+  all modules verified / vendor-verify: OK
+  gate-nodirect: OK (governed tables written only through internal/store)
+  gate-notopology: OK (no topology in committable files)
+  gate-nobackupleak: OK (no backup tool named outside the drivers)
+  seed-determinism: OK (same seed identical, different seed differs)
+  seed: items=10000 max_depth=6 links=500 events=16989
+  === conformance: pgdump
+  source: 10000 item(s)
+  pgdump driver; pg_dump 18.6; target dir pgdump, keep 8
+  contract: OK
+  backup id: pgdump-20260918T045740Z
+  pgdump: verified pgdump-20260918T045740Z.dump (167 archive entries)
+    20 tables, all counts equal
+    content checksum e5a738e861bfb9d699b4318cfc8b7bd5
+    max(seq) = 16989
+  rollup --verify: items=10000 rollups=10000 mismatches=0
+  === conformance: pgdump PASSED
+  bench-smoke: OK (no scenario errored; thresholds not asserted here — ADR-016)
+    BenchmarkBoardView500-20                 5     853661 ns/op
+    BenchmarkItemDetail-20                   5     453083 ns/op
+    BenchmarkDescendantRollupDepth6-20       5     154775 ns/op
+    BenchmarkDeltaSync50-20                  5     327252 ns/op   5842 resp_bytes
+    BenchmarkFullTextSearch-20               5     466373 ns/op
+    BenchmarkRollupRecompute200-20           5  162650220 ns/op
+  prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
+  gate-0: GREEN
+  ```
+  Note on the benchmark figures: the DGX Spark is not the §12 reference
+  hardware, so these are a smoke run and not a baseline. `gate-bench` still
+  refuses to pass without one, which is correct (ADR-016).
 - Human gates:
   - [x] ADR-002 signed off — 2026-09-12
   - [x] ADR-005 signed off — 2026-09-12
   - [x] ADR-012 signed off — 2026-09-12
-  - [~] Task 0.11 — `backup-conformance` and `restore-test` green for the
-        `pgdump` driver (output under 0.11). Not signed off: the `pgbackrest`
-        driver (step 5) and the major-upgrade runbook (step 7) need an
-        installed pgBackRest and ADR-010's repository target, which bind at
-        task 2.16
-- Pin drift (ADR-019): `<any pin more than one cycle behind, or "none">`
-- Deviations: `<none | list>`
-- Open questions raised: `<none | list with ADR numbers>`
-- Requesting sign-off to enter phase 1.
+  - [ ] Task 0.11 green — `make backup-conformance && make restore-test`.
+        **Partially met.** The `pgdump` driver is conformance-green against a
+        10k-item database, and `restore-test` rotates through it. The
+        `pgbackrest` driver has never been run against an installed
+        pgBackRest, so per ADR-017 it is not yet a driver: `pgbackrest` is
+        absent from `SIERX_BACKUP_DRIVERS` and step 5's cipher-immutability
+        check is unverified. Deferred to task 2.16, where ADR-010's repository
+        target binds and a real data directory exists. **This gate is the
+        human's call, not the agent's.**
+- Pin drift (ADR-019): none. Go 1.27.1, Node 24, PostgreSQL 18.6, goose
+  v3.28.0, sqlc v1.31.1, gopter v0.2.9.
+- Deviations: see the list above — eleven, every one in the harness rather
+  than the product. Seven were found only by running on real hardware.
+- Open questions raised: `change_event.at` cannot be backdated by the seed
+  (needs an ADR before phase 5); ADR-003's "checked per row" rationale is
+  wrong for a DEFERRABLE constraint; the CI workflows' provenance.
+- Outstanding before phase 1: task 0.11's pgBackRest conformance (or an
+  explicit decision to defer it to 2.16), `docs/ci-portability.md` (0.12),
+  and the per-release SBOM (0.13).
+- **Requesting sign-off to enter phase 1.**

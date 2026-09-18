@@ -64,6 +64,16 @@ cmd_pin() {
   [[ $digest == sha256:* ]] || die "could not resolve digest"
   sed -i -E "s|^Image=docker.io/library/postgres:18@sha256:.*|Image=docker.io/library/postgres:18@${digest}|" "$UNIT_SRC"
   echo "Pinned: $(grep '^Image=' "$UNIT_SRC")"
+
+  # The CI service container must be the SAME image, pinned the same way
+  # (§15.4). Updating it here rather than by hand: two places holding one
+  # digest is two places to forget, and the symptom is a CI run that cannot
+  # pull its database.
+  local ci=.github/workflows/ci.yml
+  if [[ -f $ci ]]; then
+    sed -i -E "s|(image: postgres:18@)sha256:[A-Za-z0-9._-]+|\1${digest}|" "$ci"
+    echo "Pinned: $(grep -m1 'image: postgres:18@' "$ci" | sed 's/^ *//')"
+  fi
 }
 
 cmd_up() {
