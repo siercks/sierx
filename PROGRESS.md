@@ -25,6 +25,19 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-17, defect five, and the root cause of defect four's symptom: the
+  Quadlet unit's `Environment=POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8`
+  was **unquoted**. systemd's `Environment=` takes space-separated VAR=VALUE
+  pairs, so it set `POSTGRES_INITDB_ARGS=--locale=C` and discarded
+  `--encoding=UTF8`; initdb then defaulted to SQL_ASCII under the C locale.
+  The task 0.2 acceptance could not have caught this — it was never run in the
+  agent sandbox, which had no Podman, and the encoding check did not exist
+  until defect four. Quoted now, and `db.sh up` asserts `UTF8 C` after the
+  container reports ready, so a volume born from a wrong unit fails at startup
+  instead of three tasks later. initdb args apply only to a fresh volume, so
+  an existing cluster needs `make db-reset` in dev or a dump and reload
+  elsewhere.
+
 - 2026-09-17, defect four, same dev host: **every scratch database was created
   with inherited encoding and collation.** `CREATE DATABASE x` with no options
   copies template1, so on a cluster initdb'd without `--encoding=UTF8` the

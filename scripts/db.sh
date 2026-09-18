@@ -81,12 +81,26 @@ cmd_up() {
   local i
   for i in $(seq 1 30); do
     if podman exec "$UNIT_NAME" pg_isready -q -U "$PGUSER_" -d "$PGDB_" 2>/dev/null; then
+      assert_encoding
       echo "db-up: $UNIT_NAME ready on 127.0.0.1:${PGPORT_}"; return 0
     fi
     sleep 1
   done
   systemctl --user status "$UNIT_NAME.service" --no-pager || true
   die "postgres did not become ready"
+}
+
+# The cluster's encoding and collation are pinned (§4.4) and are set only when
+# initdb runs, so a volume created by an earlier, differently-configured unit
+# keeps whatever it was born with. Checked here rather than left to surface
+# later as something that looks like schema drift.
+assert_encoding() {
+  local got
+  got=$(podman exec "$UNIT_NAME" psql -U "$PGUSER_" -d "$PGDB_" -X -q -At \
+        -c "SELECT pg_encoding_to_char(encoding) || ' ' || datcollate FROM pg_database WHERE datname = current_database()" 2>/dev/null) || return 0
+  if [[ $got != "UTF8 C" ]]; then
+    die "the cluster is '$got' but must be 'UTF8 C' (§4.4). initdb args apply only to a fresh volume, so: make db-reset"
+  fi
 }
 
 cmd_down() {

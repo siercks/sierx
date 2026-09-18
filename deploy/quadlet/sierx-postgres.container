@@ -20,9 +20,20 @@ Image=docker.io/library/postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab2741
 # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB are rendered by
 # scripts/db.sh from DATABASE_URL into this file (mode 0600, outside git).
 EnvironmentFile=%h/.config/containers/systemd/sierx-postgres.env
-# C locale pinned rather than inherited (§4.4: ltree's label set is
+# C locale AND UTF8 pinned rather than inherited (§4.4: ltree's label set is
 # locale-dependent; A-Za-z0-9_- holds in C, which UUID labels rely on).
-Environment=POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8
+#
+# The quotes are load-bearing. systemd's Environment= takes space-separated
+# VAR=VALUE pairs, so unquoted this line sets POSTGRES_INITDB_ARGS=--locale=C
+# and discards --encoding=UTF8 as an unparsable second assignment. initdb then
+# defaults to SQL_ASCII under the C locale, and the cluster silently accepts
+# bytes that are not valid UTF-8. Observed on a real host before db.sh started
+# checking for it.
+#
+# These args apply only when initdb runs, i.e. on a FRESH volume. Changing
+# them on an existing cluster does nothing — `make db-reset` (dev) or a dump
+# and reload (anywhere else) is required.
+Environment="POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8"
 # The postgres:18 image keeps PGDATA under /var/lib/postgresql/18/; mount the
 # parent so the initdb'd cluster lands on the named volume.
 Volume=sierx-pgdata:/var/lib/postgresql:Z
