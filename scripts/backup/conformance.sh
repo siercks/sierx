@@ -100,7 +100,13 @@ run_one() {
   bash scripts/backup/driver.sh "$d" describe
 
   echo "--- contract"
-  bash scripts/backup/driver.sh --contract "$d" >/dev/null || die "$d failed the contract check"
+  # Show the output on failure. Swallowing it left the operator with "failed
+  # the contract check" and nothing to act on, when the check knows exactly
+  # which verb failed and why.
+  if ! contract_out=$(bash scripts/backup/driver.sh --contract "$d" 2>&1); then
+    printf '%s\n' "$contract_out"
+    die "$d failed the contract check (above)"
+  fi
   echo "contract: OK"
 
   echo "--- backup"

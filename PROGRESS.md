@@ -25,6 +25,15 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-18, task 0.11: `conformance.sh` swallowed the contract check's
+  output, so a failing driver reported only "failed the contract check" while
+  the check itself knew which verb failed and why. It now prints that output,
+  and `driver.sh --contract` reports the verb's own message — for the
+  pgbackrest driver on a host with no rendered config that reads
+  `init FAILED on first run: pgbackrest: ... render it with
+  scripts/backup/render-conf.sh`, which is actionable. The check was right; it
+  just would not say so.
+
 - 2026-09-17, defect six, found by reading a GREEN gate-0 rather than a
   failure: **gate-0 ran backup conformance and the benchmarks against an empty
   database.** `migrate.sh updown-up` leaves the schema at zero rows, and

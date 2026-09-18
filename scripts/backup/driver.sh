@@ -86,9 +86,11 @@ contract() {
     echo "  describe     -> $out"
   fi
 
-  # init must be idempotent: running it twice must still exit 0.
-  if ! run_verb "$d" init >/dev/null 2>&1; then
-    echo "  init         FAILED on first run"; rc=1
+  # init must be idempotent: running it twice must still exit 0. The verb's own
+  # message is the useful part — a driver that cannot init usually says exactly
+  # what is missing — so it is reported rather than discarded.
+  if ! init_out=$(run_verb "$d" init 2>&1); then
+    echo "  init         FAILED on first run: ${init_out%%$'\n'*}"; rc=1
   elif ! run_verb "$d" init >/dev/null 2>&1; then
     echo "  init         not idempotent — second run failed (ADR-017)"; rc=1
   else
