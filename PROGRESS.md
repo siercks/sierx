@@ -907,7 +907,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.6 Operator bootstrap.
 - [x] 1.7 Projection registry.
 - [x] 1.8 Cursor pagination.
-- [ ] 1.9 Projects.
+- [x] 1.9 Projects.
 - [ ] 1.10 Resolved configuration.
 - [ ] 1.11 Item create/read/update/delete with optimistic concurrency.
 - [ ] 1.12 Transitions.
@@ -1162,3 +1162,33 @@ gate-notopology: OK (no topology in committable files)
 ```
 
 All other API tests passed in that isolated-container run.
+
+### Task 1.9 acceptance - 2026-09-18
+
+Added administrator-only project creation with atomic config version 1,
+workspace-scoped detail and bounded list reads, archive filtering and the
+reserved-prefix authority. Fixed golden responses cover all three verbs.
+Tests cover member rejection, every reserved prefix, malformed prefixes,
+initial key counter and resolved seed status membership.
+
+Required supporting changes: route registration, response helpers, golden
+fixtures and per-test database creation. This also corrects the bootstrap test:
+pgx ConnString retains its original input even after changing Config.Database,
+so the former test used the container's disposable main database rather than
+the newly named database. Both CLI runs still happened inside the disposable
+container; this run now proves them against the intended separate empty database.
+
+```text
+$ make test-api
+--- PASS: TestBootstrap (1.09s)
+--- PASS: TestProjects (0.46s)
+PASS
+ok      github.com/siercks/sierx/internal/api 5.897s
+ok      github.com/siercks/sierx/internal/api/auth 0.003s
+ok      github.com/siercks/sierx/internal/api/projection 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
