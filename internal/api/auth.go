@@ -46,6 +46,7 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Get("/api/v1/projects", s.listProjects)
 	s.Router.With(s.requireAuth).Post("/api/v1/projects", s.createProject)
 	s.Router.With(s.requireAuth).Get("/api/v1/projects/{key}", s.getProject)
+	s.Router.With(s.requireAuth).Get("/api/v1/projects/{key}/config", s.projectConfig)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
