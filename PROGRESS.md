@@ -909,7 +909,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.8 Cursor pagination.
 - [x] 1.9 Projects.
 - [x] 1.10 Resolved configuration.
-- [ ] 1.11 Item create/read/update/delete with optimistic concurrency.
+- [x] 1.11 Item create/read/update/delete with optimistic concurrency.
 - [ ] 1.12 Transitions.
 - [ ] 1.13 Move and reparent.
 - [ ] 1.14 Links.
@@ -1212,6 +1212,30 @@ ok      github.com/siercks/sierx/internal/api/projection 0.004s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.11 acceptance - 2026-09-18
+
+Added projected item reads, validated creation/edits, soft deletion and quoted
+version preconditions. Store checks versions under the workspace sequence lock;
+failed creates roll back keys and sequences. Conflicts include current and
+submitted values. Local creates now record origin_seq; JSON preserves int64
+sequence precision. Leaf rollup point totals correctly retain SQL NULL.
+
+```text
+$ make test-api
+--- PASS: TestItemsCRUD (0.46s)
+--- PASS: TestFailedCreateRollsBack (0.39s)
+--- PASS: TestConcurrentItemEdit (0.45s)
+--- PASS: TestItemSequencePrecision (0.40s)
+ok github.com/siercks/sierx/internal/api 7.601s
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.437s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (10 modules allowed)
 gate-nodirect: OK (governed tables written only through internal/store)
 gate-notopology: OK (no topology in committable files)
 ```

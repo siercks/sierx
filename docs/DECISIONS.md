@@ -978,3 +978,14 @@ Item detail allows optional fields; items/children/descendants require them.
 Fixed-shape project, link, comment, history, view, config and rollup responses
 reject fields. Dotted selection preserves the containing JSON object; a whole
 composite makes any requested leaf redundant. Unconfigured custom fields fail.
+
+If-Match applies to mutations of an existing item, including its transitions,
+hierarchy, links and comments. Creation has no prior item version to match;
+POST items/projects/views and authentication/account actions do not require
+an item If-Match. Item PATCH accepts editable scalar fields and a custom-field
+overlay; identity, type, status and hierarchy use their own actions. A conflict
+contains `current` and, for submitted item edits, `submitted`. Values are not
+silently overwritten. Points are nonnegative, at most 9999.99, with two decimal
+places; dates use YYYY-MM-DD and assignees must be active workspace members.
+An item delete affects that item, preserves its key and remains readable by key.
+New local items set origin_seq to their allocated creation sequence.

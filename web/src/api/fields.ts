@@ -20,7 +20,7 @@ export interface ItemFields {
   parent: { key: string } | null;
   project: { key_prefix: string; name: string };
   fields: Record<string, unknown>;
-  rollup: { descendant_count: number; done_count: number; points_total: number; points_done: number; earliest_start: string | null; latest_due: string | null };
+  rollup: { descendant_count: number; done_count: number; points_total: number | null; points_done: number | null; earliest_start: string | null; latest_due: string | null };
 }
 export type FieldName =
   | "assignee"
