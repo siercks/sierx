@@ -1,0 +1,89 @@
+# Release: two NATIVE build jobs and a manifest merge. No QEMU (§1.1) — a
+# cross-built arm64 binary under emulation takes minutes and tells you nothing
+# about the target, and the free arm64 runner makes emulation pointless.
+#
+# Every step is a make target or an action. SBOM per release (task 0.13), base
+# images pinned by digest, -trimpath and CGO_ENABLED=0 for a reproducible
+# artifact (§15.4).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+env:
+  IMAGE: ghcr.io/siercks/sierx
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: make release-binaries
+        env:
+          GOARCH: ${{ matrix.arch }}
+
+      - name: generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/sbom-${{ matrix.arch }}.spdx.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sierx-${{ matrix.arch }}
+          path: dist/
+          if-no-files-found: error
+
+  image:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # One image per architecture from the native binaries, then a manifest
+      # that ties them together. The base image is pinned by digest in
+      # deploy/Containerfile (§15.4).
+      - run: make release-image ARCH=amd64 TAG=${{ github.ref_name }}
+      - run: make release-image ARCH=arm64 TAG=${{ github.ref_name }}
+      - run: make release-manifest TAG=${{ github.ref_name }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          fail_on_unmatched_files: true

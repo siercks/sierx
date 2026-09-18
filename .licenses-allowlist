@@ -1,0 +1,42 @@
+# Dependency licenses (SPEC §15.1). scripts/licenses.sh enforces this file.
+#
+# Format: one directive per line, `#` starts a comment.
+#   allow  <spdx>            permitted license
+#   block  <spdx>            rejected, named explicitly
+#   resolve <module> <spdx> -- <reason>
+#                            a dual-licensed module resolved to one arm. The
+#                            reason is mandatory: BUILD task 0.13 permits
+#                            resolution "only if the allowlist file records
+#                            which arm was taken and why".
+#
+# Anything classified as a license that is neither allowed nor blocked fails
+# the gate as unknown. An unrecognised license is not a pass by default.
+
+allow MIT
+allow Apache-2.0
+allow BSD-2-Clause
+allow BSD-3-Clause
+allow ISC
+allow Unlicense
+allow CC0-1.0
+allow PostgreSQL
+allow Zlib
+
+# Copyleft.
+block GPL-2.0
+block GPL-3.0
+block LGPL-2.1
+block LGPL-3.0
+block AGPL-3.0
+block MPL-2.0
+
+# Source-available, not copyleft, and therefore not caught by a "no GPL family"
+# rule — which is exactly why BUILD names them (task 0.13).
+block SSPL-1.0
+block BSL-1.1
+block Elastic-2.0
+block Commons-Clause
+
+# Resolutions. None taken so far; every dependency is single-licensed.
+# Example of the required form:
+#   resolve example.com/mod MIT -- dual MIT/GPL-2.0; MIT arm taken, no GPL code linked

@@ -1,0 +1,36 @@
+# sqlc against the migrated schema, pgx/v5, generated code checked in.
+# BUILD task 0.7. Only the queries tasks 0.8–0.9 need are here; the phase-1 API's
+# queries arrive with the tasks that own them.
+#
+# `schema:` points at migrations/ so sqlc reads the same DDL the database gets —
+# there is no second schema definition to drift. docs/schema.sql is the snapshot
+# schema-diff compares against, not an input.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/store/query
+    gen:
+      go:
+        package: gen
+        out: internal/store/gen
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_result_struct_pointers: false
+        overrides:
+          # ltree has no pgx type; the store layer builds and compares paths as
+          # text and lets Postgres cast (§4.4).
+          - db_type: ltree
+            go_type: string
+          - db_type: ltree
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          # tsvector is generated and never read by the store.
+          - db_type: tsvector
+            go_type: string
+            nullable: true
