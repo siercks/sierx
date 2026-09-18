@@ -1645,3 +1645,19 @@ The final parenthetical is the gate's fixed reminder; the owner-operated manual
 walkthrough is recorded above and has passed. No further test rerun is requested
 for this documentation-only update. No Phase 1 scope cuts were taken. Release
 review and merge remain user-controlled; no merge is claimed here.
+
+### Phase 1 acceptance complete - 2026-09-18
+
+The owner confirmed the tested Spark checkout after completing both gates:
+
+```text
+ca9a238 (HEAD -> build/phase-1-spark, origin/build/phase-1-api) Record successful offline Phase 1 acceptance gate
+## build/phase-1-spark...origin/build/phase-1-api
+```
+
+The checkout was clean. This resolves the pending checkout-identification and
+gate-confirmation notes above: all 25 Phase 1 tasks, the automated Spark gate,
+and the owner-operated manual walkthrough have passed acceptance at ca9a238.
+Subsequent commits only record acceptance evidence in this file. No Phase 1
+scope cuts were taken. Phase 1 is ready for final PR review and the owner's
+merge; no merge has been performed as part of this acceptance record.
