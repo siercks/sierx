@@ -1620,3 +1620,28 @@ Observed manual checks:
 Manual workflow and the additional checks above passed. Final closeout awaits
 checkout identification and confirmation of the Spark automated-gate status;
 this entry does not claim a Spark performance baseline or physical-backup test.
+
+### Spark automated gate confirmed - 2026-09-18
+
+The owner supplied the final Spark gate output after the manual walkthrough.
+Both automated and manual Phase 1 acceptance checks have now passed. The supplied
+log does not include git log/status output, so the exact tested Spark SHA remains
+an outstanding provenance detail rather than an unreported test failure.
+
+```text
+prove-gates: 6 proven, 3 exempt, 0 without a proof, 0 proof failures
+gate-0: GREEN
+API suite: PASS (14.126s); golden regeneration suite: PASS (14.564s)
+golden: all endpoint and query fixtures reproduce without drift
+SXQ fuzz: 30936 executions; PASS (6.028s)
+TestCommitOrderedCursor: 544 committed events exactly once across 259 polls
+Race-enabled concurrency package: PASS (3.926s)
+gate-gen: OK
+smoke-api: real CLI bootstrap and curl workflow PASS
+gate-1: GREEN (automated; human walkthrough remains required)
+```
+
+The final parenthetical is the gate's fixed reminder; the owner-operated manual
+walkthrough is recorded above and has passed. No further test rerun is requested
+for this documentation-only update. No Phase 1 scope cuts were taken. Release
+review and merge remain user-controlled; no merge is claimed here.
