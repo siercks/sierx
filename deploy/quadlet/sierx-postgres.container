@@ -1,0 +1,43 @@
+# sierx — PostgreSQL 18, rootless Podman Quadlet unit (BUILD task 0.2).
+#
+# Installed by `scripts/db.sh up` into ~/.config/containers/systemd/ and driven
+# with `systemctl --user`. The same unit serves dev and staging; every
+# difference comes from the env file it reads, never from editing this file.
+#
+# Image pin: digest, not tag (SPEC §15.4). The digest is resolved on a machine
+# with registry access by `make db-pin`, which rewrites the Image= line below.
+# `scripts/db.sh` refuses to start the unit while the placeholder is present.
+# Dependabot's docker ecosystem proposes digest bumps (ADR-019); a PostgreSQL
+# *major* bump is a human runbook item (stanza-upgrade, ADR-010).
+
+[Unit]
+Description=sierx PostgreSQL 18
+After=network-online.target
+
+[Container]
+ContainerName=sierx-postgres
+Image=docker.io/library/postgres:18@sha256:PIN-ME-WITH-make-db-pin
+# POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB are rendered by
+# scripts/db.sh from DATABASE_URL into this file (mode 0600, outside git).
+EnvironmentFile=%h/.config/containers/systemd/sierx-postgres.env
+# C locale pinned rather than inherited (§4.4: ltree's label set is
+# locale-dependent; A-Za-z0-9_- holds in C, which UUID labels rely on).
+Environment=POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8
+# The postgres:18 image keeps PGDATA under /var/lib/postgresql/18/; mount the
+# parent so the initdb'd cluster lands on the named volume.
+Volume=sierx-pgdata:/var/lib/postgresql:Z
+# Loopback only. The host port is substituted from DATABASE_URL by scripts/db.sh
+# when it installs the unit; Quadlet does not expand env vars in PublishPort.
+PublishPort=127.0.0.1:5432:5432
+# §14.3: pg_stat_statements on, slow-statement logging at 200 ms.
+Exec=postgres -c shared_preload_libraries=pg_stat_statements -c log_min_duration_statement=200ms
+HealthCmd=pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+HealthInterval=5s
+HealthRetries=12
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

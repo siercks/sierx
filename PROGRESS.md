@@ -25,6 +25,14 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-12, task 0.2: acceptance uses `show lc_collate`, which PostgreSQL 18
+  rejects (GUC removed in PG 16). Verified with `select datcollate from
+  pg_database where datname = current_database()` instead.
+- 2026-09-12, task 0.2: the `postgres:18` digest is a `# supplied by human`
+  input in the agent's environment (no registry egress). `make db-pin` resolves
+  it on any machine with registry access; `db-up`/`db-reset` refuse to run on
+  the placeholder.
+
 - 2026-09-12, task 0.1: `docs/HANDOVER.md` is committed although it is not in
   the task's Files list — the kickoff prompt's read order names it. HANDOVER §1
   said the five doc files were already committed; the repository held only
@@ -73,7 +81,31 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       $ test -f LICENSE && test -f NOTICE && test -f docs/SPEC.md && echo files-ok
       files-ok
       ```
-- [ ] 0.2 Dev database
+- [ ] 0.2 Dev database — **implemented; ⚠ partially BLOCKED: acceptance needs
+      the dev host.** (1) No Podman in the agent sandbox, so `make db-up` was not
+      run. (2) The `postgres:18` image digest cannot be resolved without registry
+      access; the unit carries a placeholder that `db.sh` refuses to start, and
+      `make db-pin` resolves and writes it — run that first on the dev host.
+      What was verified: `bash -n` on `scripts/db.sh`; `db-reset` refuses when
+      `SIERX_ENV=staging` and refuses before dropping anything while unpinned;
+      the `make db-psql -- -c "..."` argument path via a stub podman; and a
+      native PostgreSQL 18.6 started with the unit's exact initdb args and
+      `-c` flags:
+      ```
+      $ SIERX_ENV=staging make db-reset
+      db.sh: db-reset refused: SIERX_ENV is 'staging', not dev
+      $ psql "$DATABASE_URL" -Atc "select version()" -c "select datcollate from pg_database where datname=current_database()" \
+          -c "show shared_preload_libraries" -c "show log_min_duration_statement" -c "select extname from pg_extension order by 1"
+      PostgreSQL 18.6 on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+      C
+      pg_stat_statements
+      200ms
+      plpgsql
+      ```
+      Deviation: the acceptance's `show lc_collate` errors on PostgreSQL 18
+      (`unrecognized configuration parameter`; the GUC was removed in PG 16).
+      `select datcollate from pg_database where datname = current_database()`
+      is the equivalent check.
 - [ ] 0.3 Migration tooling and extensions
 - [ ] 0.4 Schema: all of SPEC §4
 - [ ] 0.5 Invariant enforcement in the database
