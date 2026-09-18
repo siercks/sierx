@@ -8,6 +8,14 @@ SHELL := /usr/bin/env bash
 test-api: ## API tests; filter with TEST_ARGS='-run TestServerBoot'
 	@bash scripts/test-go.sh ./internal/api/... ./internal/config/... $(TEST_ARGS) -count=1
 
+.PHONY: gen-fields gate-gen prove-gen
+gen-fields: ## Generate client fields from the API registry
+	@go run ./internal/api/projection/cmd/genfields
+gate-gen: ## Assert generated API fields have not drifted
+	@bash scripts/gate-gen.sh
+prove-gen: ## Prove generated field drift is rejected
+	@bash scripts/gate-gen.sh --prove
+
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \
