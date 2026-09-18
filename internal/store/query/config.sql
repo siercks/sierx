@@ -54,8 +54,8 @@ SELECT * FROM status WHERE project_id = $1 ORDER BY key;
 SELECT * FROM item_type WHERE project_id = $1 ORDER BY level, key;
 
 -- name: InsertLink :one
-INSERT INTO item_link (from_item_id, to_item_id, kind, created_by)
-VALUES ($1, $2, $3, $4)
+INSERT INTO item_link (id, from_item_id, to_item_id, kind, created_by)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: DeleteLink :exec

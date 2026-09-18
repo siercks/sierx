@@ -912,7 +912,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.11 Item create/read/update/delete with optimistic concurrency.
 - [x] 1.12 Transitions.
 - [x] 1.13 Move and reparent.
-- [ ] 1.14 Links.
+- [x] 1.14 Links.
 - [ ] 1.15 Comments.
 - [ ] 1.16 Hierarchy reads.
 - [ ] 1.17 Item history.
@@ -1275,6 +1275,25 @@ $ make test-api
 ok github.com/siercks/sierx/internal/api 11.563s
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.381s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.14 acceptance - 2026-09-18
+
+Added inbound/outbound paginated link reads, all five link kinds, cross-project
+creation and deletion with source-item version preconditions. Store now preserves
+supplied link IDs and advances the source item version/change sequence. Nested
+endpoint summaries leave room for later reduced cross-workspace projections;
+Phase 1 resolves targets within the authenticated workspace.
+
+```text
+$ make test-api
+--- PASS: TestLinks (0.38s)
+ok github.com/siercks/sierx/internal/api 12.423s
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.390s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
