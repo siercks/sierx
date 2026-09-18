@@ -911,7 +911,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.10 Resolved configuration.
 - [x] 1.11 Item create/read/update/delete with optimistic concurrency.
 - [x] 1.12 Transitions.
-- [ ] 1.13 Move and reparent.
+- [x] 1.13 Move and reparent.
 - [ ] 1.14 Links.
 - [ ] 1.15 Comments.
 - [ ] 1.16 Hierarchy reads.
@@ -1257,4 +1257,25 @@ $ make gate-license gate-nodirect gate-notopology
 gate-license: OK (10 modules allowed)
 gate-nodirect: OK (governed tables written only through internal/store)
 gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.13 acceptance - 2026-09-18
+
+Added hierarchy move with explained project/cycle/depth errors, single-statement
+subtree rewrite, and rank placement computed under the workspace write lock.
+The store repeats hierarchy validation after serialization. Omitted rank_after
+preserves rank; explicit null prepends in the project ordering. Randomized HTTP
+create/move/delete/transition sequences verify paths and materialized rollups.
+
+```text
+$ make test-api
+--- PASS: TestMove (0.40s)
++ API mutations preserve paths and materialized rollups: OK, passed 8 tests.
+--- PASS: TestAPIHierarchyProperty (3.25s)
+ok github.com/siercks/sierx/internal/api 11.563s
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.381s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
 ```
