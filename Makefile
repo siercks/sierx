@@ -204,6 +204,8 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: ## The phase-0 gate: every check that must pass before phase 1
+	@bash test/shell/postgres-tools_test.sh
+	@bash scripts/check-postgres-tools.sh
 	@bash test/shell/schema_test.sh
 	@bash test/shell/test-go_test.sh
 	@bash test/shell/ci-local_test.sh
@@ -248,5 +250,12 @@ sbom-check: ## Validate the generated SBOM format and all stable inventory/build
 	@bash scripts/sbom.sh --check "$(or $(SBOM_OUT),dist/sbom.cdx.json)"
 
 .PHONY: ci-local-prepare sbom sbom-check check
+.PHONY: check-workflows check-vulnerabilities
+check-workflows: ## Validate GitHub Actions workflows (online pinned tool installation)
+	@bash scripts/security-check.sh workflows
+
+check-vulnerabilities: ## Scan reachable Go vulnerabilities using the current online database
+	@bash scripts/security-check.sh vulnerabilities
+
 ci-local-prepare: ## Prepare the local CI container and caches while online
 	@bash scripts/ci-local.sh prepare

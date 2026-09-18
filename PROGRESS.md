@@ -1693,3 +1693,35 @@ gate-gen: OK
 smoke-api: real CLI bootstrap and curl workflow PASS
 gate-1: GREEN (automated; human walkthrough remains required)
 ```
+
+### Pre-merge GitHub check hardening - 2026-09-18
+
+Added separate read-only workflow-lint and go-vulnerabilities jobs for pull
+requests, main/build pushes, manual dispatch and weekly scans after merge.
+Tools are pinned to actionlint v1.7.12 and govulncheck v1.8.0; ShellCheck checks
+embedded workflow shell commands. Local make targets reproduce the checks.
+Online advisory lookups remain outside the offline gate. All workflow Actions,
+including release Actions, are pinned to verified upstream commit SHAs and
+checkout does not persist its credential. Existing Dependabot updates the pins.
+
+The offline gate now checks all three PostgreSQL client versions before
+migrations and the server major when DATABASE_URL is exported. Regression
+tests reject each old client and incompatible or malformed server versions.
+
+```text
+make check-workflows: PASS (actionlint and ShellCheck)
+make check-vulnerabilities: PASS; zero reachable/imported-package vulnerabilities
+module-only advisory: GO-2026-5932, unused x/crypto/openpgp; no suppression
+postgres-tools proof: PASS
+make ci-local: exit 0; gate-0 and gate-1 GREEN
+SXQ fuzz: 59765 executions; PASS
+smoke-api: real CLI bootstrap and curl workflow PASS
+```
+
+Repository settings are still pending authenticated owner action. Public API
+inspection returned no rulesets; legacy protection and secret settings were
+not readable without authentication. Browser automation failed to initialize.
+docs/GITHUB-CHECKS.md supplies the exact main-branch rules and secret-protection
+settings to apply after the new jobs appear. Required checks are gate,
+workflow-lint and go-vulnerabilities. Hosted runs and settings confirmation are
+required before merge; this entry does not claim those settings are enabled.
