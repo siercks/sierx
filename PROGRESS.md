@@ -908,7 +908,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.7 Projection registry.
 - [x] 1.8 Cursor pagination.
 - [x] 1.9 Projects.
-- [ ] 1.10 Resolved configuration.
+- [x] 1.10 Resolved configuration.
 - [ ] 1.11 Item create/read/update/delete with optimistic concurrency.
 - [ ] 1.12 Transitions.
 - [ ] 1.13 Move and reparent.
@@ -1186,6 +1186,29 @@ PASS
 ok      github.com/siercks/sierx/internal/api 5.897s
 ok      github.com/siercks/sierx/internal/api/auth 0.003s
 ok      github.com/siercks/sierx/internal/api/projection 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.10 acceptance - 2026-09-18
+
+Added one-query resolved configuration with ordered statuses/types, initial
+status keys, enumerated transition arcs and required fields, field definitions
+and a content ETag. Fixed golden JSON covers the seeded wildcard expansion.
+Supporting route/test files verify weak conditional ETags, empty 304 bodies
+and rejection of fields on this fixed representation.
+
+```text
+$ make test-api
+=== RUN   TestResolvedConfig
+--- PASS: TestResolvedConfig (0.47s)
+PASS
+ok      github.com/siercks/sierx/internal/api 6.788s
+ok      github.com/siercks/sierx/internal/api/auth 0.004s
+ok      github.com/siercks/sierx/internal/api/projection 0.004s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 gate-license: OK (every dependency on the §15.1 allowlist)
