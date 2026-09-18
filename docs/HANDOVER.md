@@ -1,11 +1,43 @@
 # sierx — handover to the coding agent
 
-**Date:** 2026-09-12
+**Date:** 2026-09-12, revised 2026-09-18 (see §0)
 **Repository:** `github.com/siercks/sierx` (public, Apache-2.0, module path
 `github.com/siercks/sierx`)
 
-This file exists so the first session starts with zero ambiguity about what is
-already true. Read it once; `PROGRESS.md` is the running state thereafter.
+This file exists so a session starts with zero ambiguity about what is already
+true. Read it once; `PROGRESS.md` is the running state thereafter.
+
+---
+
+## 0. Current state (accepted closeout, 2026-09-18)
+
+The owner accepted Phase 0 with physical-backup validation deferred to task
+2.16, authorized pushing the closeout, and authorized Phase 1. Current phase:
+**1**. The next implementation task is BUILD 1.1; the interaction milestones
+are described in docs/PHASE-1-PLAN.md.
+
+The actual offline container gate passed on the Spark after restoring a
+vendored source file excluded by an overly broad ignore rule. All 13 store
+and seven property-suite tests ran, 24 SQL assertions passed, the stronger
+SBOM/vendor checks passed, and restoration matched 20 tables and 15,438 items
+with zero rollup mismatches. Full evidence is in
+`docs/acceptance/phase0-offline-spark-2026-09-18.log`.
+
+- Task 0.12 is accepted; earlier pending statements in historical entries are
+  superseded by the final PROGRESS acceptance block.
+- Task 0.11 remains partial. Physical restore and cipher immutability are not
+  tested. The owner approved deferral, with encrypted off-machine backup and
+  an isolated physical restore required before relying on the deployed backlog.
+- There is no deadline (ADR-020). The Spark is the first test/deployment host;
+  the Pi is not required now. Spark timings do not establish small-host budgets.
+- Keep the existing Go/PostgreSQL architecture, phase boundaries, accessibility
+  requirements and scope discipline. Browser UI implementation remains Phase 2.
+- Always separate disposable acceptance databases from persistent application
+  data. gate-0 intentionally runs migrations down to zero; ci-local isolates it.
+- Repository BUILD v1.6 plus recorded amendments supersedes the attached v1.1.
+  The database image is already digest-pinned.
+
+Sections 1-3 below are historical pre-build context, not current status.
 
 ---
 
@@ -74,8 +106,8 @@ stop at tasks 0.4, 0.8, 1.13, or 2.9 on their account.
 1. `PROGRESS.md` — current phase, next unchecked task. The only source of truth
    for where the build is.
 2. `docs/BUILD.md` §0–§4 — protocol, environment, decision record.
-3. `docs/BUILD.md` for the **current phase only**. Phase 0 is §5. **Do not read
-   §6, §7, or §8.**
+3. `docs/BUILD.md` for the **current phase**. Phase 1 is §6. Read later-phase
+   requirements when planning an explicitly requested interface, without scaffolding it.
 4. `docs/DECISIONS.md` — ADRs added since the guide was written.
 5. `docs/SPEC.md` — the sections the current task cites. Read those; do not read
    the whole specification into context on every task.
@@ -93,7 +125,7 @@ Stop and ask, rather than choosing:
 - An acceptance command needs a credential, host, or domain not in `.env.example`
 - Implementing a task as written would violate a SPEC §5 invariant
 
-## 6. Kickoff prompt
+## 6. Historical Phase 0 kickoff prompt (superseded)
 
 Paste this as the first message of the build session.
 
@@ -130,10 +162,6 @@ implement it.
 
 ## 7. Calendar
 
-The phase-2 deadline anchors on the first phase-0 commit and runs 28 days
-(SPEC §0 rule 5). Record both dates in `PROGRESS.md` at task 0.1.
-
-If it slips, cut scope rather than the date, from the ranked list in BUILD §1.2,
-top first, each cut recorded in `PROGRESS.md` with the date and reason. Never cut
-the contrast gate, `gate-axe`, `gate-keyboard`, `gate-nodirect`, the property
-tests, task 0.11's restore test, or task 2.18's cutover.
+ADR-020 supersedes the original 28-day deadline and deadline-triggered cuts.
+The owner requests steady progress without a calendar deadline. Human phase
+reviews, real-use feedback and acceptance evidence remain required.

@@ -51,7 +51,7 @@ jobs:
       PGBACKREST_REPO_TYPE: posix
       PGBACKREST_REPO_PATH: .backups/physical
       SIERX_SESSION_KEY: ci-only-not-a-secret-000000000000000000000000
-      SIERX_AUTH_MODE: password
+      SIERX_AUTH_MODE: local
       SIERX_BASE_URL: http://localhost:8080
       SIERX_TRUSTED_PROXIES: ""
 

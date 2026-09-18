@@ -1,0 +1,24 @@
+# Prepared online; the resulting local image runs gate-0 offline.
+ARG GO_IMAGE
+ARG NODE_IMAGE
+ARG PG_IMAGE
+FROM ${GO_IMAGE} AS go
+FROM ${NODE_IMAGE} AS node
+FROM ${PG_IMAGE}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git make python3 curl ca-certificates podman && rm -rf /var/lib/apt/lists/*
+COPY --from=go /usr/local/go /usr/local/go
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+ENV PATH="/usr/local/go/bin:${PATH}" GOPATH=/opt/go GOCACHE=/opt/go-build GOTOOLCHAIN=local
+WORKDIR /opt/prepared
+COPY . .
+RUN git init -q && git add -A && \
+    git -c user.name=ci -c user.email=ci@example.test commit -qm snapshot && \
+    go mod download && go mod verify && \
+    bash -c 'source scripts/tool.sh; tool_path goose; tool_path sqlc' && \
+    mkdir /opt/sierx-tools && cp bin/goose bin/sqlc /opt/sierx-tools/ && \
+    sha256sum go.mod go.sum scripts/tool.sh .nvmrc deploy/ci/Containerfile \
+      scripts/ci-run.sh deploy/quadlet/sierx-postgres.container > /opt/prepared-inputs.sha256
+COPY scripts/ci-run.sh /usr/local/bin/sierx-ci-run.sh
+WORKDIR /workspace
+ENTRYPOINT ["/bin/bash", "/usr/local/bin/sierx-ci-run.sh"]
