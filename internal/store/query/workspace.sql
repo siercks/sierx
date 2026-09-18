@@ -18,3 +18,25 @@ UPDATE seq_counter
    SET value = value + sqlc.arg(n)::bigint
  WHERE workspace_id = sqlc.arg(workspace_id)
 RETURNING value;
+
+-- name: SeedChecksum :one
+-- The determinism check for the seed generator (task 0.9). Hashes the content
+-- that must be identical between two runs with the same --seed, in a stable
+-- order. Ids and timestamps are excluded on purpose: uuidv7 embeds the clock,
+-- so they differ between runs by design, and `at`/`created_at` likewise.
+SELECT count(*)::int AS items,
+       coalesce(max(nlevel(path)), 0)::int AS max_depth,
+       md5(string_agg(sig, '|' ORDER BY sig))::text AS checksum
+  FROM (
+    SELECT i.title || ':' || s.key || ':' || t.key || ':' ||
+           coalesce(i.points::text, '-') || ':' ||
+           coalesce(i.start_date::text, '-') || ':' ||
+           coalesce(i.due_date::text, '-') || ':' ||
+           coalesce(i.body, '-') || ':' || i.fields::text || ':' ||
+           nlevel(i.path)::text AS sig,
+           i.path
+      FROM item i
+      JOIN status s ON s.id = i.status_id
+      JOIN item_type t ON t.id = i.item_type_id
+     WHERE i.workspace_id = $1
+  ) x;

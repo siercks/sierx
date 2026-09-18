@@ -8,7 +8,8 @@ SHELL := /usr/bin/env bash
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \
         schema-snapshot schema-diff test-sql test-partitions \
-        sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store
+        sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store \
+        seed seed-determinism rollup-verify
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -87,3 +88,13 @@ prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goe
 test-store: ## store.Mutate unit-of-work tests against the dev database (task 0.8)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@go test ./internal/store/... -count=1
+
+seed: ## Build a 10k-item, 6-deep, 5-project workspace (deterministic) (task 0.9)
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@go run ./cmd/sierxctl seed $(SEED_ARGS)
+
+seed-determinism: ## Seed twice with the same --seed into fresh databases and compare checksums
+	@bash scripts/seed-determinism.sh
+
+rollup-verify: ## ADR-005 control 2: recompute every rollup and report disagreements
+	@go run ./cmd/sierxctl rollup --verify

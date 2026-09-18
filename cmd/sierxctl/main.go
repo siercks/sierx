@@ -17,6 +17,10 @@ func main() {
 	switch os.Args[1] {
 	case "partitions":
 		err = runPartitions(context.Background(), os.Args[2:])
+	case "seed":
+		err = runSeed(context.Background(), os.Args[2:])
+	case "rollup":
+		err = runRollup(context.Background(), os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -28,5 +32,8 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: sierxctl partitions ensure --months-ahead N")
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  sierxctl partitions ensure --months-ahead N")
+	fmt.Fprintln(os.Stderr, "  sierxctl seed [--seed N] [--items N] [--projects N] [--max-depth N]")
+	fmt.Fprintln(os.Stderr, "  sierxctl rollup --verify")
 }

@@ -78,3 +78,39 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 	)
 	return i, err
 }
+
+const seedChecksum = `-- name: SeedChecksum :one
+SELECT count(*)::int AS items,
+       coalesce(max(nlevel(path)), 0)::int AS max_depth,
+       md5(string_agg(sig, '|' ORDER BY sig))::text AS checksum
+  FROM (
+    SELECT i.title || ':' || s.key || ':' || t.key || ':' ||
+           coalesce(i.points::text, '-') || ':' ||
+           coalesce(i.start_date::text, '-') || ':' ||
+           coalesce(i.due_date::text, '-') || ':' ||
+           coalesce(i.body, '-') || ':' || i.fields::text || ':' ||
+           nlevel(i.path)::text AS sig,
+           i.path
+      FROM item i
+      JOIN status s ON s.id = i.status_id
+      JOIN item_type t ON t.id = i.item_type_id
+     WHERE i.workspace_id = $1
+  ) x
+`
+
+type SeedChecksumRow struct {
+	Items    int32
+	MaxDepth int32
+	Checksum string
+}
+
+// The determinism check for the seed generator (task 0.9). Hashes the content
+// that must be identical between two runs with the same --seed, in a stable
+// order. Ids and timestamps are excluded on purpose: uuidv7 embeds the clock,
+// so they differ between runs by design, and `at`/`created_at` likewise.
+func (q *Queries) SeedChecksum(ctx context.Context, workspaceID pgtype.UUID) (SeedChecksumRow, error) {
+	row := q.db.QueryRow(ctx, seedChecksum, workspaceID)
+	var i SeedChecksumRow
+	err := row.Scan(&i.Items, &i.MaxDepth, &i.Checksum)
+	return i, err
+}

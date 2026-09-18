@@ -75,6 +75,11 @@ type Querier interface {
 	// §5.3: rewrite path for the item and all its descendants in ONE statement.
 	// new_parent_path is '' for a move to the root.
 	ReparentSubtree(ctx context.Context, arg ReparentSubtreeParams) ([]ReparentSubtreeRow, error)
+	// The determinism check for the seed generator (task 0.9). Hashes the content
+	// that must be identical between two runs with the same --seed, in a stable
+	// order. Ids and timestamps are excluded on purpose: uuidv7 embeds the clock,
+	// so they differ between runs by design, and `at`/`created_at` likewise.
+	SeedChecksum(ctx context.Context, workspaceID pgtype.UUID) (SeedChecksumRow, error)
 	SetItemChangeSeq(ctx context.Context, arg SetItemChangeSeqParams) error
 	SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) (SoftDeleteItemRow, error)
 	// The generic field update. version is bumped here and nowhere else (§5.4);

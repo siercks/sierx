@@ -66,6 +66,14 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Open questions raised
 
+- 2026-09-12, task 0.9: the seed cannot backdate `change_event.at` — the
+  column defaults to `now()` and `Mutate` does not accept a timestamp, so
+  "status transitions spread over ~9 months" is only true of the items' dates
+  and the transition order, not of the event timestamps. Cycle-time and
+  burndown work (§13, phase 5) needs real historical `at` values. The choice —
+  let a caller set `at` under a seed-only flag, or accept that history begins
+  at first run — belongs in an ADR before phase 5, not in the seed.
+
 - 2026-09-12, task 0.6: `deploy/quadlet/sierx-maintenance.service` (added — a
   timer needs a service; not in the Files list) runs `podman exec sierx
   sierxctl partitions ensure --months-ahead 1`. The application container's
@@ -290,7 +298,40 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         declares. Adding a column to `item` means adding it to those lists.
       - `SET CONSTRAINTS` is transaction control, not a query sqlc can model,
         so the rebalance issues it through the connection directly.
-- [ ] 0.9 Seed generator
+- [x] 0.9 Seed generator — 2026-09-12
+      ```
+      $ make migrate-up && go run ./cmd/sierxctl seed      # ~40s for 10k on the agent host
+      seed: workspace=01a0a07b-123d-7c4e-80e9-a01409674a39 items=10000 max_depth=6 links=500 events=16989
+      seed: checksum=39f6fdbadfb442aa37e4ed96383accfa
+      $ psql -Atc "select (select count(*) from item) items, (select max(nlevel(path)) from item) depth,
+                          (select count(*) from item_rollup) rollups, (select count(*) from item_link) links,
+                          (select count(*) from change_event) events"
+      10000|6|10000|500|16989
+      $ make rollup-verify
+      rollup --verify: items=10000 rollups=10000 mismatches=0
+      $ make seed-determinism
+      run A: 5a31bd7418c25469b218817b349bcd4c
+      run B: 5a31bd7418c25469b218817b349bcd4c
+      run C (--seed 8): 907901972a7675dda5b465d05644f86b
+      seed-determinism: OK (same seed identical, different seed differs)
+      ```
+      10000 items, max depth 6 (the target, not an accident — the planner fills
+      the shallowest empty level first), 5 projects, rollups == items
+      (ADR-013), 392 of the 500 links cross project boundaries (ADR-012: the
+      hierarchy cannot, so links must), 35 `config_transition` rows = 3
+      explicit arcs + the 4-row `{from: "*"}` fan-in per project (ADR-011),
+      event kinds created 10000 / status_changed 6489 / linked 500.
+      Determinism is checked in two scratch databases rather than two
+      workspaces, so the second run cannot be influenced by the first, and a
+      different `--seed` is asserted to differ — otherwise the checksum would
+      not be measuring anything.
+      **Deviation on backdated history:** items carry start and due dates
+      spread across a nine-month window and their transitions are ordered, but
+      `change_event.at` is `now()` — Mutate does not write `at`, so the events
+      are stamped with the run time. Backdating them means letting a caller
+      set `at`, which is a schema-level decision (and an audit-log
+      consideration) rather than something the seed should fake. Cycle-time
+      work in phase 5 will need it; raised as an open question below.
 - [ ] 0.10 Property tests
 - [ ] 0.11 Backup and restore harness (all steps runnable; dev target is local)
 - [ ] 0.12 CI skeleton, proven to fail
