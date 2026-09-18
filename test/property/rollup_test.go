@@ -198,7 +198,9 @@ func TestPropertyRollupsMatchAggregate(t *testing.T) {
 			e.apply(t, ops)
 
 			// The store's own SQL recomputation must find nothing wrong.
-			bad, err := e.st.VerifyRollups(context.Background())
+			// Scoped to this test's project: the unscoped query costs the whole
+			// database, so an unrelated seed would dominate the run time.
+			bad, err := e.st.VerifyRollupsForProject(context.Background(), e.projectID)
 			if err != nil {
 				return fmt.Sprintf("VerifyRollups: %v", err)
 			}
@@ -210,6 +212,7 @@ func TestPropertyRollupsMatchAggregate(t *testing.T) {
 			// property is not merely asserting that one SQL query matches
 			// itself.
 			items := e.snapshot(t)
+			stored := e.rollups(t)
 			for _, parent := range items {
 				var descendants, done int
 				var pointsTotal float64
@@ -225,9 +228,9 @@ func TestPropertyRollupsMatchAggregate(t *testing.T) {
 						pointsTotal += *d.points
 					}
 				}
-				r, err := e.q.GetRollup(context.Background(), pg(parent.id))
-				if err != nil {
-					return fmt.Sprintf("rollup missing for %s: %v", parent.id, err)
+				r, ok := stored[parent.id]
+				if !ok {
+					return fmt.Sprintf("rollup missing for %s", parent.id)
 				}
 				if int(r.DescendantCount) != descendants {
 					return fmt.Sprintf("%s descendant_count=%d, aggregate=%d",

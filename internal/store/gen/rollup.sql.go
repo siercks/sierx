@@ -62,6 +62,46 @@ func (q *Queries) InsertRollupRow(ctx context.Context, itemID pgtype.UUID) error
 	return err
 }
 
+const listRollupsForProject = `-- name: ListRollupsForProject :many
+SELECT r.item_id, r.descendant_count, r.done_count, r.points_total
+  FROM item_rollup r JOIN item i ON i.id = r.item_id
+ WHERE i.project_id = $1
+`
+
+type ListRollupsForProjectRow struct {
+	ItemID          pgtype.UUID
+	DescendantCount int32
+	DoneCount       int32
+	PointsTotal     pgtype.Numeric
+}
+
+// Every rollup in one project, so a caller comparing many items against its
+// own aggregate makes one round trip instead of one per item.
+func (q *Queries) ListRollupsForProject(ctx context.Context, projectID pgtype.UUID) ([]ListRollupsForProjectRow, error) {
+	rows, err := q.db.Query(ctx, listRollupsForProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRollupsForProjectRow{}
+	for rows.Next() {
+		var i ListRollupsForProjectRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.DescendantCount,
+			&i.DoneCount,
+			&i.PointsTotal,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recomputeRollup = `-- name: RecomputeRollup :exec
 WITH d AS (
   SELECT i.points, i.start_date, i.due_date, s.category
@@ -144,6 +184,72 @@ func (q *Queries) VerifyRollups(ctx context.Context) ([]VerifyRollupsRow, error)
 	items := []VerifyRollupsRow{}
 	for rows.Next() {
 		var i VerifyRollupsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoredDescendants,
+			&i.ActualDescendants,
+			&i.StoredDone,
+			&i.ActualDone,
+			&i.StoredPoints,
+			&i.ActualPoints,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const verifyRollupsForProject = `-- name: VerifyRollupsForProject :many
+SELECT i.id,
+       r.descendant_count AS stored_descendants,
+       coalesce(a.descendants, 0)::int AS actual_descendants,
+       r.done_count AS stored_done,
+       coalesce(a.done, 0)::int AS actual_done,
+       r.points_total AS stored_points,
+       a.points AS actual_points
+  FROM item i
+  JOIN item_rollup r ON r.item_id = i.id
+  LEFT JOIN LATERAL (
+    SELECT count(*) AS descendants,
+           count(*) FILTER (WHERE s.category = 'done') AS done,
+           sum(d.points) AS points
+      FROM item d JOIN status s ON s.id = d.status_id
+     WHERE d.path <@ i.path AND d.id <> i.id AND d.deleted_at IS NULL
+  ) a ON true
+ WHERE i.project_id = $1
+   AND (r.descendant_count <> coalesce(a.descendants, 0)
+     OR r.done_count       <> coalesce(a.done, 0)
+     OR coalesce(r.points_total, 0) <> coalesce(a.points, 0))
+`
+
+type VerifyRollupsForProjectRow struct {
+	ID                pgtype.UUID
+	StoredDescendants int32
+	ActualDescendants int32
+	StoredDone        int32
+	ActualDone        int32
+	StoredPoints      pgtype.Numeric
+	ActualPoints      int64
+}
+
+// The same check as VerifyRollups, scoped to one project. The unscoped version
+// is what `sierxctl rollup --verify` wants — an operator asking "is anything
+// wrong" means anything. A test that created 14 items should not pay to
+// re-verify a 10k-item seed on every sequence, which is what made the property
+// suite quadratic in unrelated data.
+func (q *Queries) VerifyRollupsForProject(ctx context.Context, projectID pgtype.UUID) ([]VerifyRollupsForProjectRow, error) {
+	rows, err := q.db.Query(ctx, verifyRollupsForProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []VerifyRollupsForProjectRow{}
+	for rows.Next() {
+		var i VerifyRollupsForProjectRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.StoredDescendants,

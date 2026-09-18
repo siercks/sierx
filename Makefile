@@ -27,6 +27,27 @@ endif
 help: ## List targets
 	@awk 'BEGIN{FS=":.*## "} /^[A-Za-z0-9_-]+:.*## /{printf "  %-20s %s\n",$$1,$$2}' $(MAKEFILE_LIST)
 
+# The dev loop. NOT a gate and deliberately not part of one: it runs the checks
+# that catch a mistake in seconds and skips the ones measured in minutes
+# (property tests, seed determinism, backup conformance, benchmarks). Run
+# `make gate-0` before asking for sign-off — `check` passing is not a claim
+# that the phase gate passes.
+check: ## Fast dev loop: vet, SQL invariants, store tests, generated-code and source gates
+	@go vet ./...
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@bash scripts/psql.sh -f test/sql/invariants_test.sql
+	@bash scripts/psql.sh -f test/sql/partitions_test.sql
+	@bash scripts/sqlc.sh diff
+	@go test ./internal/... -count=1
+	@bash scripts/gate-nodirect.sh
+	@bash scripts/gate-notopology.sh
+	@bash scripts/gate-nobackupleak.sh
+	@echo "check: OK (fast loop; run make gate-0 for the phase gate)"
+
+sierxctl: ## Build bin/sierxctl (the make targets and scripts use it instead of go run)
+	@bash scripts/sierxctl.sh --help >/dev/null 2>&1 || true
+	@ls -l bin/sierxctl
+
 bootstrap-check: ## Toolchain versions match the pins; required inputs present (task 0.1)
 	@bash scripts/bootstrap-check.sh
 
@@ -95,13 +116,13 @@ test-store: ## store.Mutate unit-of-work tests against the dev database (task 0.
 
 seed: ## Build a 10k-item, 6-deep, 5-project workspace (deterministic) (task 0.9)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
-	@go run ./cmd/sierxctl seed $(SEED_ARGS)
+	@bash scripts/sierxctl.sh seed $(SEED_ARGS)
 
 seed-determinism: ## Seed twice with the same --seed into fresh databases and compare checksums
 	@bash scripts/seed-determinism.sh
 
 rollup-verify: ## ADR-005 control 2: recompute every rollup and report disagreements
-	@go run ./cmd/sierxctl rollup --verify
+	@bash scripts/sierxctl.sh rollup --verify
 
 gate-license: ## Every dependency on the §15.1 license allowlist (task 0.13)
 	@bash scripts/licenses.sh check
@@ -124,7 +145,7 @@ backup-conformance: ## Run every configured backup driver through the shared ass
 	@bash scripts/backup/conformance.sh
 
 restore-test: ## Restore the latest backup into a scratch database, rotating drivers (§14.2)
-	@go run ./cmd/sierxctl restore-test
+	@bash scripts/sierxctl.sh restore-test
 
 gate-nobackupleak: ## No backup tool named outside the drivers (ADR-017)
 	@bash scripts/gate-nobackupleak.sh

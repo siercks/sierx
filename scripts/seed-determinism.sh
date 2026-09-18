@@ -47,7 +47,7 @@ run_one() {   # run_one DBNAME -> prints the checksum
     -c "DROP DATABASE IF EXISTS $db" -c "CREATE DATABASE $db" >/dev/null
   DATABASE_URL=$url bash scripts/migrate.sh up >/dev/null 2>&1 \
     || die "migrating $db failed"
-  DATABASE_URL=$url go run ./cmd/sierxctl seed \
+  DATABASE_URL=$url bash scripts/sierxctl.sh seed \
     --seed "$SEED" --items "$ITEMS" --projects "$PROJECTS" --max-depth "$DEPTH" \
     | sed -n 's/^seed: checksum=//p'
 }

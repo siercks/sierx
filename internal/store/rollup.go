@@ -93,6 +93,28 @@ func (s *Store) VerifyRollups(ctx context.Context) ([]RollupMismatch, error) {
 	return out, nil
 }
 
+// VerifyRollupsForProject is VerifyRollups scoped to one project. Callers that
+// only created items in one project use this: the unscoped query's cost is
+// proportional to every item in the database, which makes a small test pay for
+// a large seed.
+func (s *Store) VerifyRollupsForProject(ctx context.Context, projectID uuid.UUID) ([]RollupMismatch, error) {
+	rows, err := s.q.VerifyRollupsForProject(ctx, toPgUUID(projectID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RollupMismatch, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, RollupMismatch{
+			ItemID:            fromPgUUID(r.ID),
+			StoredDescendants: r.StoredDescendants,
+			ActualDescendants: r.ActualDescendants,
+			StoredDone:        r.StoredDone,
+			ActualDone:        r.ActualDone,
+		})
+	}
+	return out, nil
+}
+
 // CountItemsAndRollups returns both counts. ADR-013 requires they be equal:
 // every item gets a rollup row at creation, so a leaf has an all-zero row
 // rather than no row, and a query can join instead of coalescing.

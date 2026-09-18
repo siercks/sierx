@@ -126,7 +126,7 @@ run_one() {
   echo "  max(seq) = $esrc"
 
   echo "--- rollup --verify on the restored copy (ADR-005 control 2)"
-  DATABASE_URL=$scratch_dsn go run ./cmd/sierxctl rollup --verify \
+  DATABASE_URL=$scratch_dsn bash scripts/sierxctl.sh rollup --verify \
     || die "$d restored copy has wrong rollups"
 
   psql "$admin_url" -X -q -c "DROP DATABASE IF EXISTS $SCRATCH" >/dev/null 2>&1 || true

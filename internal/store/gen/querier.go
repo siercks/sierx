@@ -69,6 +69,9 @@ type Querier interface {
 	// item has to keep a rank that is still unique. Found by the property tests
 	// (task 0.10), which soft-delete and then create.
 	ListProjectRanks(ctx context.Context, projectID pgtype.UUID) ([]ListProjectRanksRow, error)
+	// Every rollup in one project, so a caller comparing many items against its
+	// own aggregate makes one round trip instead of one per item.
+	ListRollupsForProject(ctx context.Context, projectID pgtype.UUID) ([]ListRollupsForProjectRow, error)
 	ListStatuses(ctx context.Context, projectID pgtype.UUID) ([]Status, error)
 	MaxEventSeq(ctx context.Context, workspaceID pgtype.UUID) (int64, error)
 	// §A.1: monotonic, never reset, never reused. Row-locked like the sequence
@@ -96,6 +99,12 @@ type Querier interface {
 	// disagree with the stored value. Used by `sierxctl rollup --verify` and by the
 	// backup conformance check on a restored copy.
 	VerifyRollups(ctx context.Context) ([]VerifyRollupsRow, error)
+	// The same check as VerifyRollups, scoped to one project. The unscoped version
+	// is what `sierxctl rollup --verify` wants — an operator asking "is anything
+	// wrong" means anything. A test that created 14 items should not pay to
+	// re-verify a 10k-item seed on every sequence, which is what made the property
+	// suite quadratic in unrelated data.
+	VerifyRollupsForProject(ctx context.Context, projectID pgtype.UUID) ([]VerifyRollupsForProjectRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -68,3 +68,37 @@ SELECT i.id,
  WHERE r.descendant_count <> coalesce(a.descendants, 0)
     OR r.done_count       <> coalesce(a.done, 0)
     OR coalesce(r.points_total, 0) <> coalesce(a.points, 0);
+
+-- name: VerifyRollupsForProject :many
+-- The same check as VerifyRollups, scoped to one project. The unscoped version
+-- is what `sierxctl rollup --verify` wants — an operator asking "is anything
+-- wrong" means anything. A test that created 14 items should not pay to
+-- re-verify a 10k-item seed on every sequence, which is what made the property
+-- suite quadratic in unrelated data.
+SELECT i.id,
+       r.descendant_count AS stored_descendants,
+       coalesce(a.descendants, 0)::int AS actual_descendants,
+       r.done_count AS stored_done,
+       coalesce(a.done, 0)::int AS actual_done,
+       r.points_total AS stored_points,
+       a.points AS actual_points
+  FROM item i
+  JOIN item_rollup r ON r.item_id = i.id
+  LEFT JOIN LATERAL (
+    SELECT count(*) AS descendants,
+           count(*) FILTER (WHERE s.category = 'done') AS done,
+           sum(d.points) AS points
+      FROM item d JOIN status s ON s.id = d.status_id
+     WHERE d.path <@ i.path AND d.id <> i.id AND d.deleted_at IS NULL
+  ) a ON true
+ WHERE i.project_id = sqlc.arg(project_id)
+   AND (r.descendant_count <> coalesce(a.descendants, 0)
+     OR r.done_count       <> coalesce(a.done, 0)
+     OR coalesce(r.points_total, 0) <> coalesce(a.points, 0));
+
+-- name: ListRollupsForProject :many
+-- Every rollup in one project, so a caller comparing many items against its
+-- own aggregate makes one round trip instead of one per item.
+SELECT r.item_id, r.descendant_count, r.done_count, r.points_total
+  FROM item_rollup r JOIN item i ON i.id = r.item_id
+ WHERE i.project_id = sqlc.arg(project_id);

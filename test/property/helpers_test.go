@@ -193,6 +193,30 @@ func (e *env) snapshot(t *testing.T) []itemRow {
 	return out
 }
 
+// storedRollup is the subset of item_rollup the properties compare.
+type storedRollup struct {
+	DescendantCount int32
+	DoneCount       int32
+}
+
+// rollups fetches every rollup in this test's project in one round trip. The
+// per-item alternative turns the comparison loop into one query per item.
+func (e *env) rollups(t *testing.T) map[uuid.UUID]storedRollup {
+	t.Helper()
+	rows, err := e.q.ListRollupsForProject(context.Background(), pg(e.projectID))
+	if err != nil {
+		t.Fatalf("list rollups: %v", err)
+	}
+	out := make(map[uuid.UUID]storedRollup, len(rows))
+	for _, r := range rows {
+		out[uuid.UUID(r.ItemID.Bytes)] = storedRollup{
+			DescendantCount: r.DescendantCount,
+			DoneCount:       r.DoneCount,
+		}
+	}
+	return out
+}
+
 func labels(path string) []string { return strings.Split(path, ".") }
 
 // isStrictDescendant reports whether child's path is strictly below parent's,

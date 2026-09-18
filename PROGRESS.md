@@ -25,6 +25,24 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-16, performance (no behaviour change): the property suite dropped
+  from 137s to 13s. `VerifyRollups` is unscoped by design — an operator asking
+  "is anything wrong" means anything — so a test that created 14 items was
+  re-verifying the whole 10k-item seed on every sequence. Added
+  `VerifyRollupsForProject` and used it in the tests; the CLI still uses the
+  unscoped query. The Go-side comparison also fetches a project's rollups in
+  one round trip instead of one query per item. No property was weakened and
+  no test-count lowered.
+- 2026-09-16: added `make check`, a fast dev loop (vet, both SQL test files,
+  store tests, sqlc diff, the three source gates; ~30s). It is NOT a gate and
+  is not part of one — `gate-0` is unchanged, and `check` passing is not a
+  claim that the phase gate passes. `make sierxctl` and `scripts/sierxctl.sh`
+  build `bin/sierxctl` once and reuse it, so the make targets and scripts no
+  longer `go run` the CLI on every call. Measured saving: ~85ms per
+  invocation, not the seconds first estimated — kept because it is harmless
+  and gives the CLI a stable path for the systemd units, not because it is
+  fast.
+
 - 2026-09-12, task 0.13: the license gate classifies the LICENSE text of every
   vendored module itself rather than running `go-licenses check`.
   `go-licenses` resolves licenses by downloading modules and carries a large
