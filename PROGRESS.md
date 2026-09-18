@@ -379,7 +379,78 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       also correct for restoring a soft-deleted item, which must keep a unique
       rank. No randomized sequence in the earlier unit tests had produced that
       interleaving.
-- [ ] 0.11 Backup and restore harness (all steps runnable; dev target is local)
+- [ ] 0.11 Backup and restore harness — **steps 1–4 and 6 green; steps 5 and 7
+      left as ⚠ blocked, exactly as the task prescribes.** pgBackRest is not
+      installed here and there is no repository target, so
+      `driver-pgbackrest.sh`, `render-conf.sh` and the major-upgrade runbook are
+      not written: step 5 requires verifying against an installed pgBackRest
+      that the cipher cannot be changed on an existing stanza, and a driver
+      whose acceptance has never run is what BUILD §0.4 exists to prevent.
+      ```
+      $ SIERX_BACKUP_DRIVERS=pgdump make backup-conformance
+      === conformance: pgdump
+      --- describe
+      pgdump driver; pg_dump 18.6; target dir pgdump, keep 8
+      --- contract
+      contract: OK
+      --- backup
+      backup id: pgdump-20260914T155511Z
+      --- verify
+      pgdump: verified pgdump-20260914T155511Z.dump (167 archive entries)
+      --- restore-to scratch
+      pgdump: restored pgdump-20260914T155511Z.dump
+      --- row counts
+        20 tables, all counts equal
+      --- content checksum
+        4ad73262ab7958670147da18f7102f31
+      --- event sequence high-water mark
+        max(seq) = 16989
+      --- rollup --verify on the restored copy (ADR-005 control 2)
+      rollup --verify: items=21215 rollups=21215 mismatches=0
+      === conformance: pgdump PASSED
+      backup-conformance: OK for: pgdump
+
+      $ make gate-nobackupleak && make prove-nobackupleak
+      gate-nobackupleak: OK (no backup tool named outside the drivers)
+      prove: pg_restore in the Makefile: gate went red — OK
+      prove: pgbackrest in a make target: gate went red — OK
+      prove: pg_dump named in Go source: gate went red — OK
+      prove: wal-g in a non-driver script: gate went red — OK
+      prove: clean tree: gate GREEN — OK
+
+      $ bash scripts/backup/driver.sh pgdump retention      # 11 dumps planted
+      pgdump: retention kept 8 of 11 dump(s), limit 8
+
+      $ make restore-test
+      restore-test: run 1 of the rotation -> driver "pgdump" (configured: pgdump)
+      pgdump: restored pgdump-20260914T155511Z.dump
+      restore-test: driver "pgdump" restored into the scratch database
+      $ SIERX_BACKUP_DRIVERS=pgdump,other make restore-test   # rotation advances
+      restore-test: run 2 of the rotation -> driver "other" (configured: pgdump, other)
+      driver.sh: no driver 'other' (expected scripts/backup/driver-other.sh)
+      $ go run ./cmd/sierxctl restore-test --force
+      restore-test takes no arguments ("--force"); it has no escape hatches by design
+      ```
+      ADR-017 driver `describe` output, for recovering later which tool
+      produced a green restore: `pgdump driver; pg_dump 18.6; target dir
+      pgdump, keep 8`.
+      Notes:
+      - The rotation counter advances only on success, so a persistently broken
+        secondary keeps failing the weekly test rather than being skipped past.
+        That is the intent of ADR-010's rotation; a driver that cannot restore
+        should be loud every week.
+      - `gate-nobackupleak`'s allowlist gained two entries beyond the two
+        ADR-017 names, each with its reason in the script: `.env.example`
+        (`SIERX_BACKUP_DRIVERS` and `PGBACKREST_*` are how a driver is
+        *selected* — naming them in configuration is the ADR's mechanism, and
+        BUILD Appendix B fixes the names) and `scripts/schema.sh` (a
+        `--schema-only` structural snapshot for drift detection: no data, no
+        restore path, still needed if every driver were replaced).
+      - Once modules were vendored, `vendor/` tripped gate-notopology (a
+        dependency's `.gitignore` names `mise.local.toml`) and
+        gate-nobackupleak (pgx's Rakefile names `pg_dump`). All three
+        content gates now exclude `vendor/`: third-party source is not this
+        project's configuration and is not edited here.
 - [ ] 0.12 CI skeleton, proven to fail
 - [~] 0.13 License gate, SBOM, supply chain — **license gate green; SBOM
       outstanding.** Done out of order, before 0.10: BUILD requires a
@@ -420,8 +491,11 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
   - [x] ADR-002 signed off — 2026-09-12
   - [x] ADR-005 signed off — 2026-09-12
   - [x] ADR-012 signed off — 2026-09-12
-  - [ ] Task 0.11 green — `make backup-conformance && make restore-test`
-        against the dev repository (the off-box target binds at task 2.16)
+  - [~] Task 0.11 — `backup-conformance` and `restore-test` green for the
+        `pgdump` driver (output under 0.11). Not signed off: the `pgbackrest`
+        driver (step 5) and the major-upgrade runbook (step 7) need an
+        installed pgBackRest and ADR-010's repository target, which bind at
+        task 2.16
 - Pin drift (ADR-019): `<any pin more than one cycle behind, or "none">`
 - Deviations: `<none | list>`
 - Open questions raised: `<none | list with ADR numbers>`

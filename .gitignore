@@ -24,3 +24,6 @@ coverage*
 # compiled binaries built into the repo root by `go build ./...`
 /sierx
 /sierxctl
+
+# backup artifacts (dumps, restore-test rotation counter)
+.backups/

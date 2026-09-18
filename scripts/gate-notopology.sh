@@ -47,8 +47,13 @@ read_env() {
 # scan ROOT -> exit 0 clean, 1 on any hit. Prints hits as file:line:match.
 scan() {
   local root=$1 rc=0 files
+  # vendor/ is third-party source, not this project's configuration: a
+  # dependency's own .gitignore mentioning mise.local.toml is not a topology
+  # leak, and we do not edit those files. The gate exists to stop OUR files
+  # naming real hosts.
   files=$(cd "$root" && git ls-files --cached --others --exclude-standard -z \
-            | tr '\0' '\n' | grep -vx "$SELF" | grep -v '^\.env$' || true)
+            | tr '\0' '\n' | grep -vx "$SELF" | grep -v '^\.env$' \
+            | grep -v '^vendor/' || true)
   [[ -z $files ]] && { echo "gate-notopology: no files to scan"; return 0; }
 
   local hits
@@ -101,8 +106,10 @@ prove() {
   printf '\nendpoint 172.20.1.5\n' >> "$tmp/$target";                 expect_red "rfc1918 172.16/12"; restore
   printf '\nrepo on nas01.lan\n' >> "$tmp/$target";                   expect_red ".lan hostname"; restore
   printf '\npg1-host=db.internal\n' >> "$tmp/$target";                expect_red ".internal hostname"; restore
-  printf 'PGBACKREST_REPO_PATH=bkp-zq81x:/srv/pgbackrest/sierx\n' > "$tmp/.env"
-  printf '\nrepo is at bkp-zq81x:/srv/pgbackrest/sierx\n' >> "$tmp/$target"; expect_red ".env value leak"; restore
+  # A fixture value, not a real one. Deliberately does not name a backup tool:
+  # gate-nobackupleak scans this file too.
+  printf 'SIERX_DUMP_DIR=bkp-zq81x:/srv/backups/sierx\n' > "$tmp/.env"
+  printf '\nrepo is at bkp-zq81x:/srv/backups/sierx\n' >> "$tmp/$target"; expect_red ".env value leak"; restore
   # a .env that only restates the example must not fail the gate
   cp "$tmp/.env.example" "$tmp/.env"
   if (scan "$tmp" >/dev/null); then echo "prove: .env == example: gate GREEN — OK"

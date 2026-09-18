@@ -10,7 +10,8 @@ SHELL := /usr/bin/env bash
         schema-snapshot schema-diff test-sql test-partitions \
         sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store \
         seed seed-determinism rollup-verify \
-        gate-license prove-license vendor-verify test-property
+        gate-license prove-license vendor-verify test-property \
+        backup-conformance restore-test gate-nobackupleak prove-nobackupleak
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -116,3 +117,15 @@ vendor-verify: ## go mod verify plus a check that vendor/ matches go.mod
 test-property: ## Randomized invariant tests: rollups, paths, ranks (task 0.10)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@go test ./test/property/... -count=1 -timeout 20m
+
+backup-conformance: ## Run every configured backup driver through the shared assertion set (task 0.11)
+	@bash scripts/backup/conformance.sh
+
+restore-test: ## Restore the latest backup into a scratch database, rotating drivers (§14.2)
+	@go run ./cmd/sierxctl restore-test
+
+gate-nobackupleak: ## No backup tool named outside the drivers (ADR-017)
+	@bash scripts/gate-nobackupleak.sh
+
+prove-nobackupleak: ## Plant tool names outside the drivers and assert the gate goes red
+	@bash scripts/gate-nobackupleak.sh --prove

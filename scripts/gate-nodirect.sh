@@ -14,6 +14,7 @@
 #   migrations/         DDL, and the invariant triggers of task 0.5
 #   test/sql/           task 0.5 attempts forbidden writes on purpose
 #   internal/store/     the single write path itself, including its generated code
+#   vendor/             third-party source; not code this project writes
 #   docs/               SPEC and BUILD quote the DDL
 #   scripts/gate-nodirect.sh  this script carries the patterns
 #
@@ -23,6 +24,7 @@ set -euo pipefail
 
 TABLES=(item item_link sprint_item comment)
 ALLOW=(
+  vendor/
   migrations/
   test/sql/
   internal/store/
