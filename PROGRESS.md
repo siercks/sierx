@@ -25,6 +25,17 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-12, task 0.13: the license gate classifies the LICENSE text of every
+  vendored module itself rather than running `go-licenses check`.
+  `go-licenses` resolves licenses by downloading modules and carries a large
+  dependency tree of its own — both of which this gate exists to constrain.
+  The classifier matches distinctive strings from each license text, the same
+  method go-licenses' classifier uses, minus the network, and it is proven
+  against AGPL, MPL, SSPL, BSL, an unclassifiable license and a missing one.
+- 2026-09-12, task order: 0.13's license gate was built before 0.10 because
+  0.10's instruction is to clear the property-testing library through
+  `make gate-license` before adopting it.
+
 - 2026-09-12, tasks 0.3/0.7: goose and sqlc are pinned release binaries
   (version + per-arch sha256 in `scripts/tool.sh`, fetched into gitignored
   `bin/`) rather than `go tool` entries. Both pull large dependency trees —
@@ -332,10 +343,74 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       set `at`, which is a schema-level decision (and an audit-log
       consideration) rather than something the seed should fake. Cycle-time
       work in phase 5 will need it; raised as an open question below.
-- [ ] 0.10 Property tests
+- [x] 0.10 Property tests — 2026-09-12
+      ```
+      $ make test-property
+      + moving a node moves its whole subtree: OK, passed 10 tests.
+      --- PASS: TestPropertySubtreeMovesWholesale (0.33s)
+      + per-project ranks are a strict total order matching insertion order: OK, passed 10 tests.
+      --- PASS: TestPropertyRankIsStrictTotalOrder (0.33s)
+      + RankBetween lands strictly between its bounds: OK, passed 200 tests.
+      + RankBetween rejects inverted bounds: OK, passed 200 tests.
+      --- PASS: TestPropertyRankBetweenAlwaysStrictlyBetween (0.01s)
+      --- PASS: TestRankRebalance5000 (14.20s)
+      + rollups equal a fresh aggregate over descendants: OK, passed 12 tests.
+      --- PASS: TestPropertyRollupsMatchAggregate (121.66s)
+      + count(item_rollup) == count(item): OK, passed 12 tests.
+      --- PASS: TestPropertyRollupCountEqualsItemCount (0.43s)
+      + paths agree with parent_id and contain no cycles: OK, passed 12 tests.
+      --- PASS: TestPropertyPathsStayConsistent (0.53s)
+      ok      github.com/siercks/sierx/test/property  137.499s
+      ```
+      Library: `github.com/leanovate/gopter` v0.2.9 (MIT, no runtime deps),
+      named in `go.mod` and cleared through `make gate-license` before
+      adoption. **`pgregory.net/rapid` was the first choice and was rejected:
+      it is MPL-2.0, which §15.1 blocks.** That is the instruction to run a
+      candidate through the gate first earning its place.
+      Rollups are checked twice per sequence — against the store's SQL
+      recomputation and against an aggregate computed independently in Go — so
+      the property is not one query agreeing with itself. The 5,000-item
+      rebalance (ADR-003) commits in ~14s and preserves relative order, and a
+      create after a rebalance still lands last.
+      **Bug found and fixed:** `ListProjectRanks` filtered `deleted_at IS
+      NULL`, but `item_project_rank_uniq` covers every row in the project. A
+      sequence that soft-deleted an item and then created one allocated a rank
+      that collided with the deleted row. The query now spans deleted rows —
+      also correct for restoring a soft-deleted item, which must keep a unique
+      rank. No randomized sequence in the earlier unit tests had produced that
+      interleaving.
 - [ ] 0.11 Backup and restore harness (all steps runnable; dev target is local)
 - [ ] 0.12 CI skeleton, proven to fail
-- [ ] 0.13 License gate, SBOM, supply chain
+- [~] 0.13 License gate, SBOM, supply chain — **license gate green; SBOM
+      outstanding.** Done out of order, before 0.10: BUILD requires a
+      property-testing library be cleared through `make gate-license` before
+      adoption, which needs the gate to exist.
+      ```
+      $ make gate-license
+      ok       github.com/jackc/pgpassfile                             MIT
+      ok       github.com/jackc/pgservicefile                          MIT
+      ok       github.com/jackc/pgx/v5                                 MIT
+      ok       github.com/jackc/puddle/v2                              MIT
+      ok       github.com/leanovate/gopter                             MIT
+      ok       golang.org/x/sync                                       BSD-3-Clause
+      ok       golang.org/x/text                                       BSD-3-Clause
+      licenses.sh: 7 Go module(s) checked
+      licenses.sh: no node_modules — the frontend tree arrives at task 2.1; nothing to check on the npm side
+      gate-license: OK (every dependency on the §15.1 allowlist)
+      $ make prove-license
+      prove: AGPL-3.0 module: gate went red — OK        <- the negative test the task names
+      prove: MPL-2.0 module: gate went red — OK
+      prove: SSPL-1.0 module: gate went red — OK
+      prove: BSL-1.1 module: gate went red — OK
+      prove: unclassifiable license: gate went red — OK
+      prove: module with no license file: gate went red — OK
+      prove: clean tree: gate GREEN — OK
+      $ make vendor-verify
+      vendor-verify: OK
+      ```
+      Still to do before this box is checked: the per-release SBOM, which
+      belongs with `release.yml` in task 0.12 (BUILD task 0.12 step 2: "SBOM
+      per release"), so it is written there and referenced here.
 - [ ] 0.14 Benchmark harness
 
 ### Phase 0 exit

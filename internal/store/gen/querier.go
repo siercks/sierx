@@ -63,6 +63,11 @@ type Querier interface {
 	// The sync cursor read (§5.1). Gap-free because seq comes from seq_counter.
 	ListEventsSince(ctx context.Context, arg ListEventsSinceParams) ([]ChangeEvent, error)
 	ListItemTypes(ctx context.Context, projectID pgtype.UUID) ([]ItemType, error)
+	// Deliberately includes soft-deleted items. item_project_rank_uniq covers
+	// every row in the project, deleted or not, so allocating the next rank from
+	// the live rows alone collides with a deleted item's rank — and a restored
+	// item has to keep a rank that is still unique. Found by the property tests
+	// (task 0.10), which soft-delete and then create.
 	ListProjectRanks(ctx context.Context, projectID pgtype.UUID) ([]ListProjectRanksRow, error)
 	ListStatuses(ctx context.Context, projectID pgtype.UUID) ([]Status, error)
 	MaxEventSeq(ctx context.Context, workspaceID pgtype.UUID) (int64, error)

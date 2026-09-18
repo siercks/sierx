@@ -99,8 +99,13 @@ RETURNING id, path::text AS path, parent_id;
 UPDATE item SET change_seq = sqlc.arg(change_seq) WHERE id = sqlc.arg(id);
 
 -- name: ListProjectRanks :many
+-- Deliberately includes soft-deleted items. item_project_rank_uniq covers
+-- every row in the project, deleted or not, so allocating the next rank from
+-- the live rows alone collides with a deleted item's rank — and a restored
+-- item has to keep a rank that is still unique. Found by the property tests
+-- (task 0.10), which soft-delete and then create.
 SELECT id, rank FROM item
-WHERE project_id = $1 AND deleted_at IS NULL
+WHERE project_id = $1
 ORDER BY rank;
 
 -- name: UpdateItemRank :exec

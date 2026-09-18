@@ -322,7 +322,7 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (InsertI
 
 const listProjectRanks = `-- name: ListProjectRanks :many
 SELECT id, rank FROM item
-WHERE project_id = $1 AND deleted_at IS NULL
+WHERE project_id = $1
 ORDER BY rank
 `
 
@@ -331,6 +331,11 @@ type ListProjectRanksRow struct {
 	Rank string
 }
 
+// Deliberately includes soft-deleted items. item_project_rank_uniq covers
+// every row in the project, deleted or not, so allocating the next rank from
+// the live rows alone collides with a deleted item's rank — and a restored
+// item has to keep a rank that is still unique. Found by the property tests
+// (task 0.10), which soft-delete and then create.
 func (q *Queries) ListProjectRanks(ctx context.Context, projectID pgtype.UUID) ([]ListProjectRanksRow, error) {
 	rows, err := q.db.Query(ctx, listProjectRanks, projectID)
 	if err != nil {

@@ -9,7 +9,8 @@ SHELL := /usr/bin/env bash
         migrate-up migrate-down migrate-status migrate-updown-up \
         schema-snapshot schema-diff test-sql test-partitions \
         sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store \
-        seed seed-determinism rollup-verify
+        seed seed-determinism rollup-verify \
+        gate-license prove-license vendor-verify test-property
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -98,3 +99,20 @@ seed-determinism: ## Seed twice with the same --seed into fresh databases and co
 
 rollup-verify: ## ADR-005 control 2: recompute every rollup and report disagreements
 	@go run ./cmd/sierxctl rollup --verify
+
+gate-license: ## Every dependency on the §15.1 license allowlist (task 0.13)
+	@bash scripts/licenses.sh check
+
+prove-license: ## Plant AGPL/MPL/SSPL/BSL/unknown dependencies and assert the gate goes red
+	@bash scripts/licenses.sh --prove
+
+vendor-verify: ## go mod verify plus a check that vendor/ matches go.mod
+	@go mod verify
+	@go mod vendor
+	@git diff --exit-code --stat vendor/ go.mod go.sum \
+	  || { echo "vendor/ is out of date — commit the result of go mod vendor" >&2; exit 1; }
+	@echo "vendor-verify: OK"
+
+test-property: ## Randomized invariant tests: rollups, paths, ranks (task 0.10)
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@go test ./test/property/... -count=1 -timeout 20m
