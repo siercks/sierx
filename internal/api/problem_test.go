@@ -31,11 +31,16 @@ func TestProblemGolden(t *testing.T) {
 		}
 		return true
 	})
-	for _, p := range []Problem{BadRequest(), Unauthorized(), Forbidden(), NotFound(), MethodNotAllowed(), Conflict(map[string]any{"key": "SRX-1", "title": "Server edit", "version": 2}), TooLarge(), UnsupportedMediaType(), Unprocessable(), PreconditionRequired(), RateLimited(), InternalError(), Unavailable()} {
+	for _, p := range []Problem{BadRequest(), Unauthorized(), Forbidden(), NotFound(), MethodNotAllowed(), NotAcceptable(), Conflict(map[string]any{"key": "SRX-1", "title": "Server edit", "version": 2}), TooLarge(), UnsupportedMediaType(), Unprocessable(), PreconditionRequired(), RateLimited(), InternalError(), Unavailable()} {
 		t.Run(strconv.Itoa(p.Status), func(t *testing.T) {
 			w := httptest.NewRecorder()
 			WriteProblem(w, p)
 			path := filepath.Join("..", "..", "test", "golden", "problems", fmt.Sprintf("%d.json", p.Status))
+			if os.Getenv("SIERX_GOLDEN_UPDATE") == "1" {
+				if err := os.WriteFile(path, w.Body.Bytes(), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
 			want, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatal(err)

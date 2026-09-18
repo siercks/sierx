@@ -1,1 +1,12 @@
-{"id":"comment-1","item":"SRX-1","author":{"id":"author-1","display_name":"Author"},"body":null,"created_at":"timestamp","edited_at":"timestamp","deleted_at":"timestamp"}
+{
+  "author": {
+    "display_name": "Author",
+    "id": "author-1"
+  },
+  "body": null,
+  "created_at": "timestamp",
+  "deleted_at": "timestamp",
+  "edited_at": "timestamp",
+  "id": "comment-1",
+  "item": "SRX-1"
+}

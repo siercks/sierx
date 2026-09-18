@@ -1,4 +1,4 @@
-# CI runs `make gate-0` and nothing else (BUILD §3.4). No inline shell beyond a
+# CI runs `make gate-1` and nothing else (BUILD §3.4). No inline shell beyond a
 # single make invocation per job: anything CI can do, a human must be able to
 # run locally and offline, and a step that exists only here is a step nobody
 # can reproduce.
@@ -8,7 +8,7 @@ name: ci
 
 on:
   push:
-    branches: ["main", "phase/**"]
+    branches: ["main", "phase/**", "build/**"]
   pull_request:
   workflow_dispatch:
 
@@ -79,6 +79,6 @@ jobs:
             https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
+          sudo apt-get install -y -qq postgresql-client-18 gcc libc6-dev
 
-      - run: make gate-0
+      - run: make gate-1

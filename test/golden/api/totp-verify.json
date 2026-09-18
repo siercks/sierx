@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "recovery_codes": [
+    "generated-recovery-code",
+    "generated-recovery-code",
+    "generated-recovery-code",
+    "generated-recovery-code",
+    "generated-recovery-code",
+    "generated-recovery-code",
+    "generated-recovery-code",
+    "generated-recovery-code"
+  ],
+  "sign_in_required": true
+}

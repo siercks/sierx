@@ -32,6 +32,9 @@ func NotFound() Problem {
 func MethodNotAllowed() Problem {
 	return problem(405, "Method Not Allowed", "This method is not supported for this resource. Check the API method.")
 }
+func NotAcceptable() Problem {
+	return problem(406, "Not Acceptable", "Accept br, gzip or identity encoding for this response.")
+}
 func Conflict(current any) Problem {
 	p := problem(409, "Conflict", "This item changed. Compare the current version with your edits and retry using its version.")
 	p.Current = current

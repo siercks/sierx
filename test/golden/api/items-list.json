@@ -1,1 +1,12 @@
-{"data":[{"key":"SRX-1","title":"Original","status":{"category":"open"}}],"next_cursor":null}
+{
+  "data": [
+    {
+      "key": "SRX-1",
+      "status": {
+        "category": "open"
+      },
+      "title": "Original"
+    }
+  ],
+  "next_cursor": null
+}

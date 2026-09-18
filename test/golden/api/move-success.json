@@ -1,7 +1,7 @@
 {
   "assignee": null,
   "body": null,
-  "change_seq": 1,
+  "change_seq": 4,
   "config_version": 1,
   "created_at": "timestamp",
   "deleted_at": null,
@@ -9,15 +9,17 @@
   "fields": {},
   "id": "item-1",
   "key": "SRX-1",
-  "parent": null,
+  "parent": {
+    "key": "SRX-2"
+  },
   "points": null,
   "project": {
     "key_prefix": "SRX",
     "name": "Backlog"
   },
-  "rank": "n",
+  "rank": "oi",
   "rollup": {
-    "descendant_count": 0,
+    "descendant_count": 1,
     "done_count": 0,
     "earliest_start": null,
     "latest_due": null,
@@ -37,5 +39,5 @@
     "name": "Story"
   },
   "updated_at": "timestamp",
-  "version": 1
+  "version": 2
 }

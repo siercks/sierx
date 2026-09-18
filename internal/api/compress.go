@@ -68,7 +68,7 @@ func compression(next http.Handler) http.Handler {
 		w.Header().Add("Vary", "Accept-Encoding")
 		encoding, ok := encodingChoice(strings.Join(r.Header.Values("Accept-Encoding"), ","))
 		if !ok {
-			WriteProblem(w, problem(406, "Not Acceptable", "Accept br, gzip or identity encoding for this response."))
+			WriteProblem(w, NotAcceptable())
 			return
 		}
 		cw := &compressedWriter{ResponseWriter: w, encoding: encoding, head: r.Method == "HEAD"}

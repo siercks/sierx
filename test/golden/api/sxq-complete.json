@@ -1,1 +1,7 @@
-{"suggestions":["start_date","status","status.category"]}
+{
+  "suggestions": [
+    "start_date",
+    "status",
+    "status.category"
+  ]
+}

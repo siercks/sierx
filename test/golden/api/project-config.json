@@ -1,1 +1,120 @@
-{"version":1,"statuses":[{"key":"todo","name":"To Do","category":"open"},{"key":"doing","name":"In Progress","category":"active"},{"key":"review","name":"In Review","category":"active"},{"key":"done","name":"Done","category":"done"},{"key":"dropped","name":"Dropped","category":"cancelled"}],"types":[{"key":"initiative","name":"Initiative","level":3,"is_idea":false,"initial_status":"todo"},{"key":"epic","name":"Epic","level":2,"is_idea":false,"initial_status":"todo"},{"key":"bug","name":"Bug","level":1,"is_idea":false,"initial_status":"todo"},{"key":"story","name":"Story","level":1,"is_idea":false,"initial_status":"todo"}],"transitions":{"todo":[{"to_key":"doing","requires":["assignee"]},{"to_key":"dropped","requires":[]}],"doing":[{"to_key":"dropped","requires":[]},{"to_key":"review","requires":[]}],"review":[{"to_key":"done","requires":["assignee"]},{"to_key":"dropped","requires":[]}],"done":[{"to_key":"dropped","requires":[]}]},"fields":[{"key":"component","name":"Component","data_type":"select","options":["api","web","infra"]},{"key":"impact","name":"Impact","data_type":"number","options":[]}]}
+{
+  "fields": [
+    {
+      "data_type": "select",
+      "key": "component",
+      "name": "Component",
+      "options": [
+        "api",
+        "web",
+        "infra"
+      ]
+    },
+    {
+      "data_type": "number",
+      "key": "impact",
+      "name": "Impact",
+      "options": []
+    }
+  ],
+  "statuses": [
+    {
+      "category": "open",
+      "key": "todo",
+      "name": "To Do"
+    },
+    {
+      "category": "active",
+      "key": "doing",
+      "name": "In Progress"
+    },
+    {
+      "category": "active",
+      "key": "review",
+      "name": "In Review"
+    },
+    {
+      "category": "done",
+      "key": "done",
+      "name": "Done"
+    },
+    {
+      "category": "cancelled",
+      "key": "dropped",
+      "name": "Dropped"
+    }
+  ],
+  "transitions": {
+    "doing": [
+      {
+        "requires": [],
+        "to_key": "dropped"
+      },
+      {
+        "requires": [],
+        "to_key": "review"
+      }
+    ],
+    "done": [
+      {
+        "requires": [],
+        "to_key": "dropped"
+      }
+    ],
+    "review": [
+      {
+        "requires": [
+          "assignee"
+        ],
+        "to_key": "done"
+      },
+      {
+        "requires": [],
+        "to_key": "dropped"
+      }
+    ],
+    "todo": [
+      {
+        "requires": [
+          "assignee"
+        ],
+        "to_key": "doing"
+      },
+      {
+        "requires": [],
+        "to_key": "dropped"
+      }
+    ]
+  },
+  "types": [
+    {
+      "initial_status": "todo",
+      "is_idea": false,
+      "key": "initiative",
+      "level": 3,
+      "name": "Initiative"
+    },
+    {
+      "initial_status": "todo",
+      "is_idea": false,
+      "key": "epic",
+      "level": 2,
+      "name": "Epic"
+    },
+    {
+      "initial_status": "todo",
+      "is_idea": false,
+      "key": "bug",
+      "level": 1,
+      "name": "Bug"
+    },
+    {
+      "initial_status": "todo",
+      "is_idea": false,
+      "key": "story",
+      "level": 1,
+      "name": "Story"
+    }
+  ],
+  "version": 1
+}

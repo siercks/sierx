@@ -127,6 +127,20 @@ prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goe
 
 .PHONY: test-sxq fuzz-sxq
 .PHONY: test-concurrency
+.PHONY: golden-update test-golden smoke-api gate-1
+golden-update: ## Regenerate endpoint/query fixtures using the pinned Go toolchain
+	@bash scripts/golden.sh update
+
+test-golden: ## Regenerate fixtures and fail on any drift or uncovered route
+	@bash scripts/golden.sh check
+
+smoke-api: ## Bootstrap a disposable workspace and exercise the real server with curl
+	@bash scripts/smoke-api.sh
+
+gate-1: gate-0 ## Complete Phase 1 automated gate; Spark walkthrough remains human acceptance
+	@$(MAKE) --no-print-directory test-api test-golden test-sxq fuzz-sxq test-concurrency gate-gen smoke-api
+	@echo "gate-1: GREEN (automated; human walkthrough remains required)"
+
 test-concurrency: ## Concurrent API writers plus delta poller, including a 200-item transaction
 	@bash scripts/test-go.sh ./test/concurrency/... -race -count=1 -timeout=5m
 
@@ -223,7 +237,7 @@ gate-0: ## The phase-0 gate: every check that must pass before phase 1
 prove-gates: ## Every gate-* target in the Makefile has a proof, and it passes (task 0.12)
 	@bash scripts/prove-gates.sh
 
-ci-local: ## Run gate-0 the way CI does, in a container, offline
+ci-local: ## Run gate-1 the way CI does, in a container, offline
 	@bash scripts/ci-local.sh run
 
 sbom: ## Generate the release SBOM (CycloneDX 1.5) from vendor/ and go.sum (task 0.13)

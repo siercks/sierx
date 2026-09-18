@@ -4,6 +4,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -34,6 +35,11 @@ func TestTOTP(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &enrollment); err != nil {
 		t.Fatal(err)
 	}
+	uri, parseErr := url.Parse(enrollment.URI)
+	if parseErr != nil || uri.Scheme != "otpauth" || uri.Query().Get("secret") != enrollment.Secret || uri.Query().Get("issuer") != "sierx" {
+		t.Fatal("invalid enrollment URI")
+	}
+	assertGolden(t, "totp-enroll", w.Body.Bytes(), map[string]string{enrollment.Secret: "generated-secret", enrollment.URI: "generated-otpauth-uri"})
 	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(enrollment.Secret)
 	if err != nil {
 		t.Fatal(err)
@@ -56,6 +62,11 @@ func TestTOTP(t *testing.T) {
 	if len(confirmed.Codes) != 8 {
 		t.Fatal("missing recovery codes")
 	}
+	replace := map[string]string{}
+	for _, code := range confirmed.Codes {
+		replace[code] = "generated-recovery-code"
+	}
+	assertGolden(t, "totp-verify", w.Body.Bytes(), replace)
 	if w := apiCall(s, "GET", "/api/v1/me", "", cookie); w.Code != 401 {
 		t.Fatal("pre-enrollment session survived")
 	}
@@ -71,6 +82,8 @@ func TestTOTP(t *testing.T) {
 	b, _ = json.Marshal(map[string]string{"password": "test-password-12345", "code": confirmed.Codes[1]})
 	if w := apiCall(s, "POST", "/api/v1/auth/totp/disable", string(b), cookie); w.Code != 200 {
 		t.Fatalf("disable %d %s", w.Code, w.Body)
+	} else {
+		assertGolden(t, "totp-disable", w.Body.Bytes(), nil)
 	}
 	if w := apiCall(s, "GET", "/api/v1/me", "", cookie); w.Code != 401 {
 		t.Fatal("session survived disable")

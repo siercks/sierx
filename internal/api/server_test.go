@@ -83,6 +83,7 @@ func TestServerBoot(t *testing.T) {
 		if w.Code != 200 || w.Body.String() != "{\"alive\":true,\"database\":\"reachable\"}\n" {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
+		assertGolden(t, "health", w.Body.Bytes(), nil)
 		var entry map[string]any
 		if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
 			t.Fatal(err)
