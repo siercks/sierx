@@ -22,6 +22,8 @@ type Server struct {
 func New(pool *pgxpool.Pool, logger *slog.Logger) *Server {
 	s := &Server{Pool: pool, Router: chi.NewRouter(), Logger: logger}
 	s.Router.Use(s.requestLog)
+	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) { WriteProblem(w, NotFound()) })
+	s.Router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) { WriteProblem(w, MethodNotAllowed()) })
 	s.Router.Get("/api/v1/healthz", s.health)
 	return s
 }

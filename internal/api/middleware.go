@@ -14,7 +14,9 @@ func (s *Server) requestLog(next http.Handler) http.Handler {
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		defer func() {
 			if recover() != nil {
-				http.Error(ww, "Request failed; try again.", http.StatusInternalServerError)
+				if ww.Status() == 0 {
+					WriteProblem(ww, InternalError())
+				}
 			}
 			route := chi.RouteContext(r.Context()).RoutePattern()
 			if route == "" {
