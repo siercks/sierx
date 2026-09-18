@@ -40,6 +40,7 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.Post("/api/v1/auth/login", s.login)
 	s.Router.With(s.requireAuth).Post("/api/v1/auth/logout", s.logout)
 	s.Router.With(s.requireAuth).Get("/api/v1/me", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, Identity(r)) })
+	s.Router.With(s.requireAuth).Patch("/api/v1/me", s.updateMe)
 	s.Router.With(s.requireAuth).Post("/api/v1/auth/totp/enroll", s.totpEnroll)
 	s.Router.With(s.requireAuth).Post("/api/v1/auth/totp/verify", s.totpConfirm)
 	s.Router.With(s.requireAuth).Post("/api/v1/auth/totp/disable", s.totpDisable)

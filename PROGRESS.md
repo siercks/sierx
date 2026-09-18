@@ -917,7 +917,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.16 Hierarchy reads.
 - [x] 1.17 Item history.
 - [x] 1.18 Saved views.
-- [ ] 1.19 Preferences.
+- [x] 1.19 Preferences.
 - [ ] 1.20 Delta sync.
 - [x] 1.21 sxq subset.
 - [ ] 1.22 Caching and compression.
@@ -1395,6 +1395,24 @@ $ make test-api
 PASS (including TestViews)
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.383s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.19 acceptance - 2026-09-18
+
+Added the ADR-015 preference patch, restricted to theme, reduced_motion and
+display_name, without an item version requirement. Goldens cover valid updates,
+illegal themes and forbidden email changes. Corrected golden normalization to
+replace whole JSON string values, avoiding nondeterministic UUID/email overlap.
+
+```text
+$ make test-api
+--- PASS: TestMePreferences (0.43s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.500s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
