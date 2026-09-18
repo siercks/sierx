@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,12 +35,12 @@ func TestBootstrap(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _, _ = admin.Exec(ctx, "DROP DATABASE "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)") }()
-	cfg, err := pgxpool.ParseConfig(url)
+	dsn, err := neturl.Parse(url)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ConnConfig.Database = name
-	url = cfg.ConnConfig.ConnString()
+	dsn.Path = "/" + name
+	url = dsn.String()
 	p, err := pgxpool.New(ctx, url)
 	if err != nil {
 		t.Fatal(err)

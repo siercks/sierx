@@ -8,26 +8,17 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"uuid"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/siercks/sierx/internal/api/auth"
 	"github.com/siercks/sierx/internal/config"
 )
 
 func authFixture(t *testing.T) (*Server, string, string, string) {
 	t.Helper()
-	db := os.Getenv("DATABASE_URL")
-	if db == "" {
-		t.Fatal("DATABASE_URL required")
-	}
-	p, err := pgxpool.New(context.Background(), db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := isolatedPool(t)
 	wid, uid := uuid.NewV7().String(), uuid.NewV7().String()
 	email := uid + "@example.test"
 	hash, err := auth.HashPassword("test-password-12345")
