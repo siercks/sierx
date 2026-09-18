@@ -896,8 +896,9 @@ coverage.go is restored from the pinned upstream module and must be committed.
 
 ## Phase 1 - REST API, auth, event log
 
-Entry authorized. Planning is in docs/PHASE-1-PLAN.md; no Phase 1 implementation
-or acceptance is claimed by this closeout.
+All 25 implementation tasks are complete. Planning is in docs/PHASE-1-PLAN.md;
+per-task evidence and composite-gate results follow. Human Spark acceptance
+remains pending.
 
 - [x] 1.1 Server skeleton and executable boot checks.
 - [x] 1.2 Error model.
@@ -1535,3 +1536,37 @@ Removed deleted targets from that list and added a deterministic store-level
 regression proving rejection preserves items, events and gap-free sequences.
 The existing property assertions remain intact. The repeated full-gate run
 passed all property tests (20.717s), including TestDeletedParentMoveRollsBack.
+
+### Phase 1 automated closeout - 2026-09-18
+
+All tasks 1.1-1.25 are implemented. No Phase 1 scope cuts were taken.
+The full `make ci-local` run completed with exit status 0 in the prepared
+rootless Podman container, with network disabled and disposable PostgreSQL.
+
+```text
+$ make ci-local
+schema-diff / sqlc-diff: checked-in definitions match generated output
+SQL invariants: 24 checks passed; partition tests passed
+go vet ./... and complete Go test suite: PASS
+license / SBOM / vendor / write-boundary / topology gates: PASS
+seed-determinism: OK
+backup-conformance: OK for: pgdump
+bench-smoke: OK (thresholds not asserted on this host)
+Linux amd64 and arm64 builds: PASS
+gate proofs: PASS
+gate-0: GREEN
+golden: all endpoint and query fixtures reproduce without drift
+fuzz: 30848 executions; PASS
+TestCommitOrderedCursor: 544 events exactly once across 302 polls
+Race-enabled concurrency package: PASS (2.607s)
+gate-gen: OK
+smoke-api: real CLI bootstrap and curl workflow PASS
+gate-1: GREEN (automated; human walkthrough remains required)
+```
+
+The tested source includes the deleted-parent regression fix. Subsequent changes
+only preserve the owner's AGENTS.md and record these results. All branch commits
+retain the existing human author/committer identity with no agent attribution.
+The owner's manual Spark walkthrough must still be recorded before final Phase 1
+acceptance and merge. Existing ADR-021 physical-backup deployment remains Phase
+2.16; smoke benchmarks are not a Spark performance baseline.
