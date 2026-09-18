@@ -126,6 +126,10 @@ prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goe
 	@bash scripts/gate-nodirect.sh --prove
 
 .PHONY: test-sxq fuzz-sxq
+.PHONY: test-concurrency
+test-concurrency: ## Concurrent API writers plus delta poller, including a 200-item transaction
+	@bash scripts/test-go.sh ./test/concurrency/... -race -count=1 -timeout=5m
+
 test-sxq: ## Query grammar and normalized SQL golden corpus
 	@go test ./internal/sxq -count=1
 
