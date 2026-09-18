@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,21 +30,21 @@ type Identity struct {
 }
 
 type Service struct {
+	key       [32]byte
 	Pool      *pgxpool.Pool
 	dummyHash string
 }
 
-func New(pool *pgxpool.Pool) *Service {
+func New(pool *pgxpool.Pool, sessionKey string) *Service {
 	// Fixed non-user material; this only equalizes password work for unknown users.
 	salt := base64.RawStdEncoding.EncodeToString(make([]byte, 16))
-	return &Service{Pool: pool, dummyHash: "$argon2id$v=19$m=65536,t=3,p=1$" + salt + "$" + base64.RawStdEncoding.EncodeToString(make([]byte, 32))}
+	return &Service{Pool: pool, key: sha256.Sum256([]byte("sierx-totp-v1:" + sessionKey)), dummyHash: "$argon2id$v=19$m=65536,t=3,p=1$" + salt + "$" + base64.RawStdEncoding.EncodeToString(make([]byte, 32))}
 }
 
-func (s *Service) Login(ctx context.Context, email, password string) (string, error) {
+func (s *Service) Login(ctx context.Context, email, password, code string) (string, error) {
 	var id string
 	var hash *string
-	var secret []byte
-	err := s.Pool.QueryRow(ctx, `SELECT u.id::text,u.password_hash,u.totp_secret FROM user_account u JOIN membership m ON m.user_id=u.id WHERE u.email=$1 AND u.is_active`, email).Scan(&id, &hash, &secret)
+	err := s.Pool.QueryRow(ctx, `SELECT u.id::text,u.password_hash FROM user_account u JOIN membership m ON m.user_id=u.id WHERE u.email=$1 AND u.is_active`, email).Scan(&id, &hash)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
 	}
@@ -52,20 +53,22 @@ func (s *Service) Login(ctx context.Context, email, password string) (string, er
 		encoded = *hash
 	}
 	valid := VerifyPassword(encoded, password)
-	if err != nil || hash == nil || !valid || len(secret) > 0 {
+	if err != nil || hash == nil || !valid {
 		return "", ErrCredentials
 	}
-	return s.CreateSession(ctx, id)
+	return s.checkSecondFactor(ctx, id, code)
 }
 
-func (s *Service) CreateSession(ctx context.Context, id string) (string, error) {
+func issueSession(ctx context.Context, db interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, id string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	hash := sha256.Sum256([]byte(token))
-	result, err := s.Pool.Exec(ctx, `INSERT INTO session(id_hash,user_id,expires_at) SELECT $1,id,now()+interval '12 hours' FROM user_account WHERE id=$2 AND is_active`, hash[:], id)
+	result, err := db.Exec(ctx, `INSERT INTO session(id_hash,user_id,expires_at) SELECT $1,id,now()+interval '12 hours' FROM user_account WHERE id=$2 AND is_active`, hash[:], id)
 	if err == nil && result.RowsAffected() != 1 {
 		return "", ErrCredentials
 	}
