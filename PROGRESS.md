@@ -50,7 +50,11 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Open questions raised
 
-- none
+- 2026-09-12, task 0.5 (ADR-003, no new ADR needed): observed on PG 18.6 that
+  `item_project_rank_uniq`, being DEFERRABLE, is enforced at end of statement
+  rather than per row while immediate. The rebalance path's `SET CONSTRAINTS
+  DEFERRED` is therefore optional, not required. Recorded so the ADR's
+  rationale can be corrected when it is next amended.
 
 ---
 
@@ -149,7 +153,42 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       red. 24 = 21 tables in §4 + 3 monthly `change_event` partitions
       (2026-09 … 2026-11). `seq_counter` (§4.7) is created here; task 0.6 adds
       the per-workspace row mechanism.
-- [ ] 0.5 Invariant enforcement in the database
+- [x] 0.5 Invariant enforcement in the database — 2026-09-12, PostgreSQL 18.6
+      ```
+      $ make test-sql
+      NOTICE:  ok   raised  status.name update  [23001 ...]
+      NOTICE:  ok   raised  status.key update  [23001 ...]
+      NOTICE:  ok   raised  status.category update  [23001 ...]
+      NOTICE:  ok   raised  item_type.name update  [23001 ...]
+      NOTICE:  ok   raised  item_type.level update  [23001 ...]
+      NOTICE:  ok   allowed item_type.is_idea update (not immutable by spec)
+      NOTICE:  ok   raised  depth-9 insert  [23514 ... would be at depth 9, maximum is 8 (SPEC §5.3)]
+      NOTICE:  ok   allowed depth-8 exists (positive control)
+      NOTICE:  ok   raised  path not ending in own id  [23514 ...]
+      NOTICE:  ok   raised  parent_id set, path penultimate label is someone else  [23514 ...]
+      NOTICE:  ok   raised  parent_id NULL, path has two labels  [23514 ...]
+      NOTICE:  ok   raised  parent_id set, single-label path  [23514 ...]
+      NOTICE:  ok   raised  update parent_id without rewriting path  [23514 ...]
+      NOTICE:  ok   raised  self-ancestry reparent (root under its grandchild)  [23514 ...]
+      NOTICE:  ok   raised  reparent under itself  [23514 ...]
+      NOTICE:  ok   allowed legal subtree reparent in one statement
+      NOTICE:  ok   allowed subtree paths consistent after reparent
+      NOTICE:  ok   raised  item pointing at another project's status  [23503 ... "item_status_same_project"]
+      NOTICE:  ok   raised  item pointing at another project's type  [23503 ... "item_type_same_project"]
+      NOTICE:  ok   raised  item pointing at a nonexistent config version  [23503 ... "item_config_version_exists"]
+      NOTICE:  ok   raised  duplicate rank within a project (immediate)  [23505 ... "item_project_rank_uniq"]
+      NOTICE:  ok   allowed single-statement rank swap with the constraint immediate
+      NOTICE:  ok   raised  rank collision surviving a statement raises immediately  [23505 ...]
+      NOTICE:  ok   allowed same collision tolerated mid-transaction when deferred
+      NOTICE:  test-sql: 24 checks passed
+      ```
+      Also proven: dropping `status_immutable_trg` by hand turns `test-sql`
+      red. `docs/schema.sql` re-snapshotted for 0008; `schema-diff` green.
+      **Finding for ADR-003:** a DEFERRABLE unique constraint is checked at end
+      of statement even while immediate, so the single-statement rebalance
+      (§5.5) commits without `SET CONSTRAINTS ... DEFERRED`. The decision
+      (DEFERRABLE) stands and the deferral step is harmless belt-and-braces;
+      the ADR's "checked per row" rationale describes the non-deferrable case.
 - [ ] 0.6 Sequence counter and partition maintenance
 - [ ] 0.7 sqlc wiring
 - [ ] 0.8 `store.Mutate`: the unit of work

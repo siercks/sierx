@@ -7,7 +7,7 @@ SHELL := /usr/bin/env bash
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \
-        schema-snapshot schema-diff
+        schema-snapshot schema-diff test-sql
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -62,3 +62,7 @@ schema-snapshot: ## Dump the live schema to docs/schema.sql (deliberate, human-r
 
 schema-diff: ## Migrate a scratch DB from zero and diff it against docs/schema.sql
 	@bash scripts/schema.sh diff
+
+test-sql: ## Database-level invariants raise on every forbidden operation (task 0.5)
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@bash scripts/psql.sh -f test/sql/invariants_test.sql
