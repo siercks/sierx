@@ -1526,3 +1526,12 @@ PASS (API, authentication, projection and SXQ packages)
 ```
 
 The full offline gate is running; the Spark human walkthrough remains pending.
+
+### Full-gate integration correction - 2026-09-18
+
+The first composite run found the Phase 0 property generator retained deleted
+items in its live-item list. Phase 1 correctly rejects a deleted move parent.
+Removed deleted targets from that list and added a deterministic store-level
+regression proving rejection preserves items, events and gap-free sequences.
+The existing property assertions remain intact. The repeated full-gate run
+passed all property tests (20.717s), including TestDeletedParentMoveRollsBack.
