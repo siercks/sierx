@@ -1,0 +1,14 @@
+{
+  "query": "fields.impact \u003e= 4 and type = idea order by fields.impact desc",
+  "where": "((CASE WHEN i.project_id IN ($1::uuid) THEN (i.fields -\u003e\u003e $2::text)::numeric ELSE NULL END \u003e= $3::text::numeric) AND (t.key = $4))",
+  "order": "CASE WHEN i.project_id IN ($5::uuid) THEN (i.fields -\u003e\u003e $6::text)::numeric ELSE NULL END",
+  "desc": true,
+  "params": [
+    "01994ed4-0000-7000-8000-000000000002",
+    "impact",
+    "4",
+    "idea",
+    "01994ed4-0000-7000-8000-000000000002",
+    "impact"
+  ]
+}

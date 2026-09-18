@@ -125,6 +125,13 @@ gate-nodirect: ## Governed tables written only through internal/store (task 0.8)
 prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goes red
 	@bash scripts/gate-nodirect.sh --prove
 
+.PHONY: test-sxq fuzz-sxq
+test-sxq: ## Query grammar and normalized SQL golden corpus
+	@go test ./internal/sxq -count=1
+
+fuzz-sxq: ## Bounded fuzz run for parser safety and literal parameter binding
+	@go test ./internal/sxq -run '^$$' -fuzz '^FuzzCompile$$' -fuzztime=5s -parallel=2
+
 test-store: ## store.Mutate unit-of-work tests against the dev database (task 0.8)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@bash scripts/test-go.sh ./internal/store/... -count=1

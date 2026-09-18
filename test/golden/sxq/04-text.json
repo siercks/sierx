@@ -1,0 +1,10 @@
+{
+  "query": "text ~ \"certificate rotation\" and project in (SRX, PLAT)",
+  "where": "((i.search_tsv @@ plainto_tsquery('english',$1)) AND (p.key_prefix IN ($2,$3)))",
+  "order": "i.id",
+  "params": [
+    "certificate rotation",
+    "SRX",
+    "PLAT"
+  ]
+}

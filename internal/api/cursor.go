@@ -18,6 +18,7 @@ type Cursor struct {
 	Sort    []any  `json:"sort,omitempty"`
 	Upper   string `json:"upper"`
 	Scope   string `json:"scope"`
+	At      string `json:"at,omitempty"`
 }
 
 func EncodeCursor(c Cursor, key string) (string, error) {

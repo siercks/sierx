@@ -65,6 +65,7 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}/descendants", s.descendants)
 	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}/rollup", s.itemRollup)
 	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}/history", s.itemHistory)
+	s.Router.With(s.requireAuth).Get("/api/v1/sxq/complete", s.completeSXQ)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

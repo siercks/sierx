@@ -12,7 +12,6 @@ import (
 	"uuid"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 	"github.com/siercks/sierx/internal/api/projection"
 	"github.com/siercks/sierx/internal/store"
 )
@@ -81,78 +80,6 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, version))
 	writeJSON(w, 200, doc)
-}
-
-func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
-	fields, ok := s.selectedFields(w, r, projection.Required)
-	if !ok {
-		return
-	}
-	limit, err := PageLimit(r)
-	if err != nil {
-		requestProblem(w, err.Error())
-		return
-	}
-	q := r.URL.Query()
-	if q.Has("q") {
-		requestProblem(w, "Query filtering is not available yet.")
-		return
-	}
-	who := Identity(r)
-	c := Cursor{After: zeroID, Upper: zeroID, Scope: cursorScope(r)}
-	if token := q.Get("cursor"); token != "" {
-		c, err = DecodeCursor(token, s.auth.cfg.SessionKey, c.Scope)
-		if err != nil {
-			requestProblem(w, err.Error())
-			return
-		}
-	} else {
-		err = s.Pool.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 ORDER BY id DESC LIMIT 1`, who.WorkspaceID).Scan(&c.Upper)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			databaseProblem(w, err)
-			return
-		}
-	}
-	expression, args := projection.SQL(fields, 6)
-	params := append([]any{who.WorkspaceID, c.After, c.Upper, q.Get("project"), limit + 1}, args...)
-	rows, err := s.Pool.Query(r.Context(), "SELECT "+expression+",i.id::text"+itemJoins+`WHERE i.workspace_id=$1 AND i.id>$2::uuid AND i.id<=$3::uuid AND ($4='' OR p.key_prefix=$4) AND i.deleted_at IS NULL ORDER BY i.id LIMIT $5`, params...)
-	if err != nil {
-		databaseProblem(w, err)
-		return
-	}
-	defer rows.Close()
-	page := Page{Data: []any{}}
-	for rows.Next() {
-		var raw []byte
-		var id string
-		if err := rows.Scan(&raw, &id); err != nil {
-			databaseProblem(w, err)
-			return
-		}
-		if len(page.Data) == limit {
-			token, err := EncodeCursor(c, s.auth.cfg.SessionKey)
-			if err != nil {
-				WriteProblem(w, InternalError())
-				return
-			}
-			page.NextCursor = &token
-			break
-		}
-		var doc map[string]any
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.UseNumber()
-		if err = decoder.Decode(&doc); err != nil {
-			WriteProblem(w, InternalError())
-			return
-		}
-		page.Data = append(page.Data, projection.Apply(doc, fields))
-		c.After = id
-	}
-	if rows.Err() != nil {
-		databaseProblem(w, rows.Err())
-		return
-	}
-	writeJSON(w, 200, page)
 }
 
 type itemInput struct {

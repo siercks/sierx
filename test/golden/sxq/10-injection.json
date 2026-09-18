@@ -1,0 +1,8 @@
+{
+  "query": "title = \"x' OR 1=1 --\"",
+  "where": "(i.title = $1)",
+  "order": "i.id",
+  "params": [
+    "x' OR 1=1 --"
+  ]
+}
