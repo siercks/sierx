@@ -61,6 +61,9 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Post("/api/v1/comments", s.createComment)
 	s.Router.With(s.requireAuth).Patch("/api/v1/comments/{id}", s.changeComment)
 	s.Router.With(s.requireAuth).Delete("/api/v1/comments/{id}", s.changeComment)
+	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}/children", s.children)
+	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}/descendants", s.descendants)
+	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}/rollup", s.itemRollup)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
