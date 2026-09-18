@@ -222,6 +222,7 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 
 		case changeLink:
 			if _, err := q.InsertLink(ctx, gen.InsertLinkParams{
+				ID:         toPgUUID(c.link.ID),
 				FromItemID: toPgUUID(c.link.FromItemID),
 				ToItemID:   toPgUUID(c.link.ToItemID),
 				Kind:       c.link.Kind,
@@ -233,6 +234,11 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 		case changeUnlink:
 			if err := q.DeleteLink(ctx, toPgUUID(c.link.ID)); err != nil {
 				return Result{}, fmt.Errorf("unlink %s: %w", c.link.ID, err)
+			}
+		}
+		if c.kind == changeLink || c.kind == changeUnlink {
+			if _, err := tx.Exec(ctx, `UPDATE item SET version=version+1,change_seq=$2,updated_at=now() WHERE id=$1`, c.itemID.String(), seq); err != nil {
+				return Result{}, err
 			}
 		}
 		if c.itemID != (uuid.UUID{}) {

@@ -989,3 +989,12 @@ silently overwritten. Points are nonnegative, at most 9999.99, with two decimal
 places; dates use YYYY-MM-DD and assignees must be active workspace members.
 An item delete affects that item, preserves its key and remains readable by key.
 New local items set origin_seq to their allocated creation sequence.
+
+Transition `fields` is an optional patch using item PATCH property names (custom
+values remain nested under `fields`). Requirements inspect the merged result.
+Move `parent` is required and nullable; omitted `rank_after` preserves rank,
+null prepends and an item key inserts after it in the project-wide ordering.
+Link creation accepts `{to: item_key, kind}`; unlink uses the source item's
+version. Link reads include inbound and outbound edges. Phase 1 target lookup is
+workspace-local; cross-project edges work, and nested endpoint summaries retain
+an extension point for the later cross-workspace visibility policy.
