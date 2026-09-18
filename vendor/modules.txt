@@ -31,11 +31,18 @@ github.com/jackc/puddle/v2/internal/genstack
 github.com/leanovate/gopter
 github.com/leanovate/gopter/gen
 github.com/leanovate/gopter/prop
-# golang.org/x/sync v0.19.0
-## explicit; go 1.24.0
+# golang.org/x/crypto v0.57.0
+## explicit; go 1.26.0
+golang.org/x/crypto/argon2
+golang.org/x/crypto/blake2b
+# golang.org/x/sync v0.23.0
+## explicit; go 1.26.0
 golang.org/x/sync/semaphore
-# golang.org/x/text v0.29.0
-## explicit; go 1.24.0
+# golang.org/x/sys v0.48.0
+## explicit; go 1.26.0
+golang.org/x/sys/cpu
+# golang.org/x/text v0.42.0
+## explicit; go 1.26.0
 golang.org/x/text/cases
 golang.org/x/text/internal
 golang.org/x/text/internal/language

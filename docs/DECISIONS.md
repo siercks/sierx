@@ -910,3 +910,25 @@ passes. Do not relax backup or restore requirements to achieve deployment.
 The owner's instruction also authorizes publishing the reviewed Phase 0
 closeout. Phase 1 implementation follows BUILD task order and acceptance;
 this decision is not acceptance of any Phase 1 code.
+
+## ADR-022 - Phase 1 authentication defaults
+
+**Status:** owner authorized documented, tested defaults on 2026-09-18.
+**Scope:** details left unspecified by SPEC 11.2; no architecture change.
+
+Local passwords use Argon2id with 64 MiB, three iterations, one lane, a random
+16-byte salt and 32-byte output. New passwords require 12–1024 bytes. Login
+performs at most one password calculation concurrently, and allows ten attempts
+per source address per minute, with bounded in-memory accounting. Proxy headers
+never influence the source address used for these limits.
+
+Session tokens contain 32 random bytes encoded as base64url; only the SHA-256
+hash is stored. Sessions expire after 12 hours without sliding extension and
+logout removes the stored session. The cookie is `__Host-sierx_session`, path
+`/`, Secure, HttpOnly, SameSite=Lax, with no Domain. HTTPS is required for normal
+browser use. CLI smoke tests explicitly handle the cookie over loopback.
+
+JSON mutations reject unknown fields and bodies over 1 MiB. Browser Origin
+headers must match SIERX_BASE_URL; requests without Origin are permitted for
+non-browser API clients. Password/session/database errors never enter response
+detail text. Account inactivity is checked on every authenticated request.

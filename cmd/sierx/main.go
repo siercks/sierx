@@ -34,7 +34,9 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("server ready")
-	if err := api.New(pool, logger).Serve(ctx, listener); err != nil {
+	server := api.New(pool, logger)
+	server.ConfigureAuth(c)
+	if err := server.Serve(ctx, listener); err != nil {
 		logger.Error("server stopped with an error")
 		os.Exit(1)
 	}

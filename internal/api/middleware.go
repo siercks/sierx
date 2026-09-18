@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -8,9 +9,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+type logIdentityKey struct{}
+type logIdentity struct{ actor, workspace any }
+
 func (s *Server) requestLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		identity := &logIdentity{}
+		r = r.WithContext(context.WithValue(r.Context(), logIdentityKey{}, identity))
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		defer func() {
 			if recover() != nil {
@@ -26,7 +32,7 @@ func (s *Server) requestLog(next http.Handler) http.Handler {
 			if status == 0 {
 				status = http.StatusOK
 			}
-			s.Logger.Info("request", "method", r.Method, "route", route, "status", status, "duration_ms", time.Since(start).Milliseconds(), "actor", nil, "workspace", nil)
+			s.Logger.Info("request", "method", r.Method, "route", route, "status", status, "duration_ms", time.Since(start).Milliseconds(), "actor", identity.actor, "workspace", identity.workspace)
 		}()
 		next.ServeHTTP(ww, r)
 	})

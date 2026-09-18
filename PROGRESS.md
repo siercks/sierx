@@ -901,7 +901,7 @@ or acceptance is claimed by this closeout.
 
 - [x] 1.1 Server skeleton and executable boot checks.
 - [x] 1.2 Error model.
-- [ ] 1.3 Local authentication.
+- [x] 1.3 Local authentication.
 - [ ] 1.4 Proxy authentication.
 - [ ] 1.5 TOTP.
 - [ ] 1.6 Operator bootstrap.
@@ -986,6 +986,37 @@ PASS
 ok      github.com/siercks/sierx/internal/api 1.019s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.3 acceptance - 2026-09-18
+
+Added local login/logout/current-user endpoints, Argon2id hashing, secure
+12-hour sessions stored only as SHA-256 hashes, inactive-account enforcement,
+origin checks and bounded login work/attempts. ADR-022 records defaults approved
+under the owner's authorization. Server registration, tests and dependency
+vendoring are required supporting wiring outside the task's auth directory.
+golang.org/x/crypto v0.57.0 and x/sys v0.48.0 are BSD-3-Clause; their module
+requirements advance x/sync to v0.23.0 and x/text to v0.42.0. The license gate
+checked all ten modules. No schema change was needed.
+
+Real isolated-container acceptance:
+
+```text
+$ make test-api
+--- PASS: TestAuthLocal (0.75s)
+--- PASS: TestAuthOriginAndLimits (0.13s)
+--- PASS: TestPasswordHash (0.35s)
+--- PASS: TestProblemGolden (0.00s)
+--- PASS: TestRouterProblems (0.00s)
+--- PASS: TestServerBoot (1.01s)
+PASS
+ok      github.com/siercks/sierx/internal/api 2.241s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+licenses.sh: 10 Go module(s) checked
 gate-license: OK (every dependency on the §15.1 allowlist)
 gate-nodirect: OK (governed tables written only through internal/store)
 gate-notopology: OK (no topology in committable files)
