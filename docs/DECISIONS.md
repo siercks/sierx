@@ -1020,3 +1020,10 @@ Large before/after values stay in history; clients re-fetch affected projected
 items and ancestor rollups, and refresh descendants on a move. A workspace-wide
 event with null item_id invalidates the workspace view. This keeps 50 changes
 below the 20 KB budget regardless of Markdown body size.
+
+Item/config GET ETags are weak content hashes for conditional caching across
+compression variants. They include projected content and derived rollups; they
+are separate from the numeric edit version. Send the quoted JSON `version` in
+If-Match for a mutation, not the weak cache tag. Authentication security responses
+are not compressed; other textual responses negotiate Brotli or gzip and vary
+on Accept-Encoding. No acceptable encoding yields 406.

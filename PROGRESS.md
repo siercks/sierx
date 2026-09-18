@@ -920,7 +920,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.19 Preferences.
 - [x] 1.20 Delta sync.
 - [x] 1.21 sxq subset.
-- [ ] 1.22 Caching and compression.
+- [x] 1.22 Caching and compression.
 - [ ] 1.23 Concurrent cursor/race tests.
 - [ ] 1.24 Endpoint golden files.
 - [ ] 1.25 Metrics.
@@ -1434,4 +1434,26 @@ ok github.com/siercks/sierx/internal/store 0.565s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
+```
+
+### Task 1.22 acceptance - 2026-09-18
+
+Added Brotli v1.2.4 (MIT, vendored) and gzip with quality-aware negotiation,
+Vary and body-free 304 responses. Item/config read tags hash the representation;
+parent rollup changes invalidate caches without fabricating edit-version bumps.
+Tests cover decoded equivalence, q=0, projection variants and delta ETag absence.
+There are no static assets in Phase 1; their routes arrive with the Phase 2 web
+bundle and must use its content fingerprint. No placeholder asset route added.
+
+```text
+$ make test-api
+--- PASS: TestCachingCompression (0.44s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.460s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (11 modules allowed)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
 ```

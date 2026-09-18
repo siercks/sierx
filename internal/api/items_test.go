@@ -50,7 +50,7 @@ func TestItemsCRUD(t *testing.T) {
 	body, _ := json.Marshal(item)
 	assertGolden(t, "items-create", body, itemReplacements(item))
 	w := apiCall(s, "GET", "/api/v1/items/SRX-1", "", cookie)
-	if w.Code != 200 || w.Header().Get("ETag") != `"1"` {
+	if w.Code != 200 || w.Header().Get("ETag") == "" {
 		t.Fatal("detail failed")
 	}
 	assertGolden(t, "items-detail", w.Body.Bytes(), itemReplacements(item))

@@ -22,7 +22,7 @@ func TestResolvedConfig(t *testing.T) {
 	}
 	r := httptest.NewRequest("GET", "/api/v1/projects/SRX/config", nil)
 	r.AddCookie(cookie)
-	r.Header.Set("If-None-Match", "W/"+etag)
+	r.Header.Set("If-None-Match", etag)
 	w = httptest.NewRecorder()
 	s.Router.ServeHTTP(w, r)
 	if w.Code != 304 || w.Body.Len() != 0 || w.Header().Get("ETag") != etag {
