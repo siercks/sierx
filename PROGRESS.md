@@ -222,7 +222,14 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       schema-diff: from-scratch migration matches docs/schema.sql
       NOTICE:  test-sql: 24 checks passed
       ```
-- [ ] 0.7 sqlc wiring
+- [ ] 0.7 sqlc wiring — not started. **Session boundary (2026-09-12):** every
+      task from here on needs Go modules (`pgx/v5`, sqlc's generated code,
+      goose as a tool, property-test libraries), and the agent's sandbox cannot
+      reach the Go module proxy, `golang.org`, `gopkg.in`, or `sum.golang.org`.
+      Resume on the dev host, or with those hosts allowlisted.
+      Verified for task 0.8 step 6: Go 1.27.1 ships a stdlib `uuid` package
+      (`go doc uuid` → RFC 9562, `NewV7` present) — no `google/uuid` dependency
+      needed. **high (verified)**
 - [ ] 0.8 `store.Mutate`: the unit of work
 - [ ] 0.9 Seed generator
 - [ ] 0.10 Property tests
