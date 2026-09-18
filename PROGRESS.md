@@ -902,7 +902,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.1 Server skeleton and executable boot checks.
 - [x] 1.2 Error model.
 - [x] 1.3 Local authentication.
-- [ ] 1.4 Proxy authentication.
+- [x] 1.4 Proxy authentication.
 - [ ] 1.5 TOTP.
 - [ ] 1.6 Operator bootstrap.
 - [ ] 1.7 Projection registry.
@@ -1017,6 +1017,31 @@ ok      github.com/siercks/sierx/internal/api 2.241s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 licenses.sh: 10 Go module(s) checked
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.4 acceptance - 2026-09-18
+
+Proxy identity is accepted only from explicitly trusted immediate peers and for
+active pre-provisioned users with NULL local passwords. ADR-022 documents the
+header and account rules. Required supporting edits register the mode in auth
+middleware and exercise spoofed headers, unknown users and local-mode isolation.
+
+```text
+$ make test-api
+--- PASS: TestAuthLocal (0.71s)
+--- PASS: TestAuthOriginAndLimits (0.12s)
+--- PASS: TestPasswordHash (0.33s)
+--- PASS: TestProblemGolden (0.00s)
+--- PASS: TestRouterProblems (0.00s)
+--- PASS: TestAuthProxy (0.12s)
+--- PASS: TestServerBoot (1.01s)
+PASS
+ok      github.com/siercks/sierx/internal/api 2.294s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
 gate-license: OK (every dependency on the §15.1 allowlist)
 gate-nodirect: OK (governed tables written only through internal/store)
 gate-notopology: OK (no topology in committable files)

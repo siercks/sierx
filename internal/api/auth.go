@@ -152,12 +152,18 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		if r.Method != "GET" && r.Method != "HEAD" && !s.validOrigin(w, r) {
 			return
 		}
-		c, err := r.Cookie(auth.CookieName)
-		if err != nil {
-			WriteProblem(w, Unauthorized())
-			return
+		var who auth.Identity
+		var err error
+		if s.auth.cfg.AuthMode == "proxy" {
+			who, err = s.auth.service.Proxy(r.Context(), r, s.auth.cfg.TrustedProxies)
+		} else {
+			c, cookieErr := r.Cookie(auth.CookieName)
+			if cookieErr != nil {
+				WriteProblem(w, Unauthorized())
+				return
+			}
+			who, err = s.auth.service.Session(r.Context(), c.Value)
 		}
-		who, err := s.auth.service.Session(r.Context(), c.Value)
 		if errors.Is(err, auth.ErrCredentials) {
 			WriteProblem(w, Unauthorized())
 			return
@@ -174,6 +180,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if s.auth.cfg.AuthMode != "local" {
+		WriteProblem(w, Forbidden())
+		return
+	}
 	c, _ := r.Cookie(auth.CookieName)
 	if err := s.auth.service.Logout(r.Context(), c.Value); err != nil {
 		WriteProblem(w, Unavailable())
