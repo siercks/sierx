@@ -59,6 +59,38 @@ COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching
 
 
 --
+-- Name: change_event_ensure_partitions(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.change_event_ensure_partitions(months_ahead integer) RETURNS SETOF text
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  m        int;
+  start_at timestamptz;
+  end_at   timestamptz;
+  pname    text;
+BEGIN
+  IF months_ahead < 0 THEN
+    RAISE EXCEPTION 'months_ahead must be >= 0';
+  END IF;
+  FOR m IN 0..months_ahead LOOP
+    start_at := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+                + make_interval(months => m);
+    end_at   := start_at + interval '1 month';
+    pname    := 'change_event_' || to_char(start_at AT TIME ZONE 'UTC', 'YYYY_MM');
+    IF to_regclass(pname) IS NULL THEN
+      EXECUTE format(
+        'CREATE TABLE %I PARTITION OF change_event FOR VALUES FROM (%L) TO (%L)',
+        pname, start_at, end_at);
+      RETURN NEXT pname;
+    END IF;
+  END LOOP;
+  RETURN;
+END $$;
+
+
+--
 -- Name: item_path_check(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -143,6 +175,19 @@ BEGIN
     RAISE EXCEPTION 'status % is immutable: key, name, category cannot change (SPEC §5.6); insert a new row and a new config version',
       OLD.id USING ERRCODE = 'restrict_violation';
   END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: workspace_create_seq_counter(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.workspace_create_seq_counter() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  INSERT INTO seq_counter (workspace_id) VALUES (NEW.id);
   RETURN NEW;
 END $$;
 
@@ -1007,6 +1052,13 @@ CREATE TRIGGER item_type_immutable_trg BEFORE UPDATE ON public.item_type FOR EAC
 --
 
 CREATE TRIGGER status_immutable_trg BEFORE UPDATE ON public.status FOR EACH ROW EXECUTE FUNCTION public.status_immutable();
+
+
+--
+-- Name: workspace workspace_create_seq_counter_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER workspace_create_seq_counter_trg AFTER INSERT ON public.workspace FOR EACH ROW EXECUTE FUNCTION public.workspace_create_seq_counter();
 
 
 --

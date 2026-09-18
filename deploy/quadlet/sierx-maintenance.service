@@ -1,0 +1,11 @@
+# sierx — one-shot partition maintenance, driven by sierx-maintenance.timer.
+# Runs sierxctl inside the application container so it uses the container's
+# DATABASE_URL; the container name is bound when the app unit lands (task 2.16).
+[Unit]
+Description=sierx partition maintenance run
+After=sierx-postgres.service
+Requires=sierx-postgres.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec sierx sierxctl partitions ensure --months-ahead 1

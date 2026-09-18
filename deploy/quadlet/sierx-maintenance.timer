@@ -1,0 +1,16 @@
+# sierx — scheduled partition maintenance (BUILD task 0.6). A systemd user
+# timer, not pg_cron: no second moving part inside the database (§1.3, §3.2).
+# Runs sierx-maintenance.service, which calls
+#   sierxctl partitions ensure --months-ahead 1
+# Installed alongside the container units under ~/.config/containers/systemd/
+# (timers are plain systemd units; Quadlet ignores them, systemd loads them).
+[Unit]
+Description=sierx partition maintenance (monthly change_event partitions)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

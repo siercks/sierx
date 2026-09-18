@@ -45,7 +45,6 @@ END $$;
 -- ---- fixture: one workspace, two projects with config v1 ----------------
 INSERT INTO workspace (id, slug, name, origin_id) VALUES
   ('01000000-0000-7000-8000-000000000001', 'w', 'W', '01000000-0000-7000-8000-000000000001');
-INSERT INTO seq_counter (workspace_id) VALUES ('01000000-0000-7000-8000-000000000001');
 INSERT INTO project (id, workspace_id, key_prefix, name, kind) VALUES
   ('02000000-0000-7000-8000-000000000001', '01000000-0000-7000-8000-000000000001', 'AAA', 'A', 'delivery'),
   ('02000000-0000-7000-8000-000000000002', '01000000-0000-7000-8000-000000000001', 'BBB', 'B', 'delivery');

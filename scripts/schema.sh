@@ -47,7 +47,7 @@ admin_url() { url_for_db postgres; }
 case ${1:-} in
   snapshot)
     dump "$DATABASE_URL" > "$SNAPSHOT"
-    echo "schema-snapshot: wrote $SNAPSHOT ($(grep -c 'CREATE TABLE' "$SNAPSHOT") CREATE TABLE statements)"
+    echo "schema-snapshot: wrote $SNAPSHOT ($(grep -c '^CREATE TABLE' "$SNAPSHOT") CREATE TABLE statements)"
     ;;
   diff)
     [[ -f $SNAPSHOT ]] || die "no $SNAPSHOT — run make schema-snapshot first"

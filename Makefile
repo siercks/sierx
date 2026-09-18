@@ -7,7 +7,7 @@ SHELL := /usr/bin/env bash
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \
-        schema-snapshot schema-diff test-sql
+        schema-snapshot schema-diff test-sql test-partitions
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -66,3 +66,7 @@ schema-diff: ## Migrate a scratch DB from zero and diff it against docs/schema.s
 test-sql: ## Database-level invariants raise on every forbidden operation (task 0.5)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@bash scripts/psql.sh -f test/sql/invariants_test.sql
+
+test-partitions: ## Partition maintenance is idempotent and next month exists (task 0.6)
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@bash scripts/psql.sh -f test/sql/partitions_test.sql

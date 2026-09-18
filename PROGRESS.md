@@ -50,6 +50,16 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Open questions raised
 
+- 2026-09-12, task 0.6: `deploy/quadlet/sierx-maintenance.service` (added — a
+  timer needs a service; not in the Files list) runs `podman exec sierx
+  sierxctl partitions ensure --months-ahead 1`. The application container's
+  name is not specified until task 2.16; `sierx` is a placeholder to confirm
+  or change there.
+- 2026-09-12, task 0.6: the partition logic is a SQL function
+  (`change_event_ensure_partitions`) with `sierxctl` as a one-line caller, so
+  the idempotence test runs from psql. The guide names only the CLI; if the
+  logic is wanted in Go instead, it is a mechanical move.
+
 - 2026-09-12, task 0.5 (ADR-003, no new ADR needed): observed on PG 18.6 that
   `item_project_rank_uniq`, being DEFERRABLE, is enforced at end of statement
   rather than per row while immediate. The rebalance path's `SET CONSTRAINTS
@@ -189,7 +199,29 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       (§5.5) commits without `SET CONSTRAINTS ... DEFERRED`. The decision
       (DEFERRABLE) stands and the deferral step is harmless belt-and-braces;
       the ADR's "checked per row" rationale describes the non-deferrable case.
-- [ ] 0.6 Sequence counter and partition maintenance
+- [ ] 0.6 Sequence counter and partition maintenance — **SQL half green; Go
+      half unverified.** `0009_seq.sql` (seq_counter row created by trigger
+      alongside each workspace, backfilled; `change_event_ensure_partitions(n)`
+      idempotent creator, no drop), the timer + oneshot service units, and
+      `cmd/sierxctl/partitions.go` (a thin `pgx` caller of that function) are
+      written. `pgx` cannot be added to go.mod from the agent sandbox (module
+      proxy blocked), so `sierxctl` has not been compiled. On the dev host:
+      `go get github.com/jackc/pgx/v5@latest && go mod tidy && go mod vendor
+      && go build ./cmd/sierxctl && make gate-license` (§0.4: record the
+      addition here), then re-run the acceptance and check this box.
+      ```
+      $ make test-partitions
+      NOTICE:  ok   ensure(1): first run created 0, second run created 0, change_event_2026_10 present
+      NOTICE:  ok   ensure(6): created 4 more, then 0
+      NOTICE:  ok   every workspace has a seq_counter row (1)
+      NOTICE:  ok   event routed to the current-month partition
+      NOTICE:  test-partitions: passed
+      $ make migrate-updown-up && make schema-snapshot && make schema-diff && make test-sql
+      ... 9 versions / clean at zero / 9 versions
+      schema-snapshot: wrote docs/schema.sql (24 CREATE TABLE statements)
+      schema-diff: from-scratch migration matches docs/schema.sql
+      NOTICE:  test-sql: 24 checks passed
+      ```
 - [ ] 0.7 sqlc wiring
 - [ ] 0.8 `store.Mutate`: the unit of work
 - [ ] 0.9 Seed generator
