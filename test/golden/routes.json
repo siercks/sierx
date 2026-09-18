@@ -32,5 +32,6 @@
  "GET /api/v1/sxq/complete":"api/sxq-complete.json",
  "GET /api/v1/views":"api/views-list.json",
  "POST /api/v1/views":"api/views-create.json",
- "GET /api/v1/changes":"api/changes.json"
+ "GET /api/v1/changes":"api/changes.json",
+ "GET /api/v1/metrics":"api/metrics.json"
 }

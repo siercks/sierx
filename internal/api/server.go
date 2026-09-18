@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,10 +15,13 @@ import (
 )
 
 type Server struct {
-	auth   *authState
-	Pool   *pgxpool.Pool
-	Router *chi.Mux
-	Logger *slog.Logger
+	auth       *authState
+	Pool       *pgxpool.Pool
+	Router     *chi.Mux
+	Logger     *slog.Logger
+	requests   atomic.Uint64
+	inflight   atomic.Int64
+	durationNS atomic.Uint64
 }
 
 func New(pool *pgxpool.Pool, logger *slog.Logger) *Server {
