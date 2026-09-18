@@ -47,6 +47,11 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Post("/api/v1/projects", s.createProject)
 	s.Router.With(s.requireAuth).Get("/api/v1/projects/{key}", s.getProject)
 	s.Router.With(s.requireAuth).Get("/api/v1/projects/{key}/config", s.projectConfig)
+	s.Router.With(s.requireAuth).Get("/api/v1/items", s.listItems)
+	s.Router.With(s.requireAuth).Post("/api/v1/items", s.createItem)
+	s.Router.With(s.requireAuth).Get("/api/v1/items/{key}", s.getItem)
+	s.Router.With(s.requireAuth).Patch("/api/v1/items/{key}", s.updateItem)
+	s.Router.With(s.requireAuth).Delete("/api/v1/items/{key}", s.deleteItem)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

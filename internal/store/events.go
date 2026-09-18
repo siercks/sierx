@@ -62,6 +62,7 @@ const (
 // Mutation accumulates row changes and their events inside one Mutate call.
 // It is not safe for concurrent use; one Mutation belongs to one transaction.
 type Mutation struct {
+	expected    map[uuid.UUID]int32
 	workspaceID uuid.UUID
 	actorID     uuid.UUID
 	hasActor    bool

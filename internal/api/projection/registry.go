@@ -20,7 +20,7 @@ var Registry = []Field{
 	{"parent", "CASE WHEN par.id IS NULL THEN NULL ELSE jsonb_build_object('key',par.key) END", "{ key: string } | null"},
 	{"project", "jsonb_build_object('key_prefix',p.key_prefix,'name',p.name)", "{ key_prefix: string; name: string }"},
 	{"fields", "i.fields", "Record<string, unknown>"},
-	{"rollup", "jsonb_build_object('descendant_count',r.descendant_count,'done_count',r.done_count,'points_total',r.points_total,'points_done',r.points_done,'earliest_start',r.earliest_start,'latest_due',r.latest_due)", "{ descendant_count: number; done_count: number; points_total: number; points_done: number; earliest_start: string | null; latest_due: string | null }"},
+	{"rollup", "jsonb_build_object('descendant_count',r.descendant_count,'done_count',r.done_count,'points_total',r.points_total,'points_done',r.points_done,'earliest_start',r.earliest_start,'latest_due',r.latest_due)", "{ descendant_count: number; done_count: number; points_total: number | null; points_done: number | null; earliest_start: string | null; latest_due: string | null }"},
 }
 
 var leaves = map[string][]string{"status": {"key", "name", "category"}, "assignee": {"id", "display_name"}, "type": {"key", "name", "level"}, "parent": {"key"}, "project": {"key_prefix", "name"}, "rollup": {"descendant_count", "done_count", "points_total", "points_done", "earliest_start", "latest_due"}}

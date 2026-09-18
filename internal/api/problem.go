@@ -8,11 +8,12 @@ import (
 // Problem is the RFC 9457 response contract. Details are authored here rather
 // than copied from database, decoder, or other dependency errors.
 type Problem struct {
-	Type    string `json:"type"`
-	Title   string `json:"title"`
-	Status  int    `json:"status"`
-	Detail  string `json:"detail"`
-	Current any    `json:"current,omitempty"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Status    int    `json:"status"`
+	Detail    string `json:"detail"`
+	Current   any    `json:"current,omitempty"`
+	Submitted any    `json:"submitted,omitempty"`
 }
 
 func problem(status int, title, detail string) Problem {

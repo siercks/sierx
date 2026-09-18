@@ -38,6 +38,17 @@ func New(db DB) *Store {
 	return &Store{db: db, q: gen.New(db)}
 }
 
+// WithExpectedVersion checks the caller's version after sequence allocation
+// has serialized workspace writers, before any governed row is changed.
+func WithExpectedVersion(id uuid.UUID, version int32) MutateOption {
+	return func(m *Mutation) {
+		if m.expected == nil {
+			m.expected = map[uuid.UUID]int32{}
+		}
+		m.expected[id] = version
+	}
+}
+
 // Queries exposes read-only generated queries for callers outside this package.
 // Writes are not reachable this way: the generated writers take parameters this
 // package builds during flush, and gate-nodirect fails any package outside
@@ -130,6 +141,16 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 		return Result{}, fmt.Errorf("allocate %d seq values: %w", n, err)
 	}
 	lowest := highest - int64(n) + 1
+	for id, expected := range m.expected {
+		var actual int32
+		err := tx.QueryRow(ctx, `SELECT version FROM item WHERE id=$1 AND workspace_id=$2 AND deleted_at IS NULL FOR UPDATE`, id.String(), m.workspaceID.String()).Scan(&actual)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && actual != expected {
+			return Result{}, ErrVersionConflict
+		}
+		if err != nil {
+			return Result{}, err
+		}
+	}
 
 	// (b) Assign seq to each event in registration order; each item's
 	// change_seq becomes the highest value assigned to any of its events.
@@ -269,6 +290,9 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 }
 
 func (s *Store) applyInsert(ctx context.Context, db gen.DBTX, q *gen.Queries, m *Mutation, in *ItemInsert, seq int64) error {
+	if in.OriginSeq == nil {
+		in.OriginSeq = &seq
+	}
 	// Key from the project's monotonic counter (§A.1), never reused or reset.
 	keyRow, err := q.NextItemKey(ctx, toPgUUID(in.ProjectID))
 	if err != nil {
