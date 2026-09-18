@@ -14,6 +14,7 @@ import (
 )
 
 type Server struct {
+	auth   *authState
 	Pool   *pgxpool.Pool
 	Router *chi.Mux
 	Logger *slog.Logger
