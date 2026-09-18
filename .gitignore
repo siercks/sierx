@@ -1,0 +1,30 @@
+# Real configuration and secrets — never tracked (BUILD §3.6, §3.7)
+.env
+.env.*
+!.env.example
+
+# Toolchain and build output
+node_modules/
+dist/
+bin/
+*.test
+*.out
+coverage*
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# sqlc-diff scratch config (scripts/sqlc.sh)
+.sqlc-diff.yaml
+.sqlc-diff-out/
+
+# compiled binaries built into the repo root by `go build ./...`
+/sierx
+/sierxctl
+
+# backup artifacts (dumps, restore-test rotation counter)
+.backups/
+

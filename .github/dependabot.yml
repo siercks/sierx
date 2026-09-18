@@ -1,0 +1,50 @@
+# ADR-019 — digest pins need an update path. Configuration only: no service,
+# no runner, nothing to operate. Weekly, one grouped pull request per
+# ecosystem; every PR must pass the current phase's gate before it merges.
+#
+# Excluded from automation (ADR-019): the Go and Node toolchain pins (BUILD §1)
+# and the PostgreSQL major version. Those are dated decisions with migration
+# consequences — a PostgreSQL major bump needs stanza-upgrade and a restore
+# test (ADR-010), and the Node 26 LTS transition (2026-10) is a scheduled task.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns: ["*"]
+    ignore:
+      # toolchain pin is hand-managed (BUILD §1)
+      - dependency-name: go
+      - dependency-name: toolchain
+
+  - package-ecosystem: npm
+    directory: /
+    # The frontend tree (/web) is added at task 2.1; extend `directories` then.
+    schedule:
+      interval: weekly
+    groups:
+      npm-packages:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
+    ignore:
+      # PostgreSQL major bumps are a human runbook item (ADR-010, ADR-019)
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
