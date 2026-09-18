@@ -21,7 +21,7 @@ WHERE p.workspace_id=$1 AND p.key_prefix=$2 ORDER BY pc.version DESC LIMIT 1`
 func etagMatches(header, etag string) bool {
 	for _, value := range strings.Split(header, ",") {
 		value = strings.TrimSpace(value)
-		if value == "*" || strings.TrimPrefix(value, "W/") == etag {
+		if value == "*" || strings.TrimPrefix(value, "W/") == strings.TrimPrefix(etag, "W/") {
 			return true
 		}
 	}
@@ -38,7 +38,7 @@ func (s *Server) projectConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum := sha256.Sum256(body)
-	etag := fmt.Sprintf(`"%x"`, sum)
+	etag := fmt.Sprintf(`W/"%x"`, sum)
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Content-Type", "application/json")

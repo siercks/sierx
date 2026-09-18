@@ -73,13 +73,12 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	doc, version, err := s.readItem(r.Context(), Identity(r).WorkspaceID, chi.URLParam(r, "key"), fields)
+	doc, _, err := s.readItem(r.Context(), Identity(r).WorkspaceID, chi.URLParam(r, "key"), fields)
 	if err != nil {
 		databaseProblem(w, err)
 		return
 	}
-	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, version))
-	writeJSON(w, 200, doc)
+	writeCachedJSON(w, r, doc)
 }
 
 type itemInput struct {
