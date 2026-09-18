@@ -14,8 +14,18 @@ every resolution of an ambiguity, and `PROGRESS.md` is the only claim about
 where the build is. Every gate is a `make` target you can run locally; CI does
 nothing that `make` does not.
 
-sierx is licensed under the Apache License 2.0 — see `LICENSE` and `NOTICE`.
+sierx is licensed under the Apache License 2.0 - see `LICENSE` and `NOTICE`.
 Dependencies are held to a permissive allowlist enforced in the build.
+
+## API development
+
+Run `make test-api TEST_ARGS='-run TestServerBoot'` to select an API test.
+`TEST_ARGS` contains trusted Go test flags, not an extra make option. The runner
+loads the disposable database URL from the environment or the untracked `.env`
+and fails when it is missing. `go run ./cmd/sierx` reads environment variables
+directly; export them before starting it. `SIERX_LISTEN_ADDR` defaults to `:8080`.
+`GET /api/v1/healthz` returns `alive: true` and `database: reachable` (200) or
+`database: unavailable` (503). A database outage does not prevent process startup.
 
 ## Getting started
 
