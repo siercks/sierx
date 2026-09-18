@@ -905,7 +905,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.4 Proxy authentication.
 - [x] 1.5 TOTP.
 - [x] 1.6 Operator bootstrap.
-- [ ] 1.7 Projection registry.
+- [x] 1.7 Projection registry.
 - [ ] 1.8 Cursor pagination.
 - [ ] 1.9 Projects.
 - [ ] 1.10 Resolved configuration.
@@ -1108,3 +1108,33 @@ gate-notopology: OK (no topology in committable files)
 ```
 
 All previously added API/auth tests also passed. Phase 1 remains in progress.
+
+### Task 1.7 acceptance - 2026-09-18
+
+Added the field/SQL/type registry, nested and custom-field selection, nearest
+name suggestions, generated client types, gate-gen and its deliberate drift
+proof. Required, optional and rejected field policies are tested without adding
+future handlers. Item detail permits optional fields; fixed-shape project/link
+collections reject fields alongside ADR-007's named fixed-shape endpoints.
+Only the explicitly required generated TypeScript contract starts the web tree.
+
+```text
+$ make gen-fields gate-gen prove-gen
+gate-gen: OK
+gate-gen: OK
+gate-gen: generated fields differ; run make gen-fields
+exit status 1
+prove-gen: drift rejected
+$ make test-api
+--- PASS: TestProjectionGolden (0.00s)
+--- PASS: TestProjectionPolicies (0.00s)
+PASS
+ok      github.com/siercks/sierx/internal/api/projection 0.004s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+The full API suite passed in the same isolated PostgreSQL container run.
