@@ -15,7 +15,7 @@ import (
 func (s *Server) queryOptions(r *http.Request, q *sxq.Query, at time.Time, start int) (sxq.Options, error) {
 	options := sxq.Options{UserID: Identity(r).ID, Now: at, Start: start, Custom: map[string][]sxq.CustomField{}}
 	projects := q.ProjectKeys()
-	if project := r.URL.Query().Get("project"); project != "" {
+	if project := r.URL.Query().Get("project"); project != "" && r.URL.Path != "/api/v1/views" {
 		projects = []string{project}
 	}
 	rows, err := s.Pool.Query(r.Context(), `SELECT f.key,f.data_type,p.id::text FROM field_def f JOIN project p ON p.id=f.project_id WHERE p.workspace_id=$1 AND ($2::text[] IS NULL OR p.key_prefix=ANY($2)) ORDER BY p.id,f.key`, Identity(r).WorkspaceID, projects)
