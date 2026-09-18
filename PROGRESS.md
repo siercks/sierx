@@ -904,7 +904,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.3 Local authentication.
 - [x] 1.4 Proxy authentication.
 - [x] 1.5 TOTP.
-- [ ] 1.6 Operator bootstrap.
+- [x] 1.6 Operator bootstrap.
 - [ ] 1.7 Projection registry.
 - [ ] 1.8 Cursor pagination.
 - [ ] 1.9 Projects.
@@ -1077,3 +1077,34 @@ gate-notopology: OK (no topology in committable files)
 ```
 
 The earlier auth, proxy, boot and problem tests also passed in this run.
+
+### Task 1.6 acceptance - 2026-09-18
+
+Added environment-driven operator bootstrap. The whole workspace/admin/project
+creation commits atomically under an advisory lock. The existing workspace
+trigger creates seq_counter; the seed configuration is reused without creating
+benchmark items. Re-running with the same identity inputs reports existing IDs
+and changes nothing. Different workspace inputs are refused. Required supporting
+files are the reusable bootstrap implementation, shared config installer, CLI
+registration, environment/README documentation and an executable integration test.
+
+TestBootstrap builds and invokes the real CLI twice against its own newly
+created and migrated database, compares stored rows, checks five config statuses,
+then signs in over HTTP. It also rejects a second workspace. Test fixture cleanup
+now removes the workspace counter before the workspace.
+
+```text
+$ make test-api
+=== RUN   TestBootstrap
+--- PASS: TestBootstrap (0.90s)
+PASS
+ok      github.com/siercks/sierx/internal/api 4.424s
+ok      github.com/siercks/sierx/internal/api/auth 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+All previously added API/auth tests also passed. Phase 1 remains in progress.
