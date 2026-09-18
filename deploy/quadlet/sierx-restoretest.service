@@ -1,9 +1,8 @@
 # sierx — one restore-test run, driven by sierx-restoretest.timer.
 #
 # Calls `sierxctl restore-test`, which calls the driver's restore-to verb and
-# nothing else, rotating across the configured drivers so a secondary that has
-# never been restored from cannot stay untested (ADR-010). No --force or
-# --dry-run exists to pass here, by design.
+# nothing else, rotating across the configured drivers (ADR-010, ADR-017). No
+# tool is named here — gate-nobackupleak enforces that.
 [Unit]
 Description=sierx restore test run
 After=sierx-postgres.service
@@ -12,7 +11,6 @@ Requires=sierx-postgres.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/podman exec sierx sierxctl restore-test
-# A failed restore test must be loud: it is the only evidence that the backups
-# are real. journald plus a nonzero exit is what the host's own alerting reads.
-StandardOutput=journal
-StandardError=journal
+# A failed restore test is the one alert worth waking someone for; journald
+# plus a systemd OnFailure= hook is wired at task 2.16 with the rest of the
+# host configuration.

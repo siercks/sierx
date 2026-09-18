@@ -12,7 +12,8 @@ SHELL := /usr/bin/env bash
         seed seed-determinism rollup-verify \
         gate-license prove-license vendor-verify test-property \
         backup-conformance restore-test gate-nobackupleak prove-nobackupleak \
-        bench-smoke bench-baseline gate-bench
+        bench-smoke bench-baseline gate-bench \
+        gate-0 prove-gates ci-local
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -139,3 +140,35 @@ bench-baseline: ## Capture reference-hardware numbers into test/bench/baseline.j
 
 gate-bench: ## Assert the §12 thresholds against the baseline (reference hardware only)
 	@bash scripts/bench.sh gate
+
+# gate-0 is the phase gate. CI runs exactly this target and nothing else
+# (§3.4), so anything that must hold before phase 1 belongs here, in this
+# order: cheap checks first, so a broken toolchain fails in seconds rather
+# than after the benchmarks.
+gate-0: ## The phase-0 gate: every check that must pass before phase 1
+	@bash scripts/bootstrap-check.sh
+	@bash scripts/migrate.sh updown-up
+	@bash scripts/schema.sh diff
+	@bash scripts/psql.sh -f test/sql/invariants_test.sql
+	@bash scripts/psql.sh -f test/sql/partitions_test.sql
+	@bash scripts/sqlc.sh diff
+	@go vet ./...
+	@go test ./... -count=1
+	@bash scripts/licenses.sh check
+	@$(MAKE) --no-print-directory vendor-verify
+	@bash scripts/gate-nodirect.sh
+	@bash scripts/gate-notopology.sh
+	@bash scripts/gate-nobackupleak.sh
+	@$(MAKE) --no-print-directory seed-determinism
+	@bash scripts/backup/conformance.sh
+	@bash scripts/bench.sh smoke
+	@GOOS=linux GOARCH=amd64 go build -trimpath -o /dev/null ./cmd/...
+	@GOOS=linux GOARCH=arm64 go build -trimpath -o /dev/null ./cmd/...
+	@bash scripts/prove-gates.sh
+	@echo "gate-0: GREEN"
+
+prove-gates: ## Every gate-* target in the Makefile has a proof, and it passes (task 0.12)
+	@bash scripts/prove-gates.sh
+
+ci-local: ## Run gate-0 the way CI does, in a container, offline
+	@bash scripts/ci-local.sh

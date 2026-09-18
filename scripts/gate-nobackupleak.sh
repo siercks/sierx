@@ -16,6 +16,9 @@ TOOLS=(pgbackrest pg_dump pg_restore wal-g)
 # pass.
 ALLOW=(
   'scripts/backup/driver-[a-z]*\.sh'   # the drivers, which must name their tool
+  'scripts/backup/render-conf\.sh'     # renders the pgBackRest config template and must
+                                       # name the path it renders; it is driver plumbing,
+                                       # not a caller reaching past the interface
   'deploy/pgbackrest/'                 # the pgBackRest config template and runbook
   'scripts/gate-nobackupleak\.sh'      # this script carries the patterns
   'docs/'                              # SPEC, BUILD and the ADRs discuss the tools

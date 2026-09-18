@@ -1,0 +1,84 @@
+# CI runs `make gate-0` and nothing else (BUILD §3.4). No inline shell beyond a
+# single make invocation per job: anything CI can do, a human must be able to
+# run locally and offline, and a step that exists only here is a step nobody
+# can reproduce.
+#
+# Public repository, so this uses the free 4 vCPU runners (§1.1).
+name: ci
+
+on:
+  push:
+    branches: ["main", "phase/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      # PostgreSQL 18, pinned by digest like every other image (§15.4).
+      # `make db-up` drives a rootless Quadlet unit on a real host; in CI the
+      # service container is the equivalent, and the only difference the build
+      # sees is DATABASE_URL.
+      postgres:
+        image: postgres:18@sha256:PIN-ME-WITH-make-db-pin
+        env:
+          POSTGRES_USER: sierx
+          POSTGRES_PASSWORD: sierx
+          POSTGRES_DB: sierx
+          POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sierx -d sierx"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      SIERX_ENV: dev
+      DATABASE_URL: postgres://sierx:sierx@localhost:5432/sierx
+      SIERX_BACKUP_DRIVERS: pgdump
+      PGBACKREST_REPO_TYPE: posix
+      PGBACKREST_REPO_PATH: .backups/physical
+      SIERX_SESSION_KEY: ci-only-not-a-secret-000000000000000000000000
+      SIERX_AUTH_MODE: password
+      SIERX_BASE_URL: http://localhost:8080
+      SIERX_TRUSTED_PROXIES: ""
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      # The PostgreSQL client binaries the gate's psql-based steps need.
+      # Not "inline shell doing work": it installs a dependency, it does not
+      # implement a check.
+      - name: install postgresql-client-18
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+
+      - run: make gate-0

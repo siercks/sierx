@@ -1,15 +1,16 @@
-# sierx — scheduled restore test (§14.2, ADR-017). "If the restore test has
-# never run green, there is no backup."
+# sierx — the scheduled restore test (§14.2: "if the restore test has never run
+# green, there is no backup"). A systemd user timer, like partition
+# maintenance; no scheduler inside the database (§1.3).
 #
-# Weekly rather than daily: a restore of a full dump is the heaviest scheduled
-# operation on the box, and §14.2 asks for weekly dumps. The randomized delay
-# keeps it off the hour.
+# Weekly rather than daily: a restore test writes a full scratch database, and
+# §14.2's retention is 8 weekly dumps, so weekly is the cadence the retention
+# policy implies.
 [Unit]
 Description=sierx scheduled restore test
 
 [Timer]
-OnCalendar=Sun 03:00
-RandomizedDelaySec=2h
+OnCalendar=Sun 03:30
+RandomizedDelaySec=30m
 Persistent=true
 
 [Install]
