@@ -10,6 +10,27 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+# Environment wins; .env fills the gaps. Every other script in scripts/ does
+# this, and this one did not: the CLI then saw no DATABASE_URL whenever the
+# caller had set it as a shell variable rather than an exported one, which is
+# the normal way to type it. `make seed` failed with "DATABASE_URL is unset"
+# on a host where DATABASE_URL was plainly set. Introduced when this wrapper
+# replaced `go run` in the make targets.
+load_dotenv() {
+  local file=$1 line key val
+  [[ -f $file ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    line=${line%%#*}
+    line=${line#"${line%%[![:space:]]*}"}; line=${line%"${line##*[![:space:]]}"}
+    [[ -z $line || $line != *=* ]] && continue
+    key=${line%%=*}; val=${line#*=}
+    key=${key%"${key##*[![:space:]]}"}; val=${val#"${val%%[![:space:]]*}"}
+    [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ -z ${!key+x} ]]; then export "$key=$val"; fi
+  done < "$file"
+}
+load_dotenv .env
+
 BIN=bin/sierxctl
 
 needs_build() {

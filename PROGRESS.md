@@ -25,6 +25,17 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-18, regression introduced by the `sierxctl` wrapper (the 2026-09-16
+  speedup commit): `scripts/sierxctl.sh` did not load `.env`, unlike every
+  other script in `scripts/`. `go run` had inherited nothing either, but the
+  targets that used it were never run on a host where `DATABASE_URL` was set
+  as a plain shell variable rather than an exported one — which is how one
+  normally types it. `make seed` then failed with "DATABASE_URL is unset" on a
+  host where `echo $DATABASE_URL` printed the URL. The loader is now present
+  and identical to the others. Worth noting the speedup that caused this saved
+  ~85ms per call; the fix is correct either way, but the trade was not a good
+  one.
+
 - 2026-09-18, task 0.11: `conformance.sh` swallowed the contract check's
   output, so a failing driver reported only "failed the contract check" while
   the check itself knew which verb failed and why. It now prints that output,
