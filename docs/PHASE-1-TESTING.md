@@ -87,3 +87,7 @@ same data and authentication configuration still work.
 Record the human walkthrough result in `PROGRESS.md`. Passing automated checks
 does not substitute for that acceptance. Physical backup deployment remains the
 existing ADR-021/Phase 2.16 item; this phase does not certify it.
+
+For an on-demand metrics scrape, use the administrator cookie with
+`GET /api/v1/metrics`. The response is Prometheus text, not JSON. No monitoring
+service is required; ordinary members receive 403.

@@ -70,6 +70,7 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Get("/api/v1/views", s.listViews)
 	s.Router.With(s.requireAuth).Post("/api/v1/views", s.createView)
 	s.Router.With(s.requireAuth).Get("/api/v1/changes", s.changes)
+	s.Router.With(s.requireAuth).Get("/api/v1/metrics", s.metrics)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
