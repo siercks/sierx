@@ -204,6 +204,7 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: ## The phase-0 gate: every check that must pass before phase 1
+	@bash test/shell/schema_test.sh
 	@bash test/shell/test-go_test.sh
 	@bash test/shell/ci-local_test.sh
 	@python3 -m unittest discover -s test/python -p "test_*.py"
