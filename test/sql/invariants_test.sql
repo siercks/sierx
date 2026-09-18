@@ -58,7 +58,11 @@ INSERT INTO item_type (id, project_id, key, name, level) VALUES
   ('04000000-0000-7000-8000-000000000001', '02000000-0000-7000-8000-000000000001', 'task', 'Task', 0),
   ('04000000-0000-7000-8000-000000000002', '02000000-0000-7000-8000-000000000002', 'task', 'Task', 0);
 
--- mk_item(id, parent_id, path, rank[, status, type, cfg]) inserts a project-A item
+-- mk_item(id, parent_id, path, rank[, status, type, cfg]) inserts a project-A item.
+-- The key is derived from the WHOLE id: a truncation collides between fixture
+-- families (05...005 and 06...005 share their last 12 characters), which made
+-- the composite-FK checks below raise a unique violation on
+-- item_workspace_id_key_key and pass for the wrong reason.
 CREATE FUNCTION pg_temp.mk_item(i uuid, p uuid, pth ltree, rk text,
                                 st uuid DEFAULT '03000000-0000-7000-8000-000000000001',
                                 ty uuid DEFAULT '04000000-0000-7000-8000-000000000001',
@@ -67,7 +71,7 @@ LANGUAGE sql AS $$
   INSERT INTO item (id, workspace_id, project_id, key, item_type_id, status_id, config_version,
                     parent_id, path, title, rank, change_seq, origin_id)
   VALUES (i, '01000000-0000-7000-8000-000000000001', '02000000-0000-7000-8000-000000000001',
-          'AAA-' || right(i::text, 12), ty, st, cfg, p, pth, 'item ' || rk, rk, 0,
+          'AAA-' || replace(i::text, '-', ''), ty, st, cfg, p, pth, 'item ' || rk, rk, 0,
           '01000000-0000-7000-8000-000000000001');
 $$;
 

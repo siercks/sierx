@@ -25,6 +25,37 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-17, three defects found on the first real dev host (arm64, DGX
+  Spark), all in the harness rather than the product:
+  1. **Every `.env` loader exited silently.** The pattern
+     `[[ -z ${!key+x} ]] && export "$key=$val"` returns 1 under `set -e` the
+     first time a variable is already set in the environment, killing the
+     script with no output and exit 1. Invisible until a `.env` file existed
+     AND the caller had exported one of its keys — which is the normal case on
+     a real host. Fixed in all 11 scripts by using an `if`.
+  2. **`gate-notopology` false positive.** It treated any `.env` value
+     differing from the example's default for that key as a secret. Narrowing
+     an enumerated list to one of its members therefore flagged every mention
+     of that member across the tree. Now a value is exempt if it appears
+     anywhere in `.env.example`, which is public by construction; a real host,
+     path or secret still is not. A proof case covers it.
+  3. **Three invariant checks passed for the wrong reason.**
+     `invariants_test.sql` derived item keys from `right(id::text, 12)`, which
+     is identical for the `05...005` and `06...005` fixture families, so the
+     three ADR-012 composite-FK checks raised a unique violation on
+     `item_workspace_id_key_key` instead of the FK error they exist to assert.
+     Keys now use the whole id; the three checks raise 23503 against
+     `item_status_same_project`, `item_type_same_project` and
+     `item_config_version_exists` as intended. The PROGRESS entry for task 0.5
+     records the earlier output, which was green for the wrong reason on those
+     three lines.
+- 2026-09-17: `go.sum` and `vendor/` were regenerated from the real module
+  proxy on the dev host. The agent's mirror-built module zips hashed
+  differently from the proxy's, so the committed `go.sum` was self-consistent
+  but did not match upstream, and the vendored `golang.org/x/text` did not
+  compile. An earlier note claiming `go.sum` carried "the real hashes" was
+  wrong.
+
 - 2026-09-16, performance (no behaviour change): the property suite dropped
   from 137s to 13s. `VerifyRollups` is unscoped by design — an operator asking
   "is anything wrong" means anything — so a test that created 14 items was

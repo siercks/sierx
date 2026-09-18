@@ -8,11 +8,20 @@
 #
 #   1. RFC 1918 address literals: 10/8, 172.16/12, 192.168/16
 #   2. Hostnames under .internal, .local, .lan, .home
-#   3. Any value the operator has set in the untracked .env that differs from
-#      the committed .env.example default for the same key. The example's own
-#      values are public by construction; what must never leak is what the
-#      human filled in on top of them. The whole value is matched, verbatim;
-#      values shorter than 4 characters are skipped as noise.
+#   3. Any value the operator has set in the untracked .env that does not
+#      already appear somewhere in the committed .env.example. The example file
+#      is public by construction, so every token in it — including the members
+#      of an enumerated choice such as the driver list — is
+#      already world-readable and cannot leak. What must never appear is what
+#      the human filled in on top of it: a real host, path, bucket or secret.
+#      The whole value is matched, verbatim; values shorter than 4 characters
+#      are skipped as noise.
+#
+#      Comparing against the example's value for the SAME KEY is not enough:
+#      narrowing a two-item enumerated list to one of its members differs from
+#      the default while being no more secret than it, and the gate then
+#      reported every mention of that member in the tree as a leak. That is a
+#      real failure from a real dev host, not a hypothetical.
 #
 # `--prove` runs the gate against a scratch copy with each violation planted
 # in turn and asserts the gate goes red, then asserts a clean copy passes.
@@ -69,12 +78,12 @@ scan() {
   fi
 
   if [[ -f $root/.env ]]; then
-    declare -A example=()
-    local key val
-    while IFS=$'\t' read -r key val; do example[$key]=$val; done < <(read_env "$root/.env.example")
+    local example_text key val
+    example_text=$(cat "$root/.env.example" 2>/dev/null || true)
     while IFS=$'\t' read -r key val; do
       [[ -z $val || ${#val} -lt 4 ]] && continue
-      [[ ${example[$key]+x} && ${example[$key]} == "$val" ]] && continue
+      # Already published in .env.example, anywhere in the file.
+      [[ $example_text == *"$val"* ]] && continue
       hits=$(cd "$root" && printf '%s\n' "$files" | xargs -d '\n' grep -nIF -- "$val" 2>/dev/null || true)
       if [[ -n $hits ]]; then
         # Print the key, never the value — this output gets pasted into PROGRESS.md.
@@ -110,6 +119,17 @@ prove() {
   # gate-nobackupleak scans this file too.
   printf 'SIERX_DUMP_DIR=bkp-zq81x:/srv/backups/sierx\n' > "$tmp/.env"
   printf '\nrepo is at bkp-zq81x:/srv/backups/sierx\n' >> "$tmp/$target"; expect_red ".env value leak"; restore
+  # Narrowing an enumerated value is not a secret: selecting one member of the
+  # driver list differs from the example's default, but every token is already
+  # published there. This is the false positive that failed a real dev host.
+  # The value is read from the example rather than written out, so this file
+  # stays clean under gate-nobackupleak.
+  awk -F= '/^SIERX_BACKUP_DRIVERS=/{split($2,a,","); print "SIERX_BACKUP_DRIVERS=" a[2]; exit}' \
+    "$tmp/.env.example" > "$tmp/.env"
+  if (scan "$tmp" >/dev/null); then echo "prove: narrowed enumerated value: gate GREEN — OK"
+  else echo "prove: narrowed enumerated value: gate went red — FAIL"; fails=1; fi
+  restore
+
   # a .env that only restates the example must not fail the gate
   cp "$tmp/.env.example" "$tmp/.env"
   if (scan "$tmp" >/dev/null); then echo "prove: .env == example: gate GREEN — OK"

@@ -15,6 +15,11 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+# Environment wins; .env fills the gaps. The assignment is an `if` and not
+# `[[ ... ]] && export` on purpose: under `set -e` the && form returns 1 the
+# first time a variable is ALREADY set, which killed the script silently with
+# no output and exit 1 — invisible whenever .env happened to define something
+# the caller had already exported.
 load_dotenv() {
   local file=$1 line key val
   [[ -f $file ]] || return 0
@@ -25,7 +30,7 @@ load_dotenv() {
     key=${line%%=*}; val=${line#*=}
     key=${key%"${key##*[![:space:]]}"}; val=${val#"${val%%[![:space:]]*}"}
     [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-    [[ -z ${!key+x} ]] && export "$key=$val"
+    if [[ -z ${!key+x} ]]; then export "$key=$val"; fi
   done < "$file"
 }
 load_dotenv .env
