@@ -900,7 +900,7 @@ Entry authorized. Planning is in docs/PHASE-1-PLAN.md; no Phase 1 implementation
 or acceptance is claimed by this closeout.
 
 - [x] 1.1 Server skeleton and executable boot checks.
-- [ ] 1.2 Error model.
+- [x] 1.2 Error model.
 - [ ] 1.3 Local authentication.
 - [ ] 1.4 Proxy authentication.
 - [ ] 1.5 TOTP.
@@ -966,3 +966,27 @@ gate-notopology: OK (no topology in committable files)
 ```
 
 This is task acceptance, not the complete Phase 1 gate or human walkthrough.
+
+### Task 1.2 acceptance - 2026-09-18
+
+Added RFC 9457 constructors with locally authored error text, a `current`
+extension for conflict responses, no-store headers, and JSON router/panic
+errors. Supporting router/middleware edits and fixed problem JSON fixtures
+are required to exercise the error model. Golden tests inspect problem.go
+literals to reject dependency-produced error copy.
+
+Actual output from the same isolated offline PostgreSQL test setup:
+
+```text
+$ make test-api
+--- PASS: TestProblemGolden (0.00s)
+--- PASS: TestRouterProblems (0.00s)
+--- PASS: TestServerBoot (1.01s)
+PASS
+ok      github.com/siercks/sierx/internal/api 1.019s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
