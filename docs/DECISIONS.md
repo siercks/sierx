@@ -1013,3 +1013,10 @@ checks the defining project before extracting its typed value. Conflicting
 custom types across projects require a project constraint. Multiselect fields
 support null checks in Phase 1; membership syntax is intentionally not inferred.
 Completion returns legal grammar/field token replacements, not SQL.
+
+Delta responses contain `data` event summaries (`seq`, `at`, `item_id`,
+`actor_id`, `kind`, `field`) and `next_seq`. Empty pages retain the input cursor.
+Large before/after values stay in history; clients re-fetch affected projected
+items and ancestor rollups, and refresh descendants on a move. A workspace-wide
+event with null item_id invalidates the workspace view. This keeps 50 changes
+below the 20 KB budget regardless of Markdown body size.

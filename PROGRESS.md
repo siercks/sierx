@@ -918,7 +918,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.17 Item history.
 - [x] 1.18 Saved views.
 - [x] 1.19 Preferences.
-- [ ] 1.20 Delta sync.
+- [x] 1.20 Delta sync.
 - [x] 1.21 sxq subset.
 - [ ] 1.22 Caching and compression.
 - [ ] 1.23 Concurrent cursor/race tests.
@@ -1413,6 +1413,24 @@ $ make test-api
 PASS (all API packages)
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.500s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.20 acceptance - 2026-09-18
+
+Added workspace-scoped, ascending sequence delta reads with next_seq and no
+ETag. Compact event summaries exclude unbounded before/after content, which
+remains available in history. Tests traverse every sequence and verify a
+50-change response is below 20 KB even after fifty large-body item edits.
+
+```text
+$ make test-api
+--- PASS: TestChanges (0.76s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.565s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
