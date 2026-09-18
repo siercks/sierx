@@ -33,12 +33,15 @@ help: ## List targets
 # `make gate-0` before asking for sign-off — `check` passing is not a claim
 # that the phase gate passes.
 check: ## Fast dev loop: vet, SQL invariants, store tests, generated-code and source gates
+	@bash test/shell/test-go_test.sh
+	@bash test/shell/ci-local_test.sh
+	@python3 -m unittest discover -s test/python -p "test_*.py"
 	@go vet ./...
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@bash scripts/psql.sh -f test/sql/invariants_test.sql
 	@bash scripts/psql.sh -f test/sql/partitions_test.sql
 	@bash scripts/sqlc.sh diff
-	@go test ./internal/... -count=1
+	@bash scripts/test-go.sh ./internal/... -count=1
 	@bash scripts/gate-nodirect.sh
 	@bash scripts/gate-notopology.sh
 	@bash scripts/gate-nobackupleak.sh
@@ -112,7 +115,7 @@ prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goe
 
 test-store: ## store.Mutate unit-of-work tests against the dev database (task 0.8)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
-	@go test ./internal/store/... -count=1
+	@bash scripts/test-go.sh ./internal/store/... -count=1
 
 seed: ## Build a 10k-item, 6-deep, 5-project workspace (deterministic) (task 0.9)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
@@ -131,15 +134,12 @@ prove-license: ## Plant AGPL/MPL/SSPL/BSL/unknown dependencies and assert the ga
 	@bash scripts/licenses.sh --prove
 
 vendor-verify: ## go mod verify plus a check that vendor/ matches go.mod
-	@go mod verify
-	@go mod vendor
-	@git diff --exit-code --stat vendor/ go.mod go.sum \
-	  || { echo "vendor/ is out of date — commit the result of go mod vendor" >&2; exit 1; }
-	@echo "vendor-verify: OK"
+	@bash test/shell/vendor-verify_test.sh
+	@bash scripts/vendor-verify.sh
 
 test-property: ## Randomized invariant tests: rollups, paths, ranks (task 0.10)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
-	@go test ./test/property/... -count=1 -timeout 20m
+	@bash scripts/test-go.sh ./test/property/... -count=1 -timeout 20m
 
 backup-conformance: ## Run every configured backup driver through the shared assertion set (task 0.11)
 	@bash scripts/backup/conformance.sh
@@ -167,6 +167,9 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: ## The phase-0 gate: every check that must pass before phase 1
+	@bash test/shell/test-go_test.sh
+	@bash test/shell/ci-local_test.sh
+	@python3 -m unittest discover -s test/python -p "test_*.py"
 	@bash scripts/bootstrap-check.sh
 	@bash scripts/migrate.sh updown-up
 	@bash scripts/schema.sh diff
@@ -174,8 +177,9 @@ gate-0: ## The phase-0 gate: every check that must pass before phase 1
 	@bash scripts/psql.sh -f test/sql/partitions_test.sql
 	@bash scripts/sqlc.sh diff
 	@go vet ./...
-	@go test ./... -count=1
+	@bash scripts/test-go.sh ./... -count=1 -timeout 20m
 	@bash scripts/licenses.sh check
+	@$(MAKE) --no-print-directory sbom sbom-check
 	@$(MAKE) --no-print-directory vendor-verify
 	@bash scripts/gate-nodirect.sh
 	@bash scripts/gate-notopology.sh
@@ -197,4 +201,14 @@ prove-gates: ## Every gate-* target in the Makefile has a proof, and it passes (
 	@bash scripts/prove-gates.sh
 
 ci-local: ## Run gate-0 the way CI does, in a container, offline
-	@bash scripts/ci-local.sh
+	@bash scripts/ci-local.sh run
+
+sbom: ## Generate the release SBOM (CycloneDX 1.5) from vendor/ and go.sum (task 0.13)
+	@bash scripts/sbom.sh "$(or $(SBOM_OUT),dist/sbom.cdx.json)"
+
+sbom-check: ## Validate the generated SBOM format and all stable inventory/build fields
+	@bash scripts/sbom.sh --check "$(or $(SBOM_OUT),dist/sbom.cdx.json)"
+
+.PHONY: ci-local-prepare sbom sbom-check check
+ci-local-prepare: ## Prepare the local CI container and caches while online
+	@bash scripts/ci-local.sh prepare

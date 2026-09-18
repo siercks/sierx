@@ -9,7 +9,8 @@ dist/
 bin/
 *.test
 *.out
-coverage*
+# Root-level test reports only; dependencies may contain coverage.go source.
+/coverage*
 
 # Editors and OS
 .idea/
@@ -28,3 +29,9 @@ coverage*
 # backup artifacts (dumps, restore-test rotation counter)
 .backups/
 
+
+# SBOM and release artifacts
+dist/
+
+# Python validation helpers
+__pycache__/

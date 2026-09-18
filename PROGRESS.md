@@ -3,9 +3,9 @@
 The agent's only progress claim. Append and check boxes; never rewrite history.
 A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
-**Current phase:** 0
+**Current phase:** 1
 **Phase 2 deadline anchor:** 2026-09-12
-**Phase 2 deadline:** 2026-10-10
+**Phase 2 deadline:** none (owner direction, ADR-020; original 2026-10-10 date retired)
 
 ## Sign-offs (human writes these — see BUILD §4.0)
 
@@ -24,6 +24,30 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 - none
 
 ## Deviations from the guide
+
+- 2026-09-18, takeover verification: the operator's verbose Spark run confirmed
+  that all 13 store tests and six database-backed property tests skipped because
+  DATABASE_URL was not exported. The standalone rank-string property test ran.
+  The two preceding gate-0 GREEN runs therefore do not establish store/property
+  acceptance, although their SQL and populated logical-restore checks did run.
+  Scripts loaded .env in child processes; the Makefile's direct Go invocations
+  could not inherit those settings. scripts/test-go.sh now loads .env using
+  the existing parser, preserves environment overrides, rejects missing/empty
+  DATABASE_URL, and runs verbose tests. check, test-store, test-property and
+  gate-0 all use it. The regression proof runs in check and gate-0.
+  Local validation (Windows Git Bash; fake Go, no database):
+  ```
+  $ bash test/shell/test-go_test.sh
+  test-go proof: missing .env and environment rejected before Go runs
+  test-go proof: empty .env value rejected before Go runs
+  test-go proof: .env loaded literally; arguments preserved
+  test-go proof: exported environment wins over .env
+  test-go proof: explicitly empty environment override rejected before Go runs
+  test-go proof: Go failure exit status preserved
+  test-go proof: PASS
+  ```
+  Spark acceptance remains PENDING: make test-store && make test-property,
+  followed by make gate-0 against the disposable development database.
 
 - 2026-09-18, regression introduced by the `sierxctl` wrapper (the 2026-09-16
   speedup commit): `scripts/sierxctl.sh` did not load `.env`, unlike every
@@ -550,28 +574,33 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         Rakefile names a dump tool). All three
         content gates now exclude `vendor/`: third-party source is not this
         project's configuration and is not edited here.
-- [~] 0.12 CI skeleton, proven to fail — **workflows, prove-gates, gate-0 and
-      ci-local all green; `docs/ci-portability.md` outstanding.**
+- [x] 0.12 CI skeleton, proven to fail (offline Spark acceptance recorded below) — 2026-09-18
       ```
       $ make prove-gates
       prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
       prove-gates: OK
       ```
-      Every `gate-*` target has a proof or a recorded exemption; the two
-      exemptions are `gate-0` (composite — proving it means proving each of
-      its parts again) and `gate-bench` (advisory under ADR-016 until
-      reference hardware exists, with its one testable behaviour asserted
-      directly).
-      **Blocked from a first CI run:** `.github/workflows/ci.yml`'s postgres
-      service still carries the `sha256:PIN-ME-WITH-make-db-pin` placeholder.
-      `make db-pin` now writes the resolved digest into both the Quadlet unit
-      and the workflow, so run it on a machine with registry access and commit
-      the result before pushing, or the first run fails on an unpullable
-      image.
-- [~] 0.13 License gate, SBOM, supply chain — **license gate green; SBOM
-      outstanding.** Done out of order, before 0.10: BUILD requires a
+      Every `gate-*` target has a proof or a recorded exemption. The two
+      exemptions are `gate-0` (composite — proving it means proving each part
+      again) and `gate-bench` (advisory under ADR-016 until reference hardware
+      exists, with its one testable behaviour asserted directly).
+      `docs/ci-portability.md` written: the claim that CI can move providers
+      in a day, with worked GitLab and cron examples, the list of things that
+      would break portability, and an honest statement of current state.
+      `ci.yml` is one `make gate-0` step plus environment setup.
+      **Two things named there rather than hidden:** `ci.yml`'s postgres
+      service still needs `make db-pin` run on a machine with registry access
+      (it now writes the digest into both the Quadlet unit and the workflow);
+      and `release.yml` calls `make release-binaries`, `release-image` and
+      `release-manifest`, which do not exist yet because there is no server
+      binary until task 1.1 and no image until phase 2. Tagging a release
+      today would fail at the first missing target. Not scaffolded — BUILD
+      forbids writing files for later phases — so the workflow names its
+      future steps and the targets arrive with the tasks that own them.
+- [x] 0.13 License gate, SBOM, supply chain — 2026-09-18 (license gate
+      2026-09-12, out of order before 0.10: BUILD requires a
       property-testing library be cleared through `make gate-license` before
-      adoption, which needs the gate to exist.
+      adoption, which needs the gate to exist)
       ```
       $ make gate-license
       ok       github.com/jackc/pgpassfile                             MIT
@@ -582,22 +611,35 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       ok       golang.org/x/sync                                       BSD-3-Clause
       ok       golang.org/x/text                                       BSD-3-Clause
       licenses.sh: 7 Go module(s) checked
-      licenses.sh: no node_modules — the frontend tree arrives at task 2.1; nothing to check on the npm side
       gate-license: OK (every dependency on the §15.1 allowlist)
       $ make prove-license
-      prove: AGPL-3.0 module: gate went red — OK        <- the negative test the task names
+      prove: AGPL-3.0 module: gate went red — OK     <- the negative test the task names
       prove: MPL-2.0 module: gate went red — OK
       prove: SSPL-1.0 module: gate went red — OK
       prove: BSL-1.1 module: gate went red — OK
       prove: unclassifiable license: gate went red — OK
       prove: module with no license file: gate went red — OK
       prove: clean tree: gate GREEN — OK
+      $ make sbom && make sbom-check
+      sbom: wrote dist/sbom.cdx.json (7 Go component(s))
+      sbom: no node_modules — the frontend tree arrives at task 2.1; this SBOM covers the Go build only
+      sbom-check: dist/sbom.cdx.json lists the current component set
       $ make vendor-verify
+      all modules verified
       vendor-verify: OK
       ```
-      Still to do before this box is checked: the per-release SBOM, which
-      belongs with `release.yml` in task 0.12 (BUILD task 0.12 step 2: "SBOM
-      per release"), so it is written there and referenced here.
+      SBOM is CycloneDX 1.5, generated by `scripts/sbom.sh` from
+      `vendor/modules.txt`, `go.sum` and the vendored LICENSE files — the same
+      inputs `gate-license` reads, so the two cannot disagree about what is in
+      the build. `release.yml` calls `make sbom` rather than
+      `anchore/sbom-action`: BUILD §3.4 forbids logic that lives only in CI
+      YAML, and an SBOM nobody can regenerate locally is an SBOM nobody
+      checks. `go.sum`'s `h1:` value is recorded as a property named
+      `go:mod:h1`, not as a CycloneDX hash — it is Go's module dirhash, not a
+      file digest, and labelling it SHA-256 would be false.
+      The npm side is absent until task 2.1; `sbom.sh` says so rather than
+      implying coverage, and fails if `node_modules` appears without the
+      generator being extended.
 - [x] 0.14 Benchmark harness — 2026-09-12 (agent host, not reference hardware)
       ```
       $ make bench-smoke
@@ -702,3 +744,183 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
   explicit decision to defer it to 2.16), `docs/ci-portability.md` (0.12),
   and the per-release SBOM (0.13).
 - **Requesting sign-off to enter phase 1.**
+
+
+## Phase 0 closeout correction - 2026-09-18
+
+The operator applied the final-deliverables and test-environment patches.
+Their subsequent Spark gate output is preserved in
+[the acceptance log](docs/acceptance/phase0-spark-2026-09-18.log).
+This supersedes the PENDING Spark acceptance in the earlier test-runner entry:
+
+```text
+$ make gate-0
+test-go proof: PASS
+NOTICE:  test-sql: 24 checks passed
+ok      github.com/siercks/sierx/internal/store 0.714s
+ok      github.com/siercks/sierx/test/property 20.480s
+source: 15443 item(s)
+20 tables, all counts equal
+rollup --verify: items=15443 rollups=15443 mismatches=0
+backup-conformance: OK for: pgdump
+gate-0: GREEN
+```
+
+All 13 store and all seven property-suite tests ran; no database-test skips.
+Three future benchmark scenarios remain explicitly skipped. The sxq skip
+label is corrected from Phase 3 to Phase 1 in this closeout.
+
+### Closeout changes and acceptance boundary
+
+- Task 0.12 is reopened: its former completion claim lacked ci-local.sh.
+  The replacement now snapshots the current tree without host configuration,
+  prepares tools/modules online, and runs gate-0 in an offline disposable
+  container with its own database. Host databases and checkout are not mounted.
+- SBOM checking compares all stable inventory/build fields, including licenses,
+  hashes and provenance, and rejects malformed generated-format documents.
+  It is wired into gate-0. The generator shares the license classifier and
+  allowlist resolutions. General CycloneDX schema validation is not claimed.
+- sqlc cached-version detection uses `sqlc version`, avoiding repeated fetches
+  caused by `sqlc --version`. Container setup inputs require re-preparation
+  when they change. The CI auth fixture now uses the specified `local` mode.
+- The database digest was already pinned. Earlier placeholder claims and task
+  counts are historical; the handover now describes the actual acceptance state.
+- ADR-020 records the owner's no-deadline instruction and Spark-first staging.
+  Physical backup deferral remains proposed, not human-signed approval.
+
+Local closeout validation (Windows; no PostgreSQL/Podman execution):
+
+```text
+$ python -m unittest discover -s test/python -p 'test_*.py'
+Ran 5 tests
+OK
+$ bash scripts/sbom.sh && bash scripts/sbom.sh --check dist/sbom.cdx.json
+sbom: wrote dist/sbom.cdx.json (7 Go component(s))
+sbom-check: current inventory, licenses, hashes and build metadata verified
+```
+
+Additional local checks:
+
+```text
+$ bash test/shell/ci-local_test.sh
+ci-local proof: absent image fails with preparation instructions
+ci-local proof: offline flags, no host mounts, host .env excluded
+ci-local proof: container failure propagated
+ci-local proof: cached sqlc accepted using version subcommand
+ci-local proof: PASS (mock boundary, not container acceptance)
+$ bash test/shell/test-go_test.sh
+test-go proof: PASS
+$ bash scripts/gate-notopology.sh && bash scripts/gate-nobackupleak.sh && bash scripts/gate-nodirect.sh
+gate-notopology: OK (no topology in committable files)
+gate-nobackupleak: OK (no backup tool named outside the drivers)
+gate-nodirect: OK (governed tables written only through internal/store)
+```
+
+**PENDING on the Spark:** `make ci-local-prepare && make ci-local` and the
+updated `make gate-0`. Do not mark task 0.12 or Phase 0 complete from local
+mock/unit checks. No phase-advance sign-off is recorded by this patch.
+
+
+## Offline CI follow-up - vendor snapshot exclusion, 2026-09-18
+
+The Spark successfully built the prepared image and started the offline
+container. Runner proofs, five Python tests, bootstrap, migration round trip,
+24 SQL checks, partition checks and sqlc-diff passed. The gate then failed at
+Go compilation with undefined language.NewCoverage and language.Coverage.
+
+The repository ignore pattern `coverage*` also matches dependency source such
+as vendor/golang.org/x/text/language/coverage.go. That file is absent from the
+tracked review copy; a locally regenerated but ignored copy would compile on
+the host yet be omitted from the committable-files CI snapshot. The rule now
+applies only at the repository root (`/coverage*`). Run `go mod vendor` to
+restore the pinned dependency source, and include the restored files when
+committing. Do not weaken snapshot isolation by copying all ignored files.
+
+The old vendor verifier regenerated vendor/ before comparing tracked diffs,
+which could repair missing files and then overlook their untracked state.
+The replacement generates a separate temporary tree and compares all paths
+and file content against the current vendor/. Missing, extra and altered files
+fail; verification does not silently repair the tree.
+
+Local regression validation: six Python tests passed, including a snapshot
+case with an untracked vendor coverage.go and an excluded root coverage report.
+The shell proof rejected missing, modified and extra vendor source and accepted
+an identical tree. All three source gates passed. These were fixture tests;
+the actual Go/module verification and complete offline rerun remain pending
+on the Spark. The existing prepared image can be reused because none of its
+pinned preparation inputs changed.
+
+
+## Phase 0 accepted; Phase 1 authorized - 2026-09-18
+
+The owner reviewed the successful offline Spark run and instructed:
+"Let's defer and push, and begin to look at Phase 1 and how we can build
+something interactable."
+
+- [x] Task 0.12 accepted: real prepared-container execution, offline, on Spark.
+- [x] Closeout SBOM and vendor checks passed inside that same gate.
+- [x] Phase 0 accepted with the explicit task 0.11 exception below.
+- [x] Entry to Phase 1 authorized by the owner.
+- [x] Physical-backup conformance/cipher validation deferred to task 2.16.
+      This is an approved deferral, NOT a claim that those tests passed.
+      Require encrypted off-machine backup and an isolated physical restore
+      before relying on the deployed backlog. ADR-010 deployment inputs remain
+      unset until deployment. Task 0.11 remains partially implemented.
+
+The complete supplied output is in
+[the offline acceptance log](docs/acceptance/phase0-offline-spark-2026-09-18.log).
+It supersedes the earlier pending/failed container entries:
+
+```text
+$ go mod vendor && make vendor-verify && make ci-local
+all modules verified
+vendor-verify: OK (complete file tree matches pinned modules)
+Ran 6 tests
+OK
+NOTICE:  test-sql: 24 checks passed
+ok      github.com/siercks/sierx/internal/store 0.313s
+ok      github.com/siercks/sierx/test/property 8.462s
+sbom-check: current inventory, licenses, hashes and build metadata verified
+source: 15438 item(s)
+20 tables, all counts equal
+rollup --verify: items=15438 rollups=15438 mismatches=0
+backup-conformance: OK for: pgdump
+prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
+gate-0: GREEN
+```
+
+All 13 store tests and seven property-suite tests ran. The three named
+future-feature benchmark skips remain expected. Timings are Spark smoke
+measurements, not a small-host production baseline. The missing vendored
+coverage.go is restored from the pinned upstream module and must be committed.
+
+## Phase 1 - REST API, auth, event log
+
+Entry authorized. Planning is in docs/PHASE-1-PLAN.md; no Phase 1 implementation
+or acceptance is claimed by this closeout.
+
+- [ ] 1.1 Server skeleton and executable boot checks - next task.
+- [ ] 1.2 Error model.
+- [ ] 1.3 Local authentication.
+- [ ] 1.4 Proxy authentication.
+- [ ] 1.5 TOTP.
+- [ ] 1.6 Operator bootstrap.
+- [ ] 1.7 Projection registry.
+- [ ] 1.8 Cursor pagination.
+- [ ] 1.9 Projects.
+- [ ] 1.10 Resolved configuration.
+- [ ] 1.11 Item create/read/update/delete with optimistic concurrency.
+- [ ] 1.12 Transitions.
+- [ ] 1.13 Move and reparent.
+- [ ] 1.14 Links.
+- [ ] 1.15 Comments.
+- [ ] 1.16 Hierarchy reads.
+- [ ] 1.17 Item history.
+- [ ] 1.18 Saved views.
+- [ ] 1.19 Preferences.
+- [ ] 1.20 Delta sync.
+- [ ] 1.21 sxq subset.
+- [ ] 1.22 Caching and compression.
+- [ ] 1.23 Concurrent cursor/race tests.
+- [ ] 1.24 Endpoint golden files.
+- [ ] 1.25 Metrics.

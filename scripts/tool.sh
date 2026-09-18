@@ -47,7 +47,9 @@ tool_path() {
   [[ -n ${SHA:-} ]] || { echo "tool.sh: no $name pin for $arch" >&2; return 1; }
 
   local dest=$TOOL_BIN/$name
-  if [[ -x $dest ]] && "$dest" --version 2>/dev/null | grep -q "${VERSION#v}"; then
+  local version_arg=--version
+  [[ $name != sqlc ]] || version_arg=version
+  if [[ -x $dest ]] && "$dest" "$version_arg" 2>/dev/null | grep -q "${VERSION#v}"; then
     echo "$dest"; return 0
   fi
   mkdir -p "$TOOL_BIN"
