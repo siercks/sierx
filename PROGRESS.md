@@ -25,6 +25,12 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-12, task 0.3: goose runs as a pinned release binary (v3.28.0,
+  sha256-verified into gitignored `bin/`) rather than `go tool goose`, because
+  the agent's sandbox cannot reach the Go module proxy. Switch to `go tool
+  goose` at task 0.8 when go.mod gets its dependencies, so the pin is in
+  go.mod and visible to `gate-license`.
+
 - 2026-09-12, task 0.2: acceptance uses `show lc_collate`, which PostgreSQL 18
   rejects (GUC removed in PG 16). Verified with `select datcollate from
   pg_database where datname = current_database()` instead.
@@ -106,7 +112,24 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       (`unrecognized configuration parameter`; the GUC was removed in PG 16).
       `select datcollate from pg_database where datname = current_database()`
       is the equivalent check.
-- [ ] 0.3 Migration tooling and extensions
+- [x] 0.3 Migration tooling and extensions — 2026-09-12, against PostgreSQL
+      18.6 (native, sandbox; see 0.2 note)
+      ```
+      $ make migrate-updown-up
+      fetching goose v3.28.0 (linux_x86_64) ...
+      == up
+      OK   0001_extensions.sql (29.16ms)
+      goose: successfully migrated database to version: 1
+      all migrations applied: 1 versions
+      == down-to 0
+      OK   0001_extensions.sql (10.66ms)
+      goose: no migrations to run. current version: 0
+      clean at zero: 0 tables, 0 extensions
+      == up again
+      OK   0001_extensions.sql (22.79ms)
+      goose: successfully migrated database to version: 1
+      all migrations applied: 1 versions
+      ```
 - [ ] 0.4 Schema: all of SPEC §4
 - [ ] 0.5 Invariant enforcement in the database
 - [ ] 0.6 Sequence counter and partition maintenance

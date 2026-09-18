@@ -5,7 +5,8 @@ SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
-        db-up db-down db-psql db-reset db-pin
+        db-up db-down db-psql db-reset db-pin \
+        migrate-up migrate-down migrate-status migrate-updown-up
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -42,3 +43,15 @@ db-reset: ## DESTROY the dev database and recreate it (refuses unless SIERX_ENV=
 
 db-pin: ## Resolve the postgres:18 digest and write it into the Quadlet unit (needs registry access)
 	@bash scripts/db.sh pin
+
+migrate-up: ## Apply pending migrations (goose, plain SQL) (task 0.3)
+	@bash scripts/migrate.sh up
+
+migrate-down: ## Roll back the most recent migration
+	@bash scripts/migrate.sh down
+
+migrate-status: ## Show migration status
+	@bash scripts/migrate.sh status
+
+migrate-updown-up: ## up -> down to zero -> up, asserting clean at each step
+	@bash scripts/migrate.sh updown-up
