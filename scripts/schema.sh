@@ -49,6 +49,16 @@ url_for_db() {   # url_for_db NAME -> DATABASE_URL with its database replaced
 }
 admin_url() { url_for_db postgres; }
 
+# A scratch database must be created with the SAME encoding and locale as the
+# real one (§4.4: the C collation is pinned because ltree's label set is
+# locale-dependent). CREATE DATABASE with no options inherits template1, so on
+# a cluster initdb'd without --encoding=UTF8 the scratch copy comes out
+# SQL_ASCII and pg_dump emits a different client_encoding line — which looks
+# exactly like schema drift and is not.
+create_db_sql() {
+  printf "CREATE DATABASE %s TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'" "$1"
+}
+
 case ${1:-} in
   snapshot)
     dump "$DATABASE_URL" > "$SNAPSHOT"
@@ -58,7 +68,7 @@ case ${1:-} in
     [[ -f $SNAPSHOT ]] || die "no $SNAPSHOT — run make schema-snapshot first"
     scratch=$(url_for_db "$SCRATCH_DB")
     psql "$(admin_url)" -X -q -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $SCRATCH_DB" \
-                                                  -c "CREATE DATABASE $SCRATCH_DB"
+                                                  -c "$(create_db_sql "$SCRATCH_DB")"
     trap 'psql "$(admin_url)" -X -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true' EXIT
     DATABASE_URL=$scratch bash scripts/migrate.sh up >/dev/null 2>&1 || die "from-scratch migration failed"
     if diff -u "$SNAPSHOT" <(dump "$scratch"); then

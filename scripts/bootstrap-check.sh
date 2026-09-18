@@ -94,6 +94,28 @@ else
   bad psql "psql not found and no podman to containerize it"
 fi
 
+# ---- the database's own encoding and collation (§4.4) -------------------
+# The C collation and UTF8 are pinned, not inherited: ltree's label set is
+# locale-dependent, and SQL_ASCII silently accepts bytes that are not valid
+# UTF-8 in a schema that is mostly text. Checked here because every other
+# symptom of getting this wrong looks like something else — the first one
+# observed was a schema-diff failure that looked like drift.
+if [[ -n ${DATABASE_URL:-} ]] && command -v psql >/dev/null 2>&1; then
+  if db_info=$(psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 \
+      -c "SELECT pg_encoding_to_char(encoding) || ' ' || datcollate FROM pg_database WHERE datname = current_database()" 2>/dev/null); then
+    read -r db_enc db_coll <<<"$db_info"
+    if [[ $db_enc == UTF8 && $db_coll == C ]]; then
+      ok database "encoding $db_enc, collation $db_coll"
+    else
+      bad database "encoding $db_enc, collation $db_coll — must be UTF8 and C (§4.4); recreate the cluster with make db-reset"
+    fi
+  else
+    info database "not reachable; skipping the encoding and collation check"
+  fi
+else
+  info database "no psql or no DATABASE_URL; skipping the encoding and collation check"
+fi
+
 # ---- sign-offs: informational, never a failure --------------------------
 if [[ -f PROGRESS.md ]]; then
   while IFS= read -r line; do

@@ -25,6 +25,24 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Deviations from the guide
 
+- 2026-09-17, defect four, same dev host: **every scratch database was created
+  with inherited encoding and collation.** `CREATE DATABASE x` with no options
+  copies template1, so on a cluster initdb'd without `--encoding=UTF8` the
+  scratch copy comes out `SQL_ASCII` while the committed snapshot is `UTF8`.
+  `schema-diff` then reports a one-line `client_encoding` difference that looks
+  exactly like schema drift and is not. All four creators — `schema.sh`,
+  `seed-determinism.sh`, `conformance.sh` and `sierxctl restore-test` — now
+  pin `TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'`. The restore case
+  mattered most: a restore into a differently-encoded database is not a test
+  of the backup.
+  `bootstrap-check` now also asserts the dev database's own encoding and
+  collation are UTF8 and C (§4.4), skipping with an INFO line when the server
+  is unreachable. It checked the tools and never the cluster, which is why a
+  mis-initialised cluster surfaced three tasks later as a schema-diff failure.
+  **If that check fails, the cluster is wrong, not the snapshot**: `make
+  db-reset` recreates it through the Quadlet unit, which passes
+  `--locale=C --encoding=UTF8` to initdb.
+
 - 2026-09-17, three defects found on the first real dev host (arm64, DGX
   Spark), all in the harness rather than the product:
   1. **Every `.env` loader exited silently.** The pattern

@@ -99,7 +99,8 @@ run_one() {
 
   echo "--- restore-to scratch"
   psql "$admin_url" -X -q -v ON_ERROR_STOP=1 \
-    -c "DROP DATABASE IF EXISTS $SCRATCH" -c "CREATE DATABASE $SCRATCH" >/dev/null
+    -c "DROP DATABASE IF EXISTS $SCRATCH" \
+    -c "CREATE DATABASE $SCRATCH TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'" >/dev/null
   bash scripts/backup/driver.sh "$d" restore-to "$scratch_dsn" || die "$d restore-to failed"
 
   echo "--- row counts"

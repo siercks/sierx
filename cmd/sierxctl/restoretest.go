@@ -64,7 +64,11 @@ func runRestoreTest(ctx context.Context, args []string) error {
 	}
 	for _, sql := range []string{
 		"DROP DATABASE IF EXISTS " + quoteIdent(scratch),
-		"CREATE DATABASE " + quoteIdent(scratch),
+		// Pinned, not inherited: a scratch database created from template1 on a
+		// cluster initdb'd without --encoding=UTF8 comes out SQL_ASCII, and a
+		// restore into it would be testing a different database than the one
+		// that was backed up (§4.4).
+		"CREATE DATABASE " + quoteIdent(scratch) + " TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'",
 	} {
 		if err := psqlExec(ctx, adminDSN, sql); err != nil {
 			return fmt.Errorf("preparing scratch database: %w", err)

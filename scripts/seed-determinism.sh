@@ -49,7 +49,8 @@ run_one() {   # run_one DBNAME -> prints the checksum
   local db=$1 url
   url=$(url_for_db "$db")
   psql "$admin_url" -X -q -v ON_ERROR_STOP=1 \
-    -c "DROP DATABASE IF EXISTS $db" -c "CREATE DATABASE $db" >/dev/null
+    -c "DROP DATABASE IF EXISTS $db" \
+    -c "CREATE DATABASE $db TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'" >/dev/null
   DATABASE_URL=$url bash scripts/migrate.sh up >/dev/null 2>&1 \
     || die "migrating $db failed"
   DATABASE_URL=$url bash scripts/sierxctl.sh seed \
