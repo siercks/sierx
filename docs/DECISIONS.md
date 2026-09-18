@@ -932,3 +932,12 @@ JSON mutations reject unknown fields and bodies over 1 MiB. Browser Origin
 headers must match SIERX_BASE_URL; requests without Origin are permitted for
 non-browser API clients. Password/session/database errors never enter response
 detail text. Account inactivity is checked on every authenticated request.
+
+Proxy authentication uses a single `X-Sierx-Email` header supplied by the
+authenticating proxy. The proxy must remove any client-supplied value before
+setting it. Only the immediate TCP peer is checked against trusted CIDRs;
+Forwarded, X-Forwarded-For and X-Real-IP cannot establish trust. The email must
+identify an active, pre-provisioned member with a NULL password hash. No user
+is created implicitly. Proxy mode does not accept local login or logout;
+sign-out is handled by the authenticating proxy. Local mode ignores identity
+headers. The operational health endpoint remains unauthenticated.
