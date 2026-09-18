@@ -235,8 +235,12 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 			if err := q.DeleteLink(ctx, toPgUUID(c.link.ID)); err != nil {
 				return Result{}, fmt.Errorf("unlink %s: %w", c.link.ID, err)
 			}
+		case changeComment:
+			if err := applyComment(ctx, tx, m, c.comment); err != nil {
+				return Result{}, err
+			}
 		}
-		if c.kind == changeLink || c.kind == changeUnlink {
+		if c.kind == changeLink || c.kind == changeUnlink || c.kind == changeComment {
 			if _, err := tx.Exec(ctx, `UPDATE item SET version=version+1,change_seq=$2,updated_at=now() WHERE id=$1`, c.itemID.String(), seq); err != nil {
 				return Result{}, err
 			}

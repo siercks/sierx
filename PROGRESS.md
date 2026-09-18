@@ -913,7 +913,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.12 Transitions.
 - [x] 1.13 Move and reparent.
 - [x] 1.14 Links.
-- [ ] 1.15 Comments.
+- [x] 1.15 Comments.
 - [ ] 1.16 Hierarchy reads.
 - [ ] 1.17 Item history.
 - [ ] 1.18 Saved views.
@@ -1294,6 +1294,24 @@ $ make test-api
 ok github.com/siercks/sierx/internal/api 12.423s
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.390s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.15 acceptance - 2026-09-18
+
+Added raw Markdown comments, bounded listing, author edits and soft deletion.
+Supporting PATCH/DELETE routes make edited_at and deleted_at actionable. Every
+change uses store.Mutate with an owning-item version check and history event.
+Deleted comment responses retain attribution/timestamps and hide the body.
+
+```text
+$ make test-api
+--- PASS: TestComments (0.49s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.438s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
