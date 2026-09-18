@@ -80,5 +80,8 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-18 gcc libc6-dev
+          # Hosted runners also have older PostgreSQL clients. Select the whole
+          # PG18 tool suite, not just psql (whose wrapper may choose differently).
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
       - run: make gate-1

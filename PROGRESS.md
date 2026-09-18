@@ -1661,3 +1661,35 @@ and the owner-operated manual walkthrough have passed acceptance at ca9a238.
 Subsequent commits only record acceptance evidence in this file. No Phase 1
 scope cuts were taken. Phase 1 is ready for final PR review and the owner's
 merge; no merge has been performed as part of this acceptance record.
+
+### Hosted CI PostgreSQL client correction - 2026-09-18
+
+Both failed hosted runs supplied by the owner selected pg_dump 16.15 against
+PostgreSQL 18.6. Although client 18 was installed and psql reported 18.6, the
+runner's command lookup still selected an older dump client. The failed dump
+then appeared as deletion of the entire schema in the drift comparison.
+
+The workflow now prepends /usr/lib/postgresql/18/bin through GITHUB_PATH so all
+subsequent PostgreSQL commands use the installed version 18 suite. Schema diff
+checks dump success before comparing; snapshot generation preserves the saved
+file on failed or partial dumps. Regression coverage checks those failures,
+successful normalization, and genuine drift detection. The existing schema-only
+exception in the backup-boundary gate is extended only to its exact test file.
+
+This corrects hosted CI tooling and diagnostics, not application behavior or
+migrations. The Spark manual results remain valid. Hosted CI must rerun on the
+published fix before merge; earlier failed hosted checks are not waived.
+
+Validation of the correction:
+
+```text
+bash test/shell/schema_test.sh: PASS
+make ci-local: exit 0
+gate-0: GREEN (including backup-boundary proof cases)
+golden: all endpoint and query fixtures reproduce without drift
+SXQ fuzz: 20485 executions; PASS
+Race-enabled concurrency package: PASS (2.965s)
+gate-gen: OK
+smoke-api: real CLI bootstrap and curl workflow PASS
+gate-1: GREEN (automated; human walkthrough remains required)
+```

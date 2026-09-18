@@ -33,6 +33,9 @@ ALLOW=(
                                        # drift detection (task 0.4). No data, no
                                        # restore path, not a backup: it would still be
                                        # needed if every backup driver were replaced.
+  'test/shell/schema_test\.sh$'         # mocks the schema-only tool above to prove
+                                       # dump errors cannot corrupt its snapshot;
+                                       # no data backup or restore operation.
 )
 
 scan() {
