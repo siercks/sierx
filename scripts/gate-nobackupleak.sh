@@ -15,6 +15,8 @@ TOOLS=(pgbackrest pg_dump pg_restore wal-g)
 # the rest are recorded deliberately rather than widened later to make a task
 # pass.
 ALLOW=(
+  'scripts/check-postgres-tools\.sh$'  # checks client versions only, never backs up data
+  'test/shell/postgres-tools_test\.sh$' # mocks the version-only preflight above
   'scripts/backup/driver-[a-z]*\.sh'   # the drivers, which must name their tool
   'scripts/backup/render-conf\.sh'     # renders the pgBackRest config template and must
                                        # name the path it renders; it is driver plumbing,
