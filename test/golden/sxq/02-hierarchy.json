@@ -1,0 +1,4 @@
+{
+  "query": "type = epic and descendants(status.category = open) \u003e 0",
+  "error": "descendants is not available until phase 5"
+}

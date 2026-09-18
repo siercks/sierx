@@ -1,0 +1,6 @@
+{
+  "detail": "Field email cannot be changed here. Use the account security flow.",
+  "status": 400,
+  "title": "Bad Request",
+  "type": "about:blank"
+}

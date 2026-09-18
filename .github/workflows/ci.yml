@@ -1,4 +1,4 @@
-# CI runs `make gate-0` and nothing else (BUILD §3.4). No inline shell beyond a
+# CI runs `make gate-1` and nothing else (BUILD §3.4). No inline shell beyond a
 # single make invocation per job: anything CI can do, a human must be able to
 # run locally and offline, and a step that exists only here is a step nobody
 # can reproduce.
@@ -8,7 +8,7 @@ name: ci
 
 on:
   push:
-    branches: ["main", "phase/**"]
+    branches: ["main", "phase/**", "build/**"]
   pull_request:
   workflow_dispatch:
 
@@ -56,14 +56,16 @@ jobs:
       SIERX_TRUSTED_PROXIES: ""
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
 
@@ -79,6 +81,9 @@ jobs:
             https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
+          sudo apt-get install -y -qq postgresql-client-18 gcc libc6-dev
+          # Hosted runners also have older PostgreSQL clients. Select the whole
+          # PG18 tool suite, not just psql (whose wrapper may choose differently).
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
-      - run: make gate-0
+      - run: make gate-1

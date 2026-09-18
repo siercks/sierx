@@ -1,0 +1,6 @@
+{
+  "detail": "unknown field \"stats\"; try \"status\"",
+  "status": 400,
+  "title": "Bad Request",
+  "type": "about:blank"
+}

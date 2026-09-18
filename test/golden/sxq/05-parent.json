@@ -1,0 +1,8 @@
+{
+  "query": "parent = SRX-42 order by rank asc",
+  "where": "(par.key = $1)",
+  "order": "i.rank",
+  "params": [
+    "SRX-42"
+  ]
+}

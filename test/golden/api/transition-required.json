@@ -1,0 +1,6 @@
+{
+  "detail": "Required fields are missing: assignee.",
+  "status": 422,
+  "title": "Unprocessable Content",
+  "type": "about:blank"
+}

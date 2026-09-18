@@ -1,0 +1,6 @@
+{
+  "detail": "Cannot move an item from project SRX under a parent in project OTH. Choose a parent in SRX.",
+  "status": 422,
+  "title": "Unprocessable Content",
+  "type": "about:blank"
+}

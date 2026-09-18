@@ -1,0 +1,8 @@
+{
+  "id": "view-1",
+  "layout": "list",
+  "name": "Mine",
+  "owner_id": "author-1",
+  "query": "status=todo order by rank",
+  "shared": false
+}

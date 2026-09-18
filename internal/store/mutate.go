@@ -38,6 +38,17 @@ func New(db DB) *Store {
 	return &Store{db: db, q: gen.New(db)}
 }
 
+// WithExpectedVersion checks the caller's version after sequence allocation
+// has serialized workspace writers, before any governed row is changed.
+func WithExpectedVersion(id uuid.UUID, version int32) MutateOption {
+	return func(m *Mutation) {
+		if m.expected == nil {
+			m.expected = map[uuid.UUID]int32{}
+		}
+		m.expected[id] = version
+	}
+}
+
 // Queries exposes read-only generated queries for callers outside this package.
 // Writes are not reachable this way: the generated writers take parameters this
 // package builds during flush, and gate-nodirect fails any package outside
@@ -52,6 +63,7 @@ var (
 	ErrEmpty = errors.New("store: mutation is empty")
 	// ErrVersionConflict maps to 409 (§5.4).
 	ErrVersionConflict = errors.New("store: item version conflict")
+	ErrInvalidMove     = errors.New("store: invalid hierarchy move")
 )
 
 // Result reports what a mutation did. HighestSeq is the value a client can use
@@ -130,6 +142,16 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 		return Result{}, fmt.Errorf("allocate %d seq values: %w", n, err)
 	}
 	lowest := highest - int64(n) + 1
+	for id, expected := range m.expected {
+		var actual int32
+		err := tx.QueryRow(ctx, `SELECT version FROM item WHERE id=$1 AND workspace_id=$2 AND deleted_at IS NULL FOR UPDATE`, id.String(), m.workspaceID.String()).Scan(&actual)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && actual != expected {
+			return Result{}, ErrVersionConflict
+		}
+		if err != nil {
+			return Result{}, err
+		}
+	}
 
 	// (b) Assign seq to each event in registration order; each item's
 	// change_seq becomes the highest value assigned to any of its events.
@@ -171,7 +193,7 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 			}
 
 		case changeReparent:
-			if err := s.applyReparent(ctx, q, m, c.reparen, seq); err != nil {
+			if err := s.applyReparent(ctx, tx, q, m, c.reparen, seq); err != nil {
 				return Result{}, err
 			}
 
@@ -200,6 +222,7 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 
 		case changeLink:
 			if _, err := q.InsertLink(ctx, gen.InsertLinkParams{
+				ID:         toPgUUID(c.link.ID),
 				FromItemID: toPgUUID(c.link.FromItemID),
 				ToItemID:   toPgUUID(c.link.ToItemID),
 				Kind:       c.link.Kind,
@@ -211,6 +234,15 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 		case changeUnlink:
 			if err := q.DeleteLink(ctx, toPgUUID(c.link.ID)); err != nil {
 				return Result{}, fmt.Errorf("unlink %s: %w", c.link.ID, err)
+			}
+		case changeComment:
+			if err := applyComment(ctx, tx, m, c.comment); err != nil {
+				return Result{}, err
+			}
+		}
+		if c.kind == changeLink || c.kind == changeUnlink || c.kind == changeComment {
+			if _, err := tx.Exec(ctx, `UPDATE item SET version=version+1,change_seq=$2,updated_at=now() WHERE id=$1`, c.itemID.String(), seq); err != nil {
+				return Result{}, err
 			}
 		}
 		if c.itemID != (uuid.UUID{}) {
@@ -269,6 +301,9 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 }
 
 func (s *Store) applyInsert(ctx context.Context, db gen.DBTX, q *gen.Queries, m *Mutation, in *ItemInsert, seq int64) error {
+	if in.OriginSeq == nil {
+		in.OriginSeq = &seq
+	}
 	// Key from the project's monotonic counter (§A.1), never reused or reset.
 	keyRow, err := q.NextItemKey(ctx, toPgUUID(in.ProjectID))
 	if err != nil {
@@ -376,7 +411,7 @@ func (s *Store) applyUpdate(ctx context.Context, q *gen.Queries, m *Mutation, up
 	return nil
 }
 
-func (s *Store) applyReparent(ctx context.Context, q *gen.Queries, m *Mutation, r *ItemReparent, seq int64) error {
+func (s *Store) applyReparent(ctx context.Context, db gen.DBTX, q *gen.Queries, m *Mutation, r *ItemReparent, seq int64) error {
 	item, err := q.GetItem(ctx, toPgUUID(r.ID))
 	if err != nil {
 		return fmt.Errorf("reparent %s: %w", r.ID, err)
@@ -387,16 +422,27 @@ func (s *Store) applyReparent(ctx context.Context, q *gen.Queries, m *Mutation, 
 		if err != nil {
 			return fmt.Errorf("reparent %s: new parent %s: %w", r.ID, *r.NewParentID, err)
 		}
-		if parent.ProjectID != item.ProjectID {
-			return fmt.Errorf("store: cross-project move rejected (ADR-012): %s", r.ID)
+		if parent.ProjectID != item.ProjectID || parent.DeletedAt.Valid {
+			return ErrInvalidMove
 		}
 		// §5.3: reject a move that would make the item its own ancestor. The
 		// database trigger rejects it too; this produces a usable error instead
 		// of a constraint violation.
 		if isDescendantOrSelf(parent.Path, item.Path) {
-			return fmt.Errorf("store: reparenting %s under %s would make it its own ancestor (§5.3)", r.ID, *r.NewParentID)
+			return ErrInvalidMove
 		}
 		newParentPath = parent.Path
+	}
+	var height int
+	if err := db.QueryRow(ctx, `SELECT max(nlevel(path))-nlevel($1::ltree)+1 FROM item WHERE path <@ $1::ltree`, item.Path).Scan(&height); err != nil {
+		return err
+	}
+	depth := 0
+	if newParentPath != "" {
+		depth = strings.Count(newParentPath, ".") + 1
+	}
+	if depth+height > 8 {
+		return ErrInvalidMove
 	}
 	// The old path is dirty (its former ancestors lose descendants) and so is
 	// the new one (its new ancestors gain them).
@@ -415,6 +461,45 @@ func (s *Store) applyReparent(ctx context.Context, q *gen.Queries, m *Mutation, 
 	}
 	for _, row := range rows {
 		m.touchedPaths = append(m.touchedPaths, row.Path)
+	}
+	if r.SetRank {
+		for attempt := 0; attempt < 2; attempt++ {
+			ranks, err := q.ListProjectRanks(ctx, item.ProjectID)
+			if err != nil {
+				return err
+			}
+			lo, hi := "", ""
+			found := r.RankAfter == nil
+			for _, candidate := range ranks {
+				if candidate.ID == item.ID {
+					continue
+				}
+				if found {
+					hi = candidate.Rank
+					break
+				}
+				if fromPgUUID(candidate.ID) == *r.RankAfter {
+					lo = candidate.Rank
+					found = true
+				}
+			}
+			if !found {
+				return ErrInvalidMove
+			}
+			rank, err := RankBetween(lo, hi)
+			if err != nil {
+				return err
+			}
+			if RankNeedsRebalance(rank) {
+				if err := rebalanceProjectRanks(ctx, db, q, fromPgUUID(item.ProjectID), ranks); err != nil {
+					return err
+				}
+				continue
+			}
+			_, err = db.Exec(ctx, `UPDATE item SET rank=$2 WHERE id=$1`, r.ID.String(), rank)
+			return err
+		}
+		return ErrRankOrder
 	}
 	return nil
 }

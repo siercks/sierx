@@ -1,25 +1,25 @@
 # sierx build progress
 
 The agent's only progress claim. Append and check boxes; never rewrite history.
-A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
+A checked box with no pasted acceptance output is treated as red (BUILD Â§0.4).
 
 **Current phase:** 1
 **Phase 2 deadline anchor:** 2026-09-12
 **Phase 2 deadline:** none (owner direction, ADR-020; original 2026-10-10 date retired)
 
-## Sign-offs (human writes these — see BUILD §4.0)
+## Sign-offs (human writes these â€” see BUILD Â§4.0)
 
-- [x] ADR-002 approved — 2026-09-12 — one sequence value per event row
-- [x] ADR-005 approved — 2026-09-12 — rollups maintained in the store layer
-- [x] ADR-012 approved — 2026-09-12 — cross-project moves rejected in v1
-- [x] ADR-014 approved — 2026-09-12 — Markdown with raw HTML disabled at the parser
-- [x] ADR-010 dev repository target defined — 2026-09-12 — `posix` to a local
+- [x] ADR-002 approved â€” 2026-09-12 â€” one sequence value per event row
+- [x] ADR-005 approved â€” 2026-09-12 â€” rollups maintained in the store layer
+- [x] ADR-012 approved â€” 2026-09-12 â€” cross-project moves rejected in v1
+- [x] ADR-014 approved â€” 2026-09-12 â€” Markdown with raw HTML disabled at the parser
+- [x] ADR-010 dev repository target defined â€” 2026-09-12 â€” `posix` to a local
       path, no decision required (BUILD ADR-010)
-- [ ] ADR-010 **deployment** repository target — set at task 2.16 in the host
+- [ ] ADR-010 **deployment** repository target â€” set at task 2.16 in the host
       env file. `sftp` recommended. `bootstrap-check` rejects the dev `posix`
       target whenever `SIERX_ENV` is not `dev`, so this cannot be skipped
 
-## Cuts taken (BUILD §1.2)
+## Cuts taken (BUILD Â§1.2)
 
 - none
 
@@ -53,7 +53,7 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   speedup commit): `scripts/sierxctl.sh` did not load `.env`, unlike every
   other script in `scripts/`. `go run` had inherited nothing either, but the
   targets that used it were never run on a host where `DATABASE_URL` was set
-  as a plain shell variable rather than an exported one — which is how one
+  as a plain shell variable rather than an exported one â€” which is how one
   normally types it. `make seed` then failed with "DATABASE_URL is unset" on a
   host where `echo $DATABASE_URL` printed the URL. The loader is now present
   and identical to the others. Worth noting the speedup that caused this saved
@@ -63,7 +63,7 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 - 2026-09-18, task 0.11: `conformance.sh` swallowed the contract check's
   output, so a failing driver reported only "failed the contract check" while
   the check itself knew which verb failed and why. It now prints that output,
-  and `driver.sh --contract` reports the verb's own message — for the
+  and `driver.sh --contract` reports the verb's own message â€” for the
   pgbackrest driver on a host with no rendered config that reads
   `init FAILED on first run: pgbackrest: ... render it with
   scripts/backup/render-conf.sh`, which is actionable. The check was right; it
@@ -80,10 +80,10 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   checksum line, `items=0 rollups=0`, and nine skipped scenarios.
   Fixed two ways: gate-0 seeds before conformance and bench, and
   `conformance.sh` now refuses a source database with no items instead of
-  reporting a trivial pass. BUILD §0.4's "a green claim without evidence is
+  reporting a trivial pass. BUILD Â§0.4's "a green claim without evidence is
   treated as red" applies to the harness, not just to the checkboxes.
   Also: the pgdump driver's `describe` printed `pg_dump 18.6-1.pgdg24.04+2)`
-  on a Debian-packaged client — `$NF` picked up the packaging string and its
+  on a Debian-packaged client â€” `$NF` picked up the packaging string and its
   bracket. That line is restore attribution under ADR-017, so it now reads
   `pg_dump 18.6`.
 
@@ -92,7 +92,7 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   was **unquoted**. systemd's `Environment=` takes space-separated VAR=VALUE
   pairs, so it set `POSTGRES_INITDB_ARGS=--locale=C` and discarded
   `--encoding=UTF8`; initdb then defaulted to SQL_ASCII under the C locale.
-  The task 0.2 acceptance could not have caught this — it was never run in the
+  The task 0.2 acceptance could not have caught this â€” it was never run in the
   agent sandbox, which had no Podman, and the encoding check did not exist
   until defect four. Quoted now, and `db.sh up` asserts `UTF8 C` after the
   container reports ready, so a volume born from a wrong unit fails at startup
@@ -105,13 +105,13 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   copies template1, so on a cluster initdb'd without `--encoding=UTF8` the
   scratch copy comes out `SQL_ASCII` while the committed snapshot is `UTF8`.
   `schema-diff` then reports a one-line `client_encoding` difference that looks
-  exactly like schema drift and is not. All four creators — `schema.sh`,
-  `seed-determinism.sh`, `conformance.sh` and `sierxctl restore-test` — now
+  exactly like schema drift and is not. All four creators â€” `schema.sh`,
+  `seed-determinism.sh`, `conformance.sh` and `sierxctl restore-test` â€” now
   pin `TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'`. The restore case
   mattered most: a restore into a differently-encoded database is not a test
   of the backup.
   `bootstrap-check` now also asserts the dev database's own encoding and
-  collation are UTF8 and C (§4.4), skipping with an INFO line when the server
+  collation are UTF8 and C (Â§4.4), skipping with an INFO line when the server
   is unreachable. It checked the tools and never the cluster, which is why a
   mis-initialised cluster surfaced three tasks later as a schema-diff failure.
   **If that check fails, the cluster is wrong, not the snapshot**: `make
@@ -124,7 +124,7 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
      `[[ -z ${!key+x} ]] && export "$key=$val"` returns 1 under `set -e` the
      first time a variable is already set in the environment, killing the
      script with no output and exit 1. Invisible until a `.env` file existed
-     AND the caller had exported one of its keys — which is the normal case on
+     AND the caller had exported one of its keys â€” which is the normal case on
      a real host. Fixed in all 11 scripts by using an `if`.
   2. **`gate-notopology` false positive.** It treated any `.env` value
      differing from the example's default for that key as a secret. Narrowing
@@ -150,8 +150,8 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   wrong.
 
 - 2026-09-16, performance (no behaviour change): the property suite dropped
-  from 137s to 13s. `VerifyRollups` is unscoped by design — an operator asking
-  "is anything wrong" means anything — so a test that created 14 items was
+  from 137s to 13s. `VerifyRollups` is unscoped by design â€” an operator asking
+  "is anything wrong" means anything â€” so a test that created 14 items was
   re-verifying the whole 10k-item seed on every sequence. Added
   `VerifyRollupsForProject` and used it in the tests; the CLI still uses the
   unscoped query. The Go-side comparison also fetches a project's rollups in
@@ -159,18 +159,18 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   no test-count lowered.
 - 2026-09-16: added `make check`, a fast dev loop (vet, both SQL test files,
   store tests, sqlc diff, the three source gates; ~30s). It is NOT a gate and
-  is not part of one — `gate-0` is unchanged, and `check` passing is not a
+  is not part of one â€” `gate-0` is unchanged, and `check` passing is not a
   claim that the phase gate passes. `make sierxctl` and `scripts/sierxctl.sh`
   build `bin/sierxctl` once and reuse it, so the make targets and scripts no
   longer `go run` the CLI on every call. Measured saving: ~85ms per
-  invocation, not the seconds first estimated — kept because it is harmless
+  invocation, not the seconds first estimated â€” kept because it is harmless
   and gives the CLI a stable path for the systemd units, not because it is
   fast.
 
 - 2026-09-12, task 0.13: the license gate classifies the LICENSE text of every
   vendored module itself rather than running `go-licenses check`.
   `go-licenses` resolves licenses by downloading modules and carries a large
-  dependency tree of its own — both of which this gate exists to constrain.
+  dependency tree of its own â€” both of which this gate exists to constrain.
   The classifier matches distinctive strings from each license text, the same
   method go-licenses' classifier uses, minus the network, and it is proven
   against AGPL, MPL, SSPL, BSL, an unclassifiable license and a missing one.
@@ -180,8 +180,8 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 - 2026-09-12, tasks 0.3/0.7: goose and sqlc are pinned release binaries
   (version + per-arch sha256 in `scripts/tool.sh`, fetched into gitignored
-  `bin/`) rather than `go tool` entries. Both pull large dependency trees —
-  database drivers, a SQL parser — that would enter `go.mod` and
+  `bin/`) rather than `go tool` entries. Both pull large dependency trees â€”
+  database drivers, a SQL parser â€” that would enter `go.mod` and
   `gate-license`'s scope without a line of them shipping in the binary. This
   supersedes the earlier note that said to switch to `go tool goose` at 0.8.
 - 2026-09-12, environment: the agent sandbox cannot reach `proxy.golang.org`,
@@ -189,7 +189,7 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   modules were resolved with `GOPROXY=file:///<local>,direct GOSUMDB=off`,
   where the local filesystem proxy holds `golang.org/x/text`,
   `golang.org/x/sync`, `gopkg.in/yaml.v3` and `gopkg.in/check.v1` mirrored from
-  their GitHub repositories. **Nothing in the repository depends on this** — no
+  their GitHub repositories. **Nothing in the repository depends on this** â€” no
   `replace` directives, no vendored fork, and `go.sum` carries the real
   hashes. On a normal network `go mod download` works unmodified. Re-run
   `go mod verify` on the dev host to confirm.
@@ -209,9 +209,9 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
   the placeholder.
 
 - 2026-09-12, task 0.1: `docs/HANDOVER.md` is committed although it is not in
-  the task's Files list — the kickoff prompt's read order names it. HANDOVER §1
+  the task's Files list â€” the kickoff prompt's read order names it. HANDOVER Â§1
   said the five doc files were already committed; the repository held only
-  `LICENSE`, so task 0.1 installed them as BUILD steps 3–5 and 7 describe.
+  `LICENSE`, so task 0.1 installed them as BUILD steps 3â€“5 and 7 describe.
 - 2026-09-12, task 0.1: `prove-gates` (task 0.12) does not exist yet, so the
   gate's proof ships as `scripts/gate-notopology.sh --prove` (`make
   prove-notopology`). Task 0.12's `prove-gates.sh` should discover `gate-*`
@@ -219,15 +219,15 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ## Open questions raised
 
-- 2026-09-12, task 0.9: the seed cannot backdate `change_event.at` — the
+- 2026-09-12, task 0.9: the seed cannot backdate `change_event.at` â€” the
   column defaults to `now()` and `Mutate` does not accept a timestamp, so
   "status transitions spread over ~9 months" is only true of the items' dates
   and the transition order, not of the event timestamps. Cycle-time and
-  burndown work (§13, phase 5) needs real historical `at` values. The choice —
+  burndown work (Â§13, phase 5) needs real historical `at` values. The choice â€”
   let a caller set `at` under a seed-only flag, or accept that history begins
-  at first run — belongs in an ADR before phase 5, not in the seed.
+  at first run â€” belongs in an ADR before phase 5, not in the seed.
 
-- 2026-09-12, task 0.6: `deploy/quadlet/sierx-maintenance.service` (added — a
+- 2026-09-12, task 0.6: `deploy/quadlet/sierx-maintenance.service` (added â€” a
   timer needs a service; not in the Files list) runs `podman exec sierx
   sierxctl partitions ensure --months-ahead 1`. The application container's
   name is not specified until task 2.16; `sierx` is a placeholder to confirm
@@ -245,11 +245,11 @@ A checked box with no pasted acceptance output is treated as red (BUILD §0.4).
 
 ---
 
-## Phase 0 — Schema, migrations, seed, CI skeleton
+## Phase 0 â€” Schema, migrations, seed, CI skeleton
 
-Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
+Gate: `make gate-0`. Tasks in order; one commit each (BUILD Â§3.3).
 
-- [x] 0.1 Repository skeleton and toolchain pins — 2026-09-17, on the dev host
+- [x] 0.1 Repository skeleton and toolchain pins â€” 2026-09-17, on the dev host
       (arm64, DGX Spark, Ubuntu 24.04)
       ```
       $ make bootstrap-check
@@ -258,18 +258,18 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       podman     OK    podman version 4.9.3
       psql       OK    psql 18.6
       database   OK    encoding UTF8, collation C
-      signoff    INFO  ADR-010 **deployment** repository target — set at task 2.16 in the host
+      signoff    INFO  ADR-010 **deployment** repository target â€” set at task 2.16 in the host
       backup     OK    repository type posix, path set, SIERX_ENV=dev
       $ make gate-notopology && make prove-notopology
       gate-notopology: OK (no topology in committable files)
       ... 9 proof cases, all OK (see the phase-0 exit block)
       ```
-- [x] 0.2 Dev database — 2026-09-17, on the dev host
+- [x] 0.2 Dev database â€” 2026-09-17, on the dev host
       ```
       $ make db-reset
       db-reset will DESTROY:
         container : sierx-postgres
-        volume    : sierx-pgdata (the entire PGDATA — every database in this cluster)
+        volume    : sierx-pgdata (the entire PGDATA â€” every database in this cluster)
         database  : sierx on localhost:5432
       dropped volume sierx-pgdata
       waiting for postgres ...
@@ -277,13 +277,13 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       $ make bootstrap-check | grep database
       database   OK    encoding UTF8, collation C
       ```
-      The cluster is UTF8 and C as §4.4 requires. Getting there took two fixes
+      The cluster is UTF8 and C as Â§4.4 requires. Getting there took two fixes
       recorded under deviations: the Quadlet unit's unquoted
       `POSTGRES_INITDB_ARGS` (which silently produced SQL_ASCII) and the
       encoding assertion that now catches it at `db-up` and in
       `bootstrap-check`. The acceptance's `show lc_collate` does not exist on
       PostgreSQL 18; the `pg_database` query above is the equivalent.
-- [x] 0.3 Migration tooling and extensions — 2026-09-12, against PostgreSQL
+- [x] 0.3 Migration tooling and extensions â€” 2026-09-12, against PostgreSQL
       18.6 (native, sandbox; see 0.2 note)
       ```
       $ make migrate-updown-up
@@ -301,7 +301,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       goose: successfully migrated database to version: 1
       all migrations applied: 1 versions
       ```
-- [x] 0.4 Schema: all of SPEC §4 — 2026-09-12, against PostgreSQL 18.6 (native)
+- [x] 0.4 Schema: all of SPEC Â§4 â€” 2026-09-12, against PostgreSQL 18.6 (native)
       ```
       $ make migrate-updown-up && make schema-snapshot && make schema-diff
       == up
@@ -317,10 +317,10 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       schema-diff: from-scratch migration matches docs/schema.sql
       ```
       Also proven: editing a migration after the snapshot turns `schema-diff`
-      red. 24 = 21 tables in §4 + 3 monthly `change_event` partitions
-      (2026-09 … 2026-11). `seq_counter` (§4.7) is created here; task 0.6 adds
+      red. 24 = 21 tables in Â§4 + 3 monthly `change_event` partitions
+      (2026-09 â€¦ 2026-11). `seq_counter` (Â§4.7) is created here; task 0.6 adds
       the per-workspace row mechanism.
-- [x] 0.5 Invariant enforcement in the database — 2026-09-12, PostgreSQL 18.6
+- [x] 0.5 Invariant enforcement in the database â€” 2026-09-12, PostgreSQL 18.6
       ```
       $ make test-sql
       NOTICE:  ok   raised  status.name update  [23001 ...]
@@ -329,7 +329,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       NOTICE:  ok   raised  item_type.name update  [23001 ...]
       NOTICE:  ok   raised  item_type.level update  [23001 ...]
       NOTICE:  ok   allowed item_type.is_idea update (not immutable by spec)
-      NOTICE:  ok   raised  depth-9 insert  [23514 ... would be at depth 9, maximum is 8 (SPEC §5.3)]
+      NOTICE:  ok   raised  depth-9 insert  [23514 ... would be at depth 9, maximum is 8 (SPEC Â§5.3)]
       NOTICE:  ok   allowed depth-8 exists (positive control)
       NOTICE:  ok   raised  path not ending in own id  [23514 ...]
       NOTICE:  ok   raised  parent_id set, path penultimate label is someone else  [23514 ...]
@@ -353,10 +353,10 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       red. `docs/schema.sql` re-snapshotted for 0008; `schema-diff` green.
       **Finding for ADR-003:** a DEFERRABLE unique constraint is checked at end
       of statement even while immediate, so the single-statement rebalance
-      (§5.5) commits without `SET CONSTRAINTS ... DEFERRED`. The decision
+      (Â§5.5) commits without `SET CONSTRAINTS ... DEFERRED`. The decision
       (DEFERRABLE) stands and the deferral step is harmless belt-and-braces;
       the ADR's "checked per row" rationale describes the non-deferrable case.
-- [x] 0.6 Sequence counter and partition maintenance — 2026-09-12 (Go half
+- [x] 0.6 Sequence counter and partition maintenance â€” 2026-09-12 (Go half
       closed in the same session once module egress was worked around)
       ```
       $ make test-partitions
@@ -373,13 +373,13 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       $ go run ./cmd/sierxctl partitions ensure --months-ahead 3
       partitions ensure: 0 created, months-ahead=3
       ```
-- [x] 0.7 sqlc wiring — 2026-09-12
+- [x] 0.7 sqlc wiring â€” 2026-09-12
       ```
       $ make sqlc-diff && go build ./...
       sqlc-diff: checked-in generated code matches fresh output
       ```
       sqlc v1.31.1, `sql_package: pgx/v5`, schema read from `migrations/` so
-      there is no second schema definition. Queries limited to what 0.8–0.9
+      there is no second schema definition. Queries limited to what 0.8â€“0.9
       need: workspace/seq allocation, item CRUD + one-statement subtree
       reparent, rollup insert/recompute/verify, events, config and links.
       `ltree` is overridden to `string` (no pgx type; the store passes text and
@@ -389,7 +389,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       partitions declared in 0006. Partitions created later at runtime by
       `change_event_ensure_partitions` do not appear, because sqlc reads
       `migrations/`, so the generated output stays stable month to month.
-- [x] 0.8 `store.Mutate`: the unit of work — 2026-09-12
+- [x] 0.8 `store.Mutate`: the unit of work â€” 2026-09-12
       ```
       $ make test-store
       --- PASS: TestMutateAllocatesOneSeqPerEvent (0.02s)
@@ -408,18 +408,18 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       ok      github.com/siercks/sierx/internal/store 0.364s
       $ make gate-nodirect && make prove-nodirect
       gate-nodirect: OK (governed tables written only through internal/store)
-      prove: INSERT INTO item from internal/api: gate went red — OK
-      prove: lowercase multi-line UPDATE item: gate went red — OK
-      prove: DELETE FROM comment: gate went red — OK
-      prove: INSERT INTO sprint_item: gate went red — OK
-      prove: TRUNCATE item_link: gate went red — OK
-      prove: item_type/item_rollup writes and a plain SELECT stay green — OK
-      prove: clean tree: gate GREEN — OK
+      prove: INSERT INTO item from internal/api: gate went red â€” OK
+      prove: lowercase multi-line UPDATE item: gate went red â€” OK
+      prove: DELETE FROM comment: gate went red â€” OK
+      prove: INSERT INTO sprint_item: gate went red â€” OK
+      prove: TRUNCATE item_link: gate went red â€” OK
+      prove: item_type/item_rollup writes and a plain SELECT stay green â€” OK
+      prove: clean tree: gate GREEN â€” OK
       ```
-      The §5.1 requirement is met: 8 concurrent writers, 48 events, a cursor
+      The Â§5.1 requirement is met: 8 concurrent writers, 48 events, a cursor
       polled throughout the run, every seq value observed exactly once and no
       gaps. `Mutation` has no way to register a row change without its events
-      (ADR-001 as a type property), and no event-count parameter — the seq
+      (ADR-001 as a type property), and no event-count parameter â€” the seq
       block is sized from the accumulated events (ADR-002).
       Three implementation notes worth keeping:
       - `item.fields` is `jsonb NOT NULL DEFAULT '{}'`; an explicit NULL in an
@@ -431,7 +431,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         declares. Adding a column to `item` means adding it to those lists.
       - `SET CONSTRAINTS` is transaction control, not a query sqlc can model,
         so the rebalance issues it through the connection directly.
-- [x] 0.9 Seed generator — 2026-09-12
+- [x] 0.9 Seed generator â€” 2026-09-12
       ```
       $ make migrate-up && go run ./cmd/sierxctl seed      # ~40s for 10k on the agent host
       seed: workspace=01a0a07b-123d-7c4e-80e9-a01409674a39 items=10000 max_depth=6 links=500 events=16989
@@ -448,7 +448,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       run C (--seed 8): 907901972a7675dda5b465d05644f86b
       seed-determinism: OK (same seed identical, different seed differs)
       ```
-      10000 items, max depth 6 (the target, not an accident — the planner fills
+      10000 items, max depth 6 (the target, not an accident â€” the planner fills
       the shallowest empty level first), 5 projects, rollups == items
       (ADR-013), 392 of the 500 links cross project boundaries (ADR-012: the
       hierarchy cannot, so links must), 35 `config_transition` rows = 3
@@ -456,16 +456,16 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       event kinds created 10000 / status_changed 6489 / linked 500.
       Determinism is checked in two scratch databases rather than two
       workspaces, so the second run cannot be influenced by the first, and a
-      different `--seed` is asserted to differ — otherwise the checksum would
+      different `--seed` is asserted to differ â€” otherwise the checksum would
       not be measuring anything.
       **Deviation on backdated history:** items carry start and due dates
       spread across a nine-month window and their transitions are ordered, but
-      `change_event.at` is `now()` — Mutate does not write `at`, so the events
+      `change_event.at` is `now()` â€” Mutate does not write `at`, so the events
       are stamped with the run time. Backdating them means letting a caller
       set `at`, which is a schema-level decision (and an audit-log
       consideration) rather than something the seed should fake. Cycle-time
       work in phase 5 will need it; raised as an open question below.
-- [x] 0.10 Property tests — 2026-09-12
+- [x] 0.10 Property tests â€” 2026-09-12
       ```
       $ make test-property
       + moving a node moves its whole subtree: OK, passed 10 tests.
@@ -487,27 +487,27 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       Library: `github.com/leanovate/gopter` v0.2.9 (MIT, no runtime deps),
       named in `go.mod` and cleared through `make gate-license` before
       adoption. **`pgregory.net/rapid` was the first choice and was rejected:
-      it is MPL-2.0, which §15.1 blocks.** That is the instruction to run a
+      it is MPL-2.0, which Â§15.1 blocks.** That is the instruction to run a
       candidate through the gate first earning its place.
-      Rollups are checked twice per sequence — against the store's SQL
-      recomputation and against an aggregate computed independently in Go — so
+      Rollups are checked twice per sequence â€” against the store's SQL
+      recomputation and against an aggregate computed independently in Go â€” so
       the property is not one query agreeing with itself. The 5,000-item
       rebalance (ADR-003) commits in ~14s and preserves relative order, and a
       create after a rebalance still lands last.
       **Bug found and fixed:** `ListProjectRanks` filtered `deleted_at IS
       NULL`, but `item_project_rank_uniq` covers every row in the project. A
       sequence that soft-deleted an item and then created one allocated a rank
-      that collided with the deleted row. The query now spans deleted rows —
+      that collided with the deleted row. The query now spans deleted rows â€”
       also correct for restoring a soft-deleted item, which must keep a unique
       rank. No randomized sequence in the earlier unit tests had produced that
       interleaving.
-- [~] 0.11 Backup and restore harness — **steps 1–4 and 6 green; steps 5 and 7
-      left as ⚠ blocked, exactly as the task prescribes.** pgBackRest is not
+- [~] 0.11 Backup and restore harness â€” **steps 1â€“4 and 6 green; steps 5 and 7
+      left as âš  blocked, exactly as the task prescribes.** pgBackRest is not
       installed here and there is no repository target, so
       `driver-pgbackrest.sh`, `render-conf.sh` and the major-upgrade runbook are
       not written: step 5 requires verifying against an installed pgBackRest
       that the cipher cannot be changed on an existing stanza, and a driver
-      whose acceptance has never run is what BUILD §0.4 exists to prevent.
+      whose acceptance has never run is what BUILD Â§0.4 exists to prevent.
       ```
       $ SIERX_BACKUP_DRIVERS=pgdump make backup-conformance
       === conformance: pgdump
@@ -534,11 +534,11 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
 
       $ make gate-nobackupleak && make prove-nobackupleak
       gate-nobackupleak: OK (no backup tool named outside the drivers)
-      prove: pg_restore in the Makefile: gate went red — OK
-      prove: pgbackrest in a make target: gate went red — OK
-      prove: pg_dump named in Go source: gate went red — OK
-      prove: wal-g in a non-driver script: gate went red — OK
-      prove: clean tree: gate GREEN — OK
+      prove: pg_restore in the Makefile: gate went red â€” OK
+      prove: pgbackrest in a make target: gate went red â€” OK
+      prove: pg_dump named in Go source: gate went red â€” OK
+      prove: wal-g in a non-driver script: gate went red â€” OK
+      prove: clean tree: gate GREEN â€” OK
 
       $ bash scripts/backup/driver.sh pgdump retention      # 11 dumps planted
       pgdump: retention kept 8 of 11 dump(s), limit 8
@@ -564,7 +564,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       - `gate-nobackupleak`'s allowlist gained two entries beyond the two
         ADR-017 names, each with its reason in the script: `.env.example`
         (the driver list and repository variables are how a driver is
-        *selected* — naming them in configuration is the ADR's mechanism, and
+        *selected* â€” naming them in configuration is the ADR's mechanism, and
         BUILD Appendix B fixes the names) and `scripts/schema.sh` (a
         `--schema-only` structural snapshot for drift detection: no data, no
         restore path, still needed if every driver were replaced).
@@ -574,14 +574,14 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         Rakefile names a dump tool). All three
         content gates now exclude `vendor/`: third-party source is not this
         project's configuration and is not edited here.
-- [x] 0.12 CI skeleton, proven to fail (offline Spark acceptance recorded below) — 2026-09-18
+- [x] 0.12 CI skeleton, proven to fail (offline Spark acceptance recorded below) â€” 2026-09-18
       ```
       $ make prove-gates
       prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
       prove-gates: OK
       ```
       Every `gate-*` target has a proof or a recorded exemption. The two
-      exemptions are `gate-0` (composite — proving it means proving each part
+      exemptions are `gate-0` (composite â€” proving it means proving each part
       again) and `gate-bench` (advisory under ADR-016 until reference hardware
       exists, with its one testable behaviour asserted directly).
       `docs/ci-portability.md` written: the claim that CI can move providers
@@ -594,10 +594,10 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       and `release.yml` calls `make release-binaries`, `release-image` and
       `release-manifest`, which do not exist yet because there is no server
       binary until task 1.1 and no image until phase 2. Tagging a release
-      today would fail at the first missing target. Not scaffolded — BUILD
-      forbids writing files for later phases — so the workflow names its
+      today would fail at the first missing target. Not scaffolded â€” BUILD
+      forbids writing files for later phases â€” so the workflow names its
       future steps and the targets arrive with the tasks that own them.
-- [x] 0.13 License gate, SBOM, supply chain — 2026-09-18 (license gate
+- [x] 0.13 License gate, SBOM, supply chain â€” 2026-09-18 (license gate
       2026-09-12, out of order before 0.10: BUILD requires a
       property-testing library be cleared through `make gate-license` before
       adoption, which needs the gate to exist)
@@ -611,36 +611,36 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       ok       golang.org/x/sync                                       BSD-3-Clause
       ok       golang.org/x/text                                       BSD-3-Clause
       licenses.sh: 7 Go module(s) checked
-      gate-license: OK (every dependency on the §15.1 allowlist)
+      gate-license: OK (every dependency on the Â§15.1 allowlist)
       $ make prove-license
-      prove: AGPL-3.0 module: gate went red — OK     <- the negative test the task names
-      prove: MPL-2.0 module: gate went red — OK
-      prove: SSPL-1.0 module: gate went red — OK
-      prove: BSL-1.1 module: gate went red — OK
-      prove: unclassifiable license: gate went red — OK
-      prove: module with no license file: gate went red — OK
-      prove: clean tree: gate GREEN — OK
+      prove: AGPL-3.0 module: gate went red â€” OK     <- the negative test the task names
+      prove: MPL-2.0 module: gate went red â€” OK
+      prove: SSPL-1.0 module: gate went red â€” OK
+      prove: BSL-1.1 module: gate went red â€” OK
+      prove: unclassifiable license: gate went red â€” OK
+      prove: module with no license file: gate went red â€” OK
+      prove: clean tree: gate GREEN â€” OK
       $ make sbom && make sbom-check
       sbom: wrote dist/sbom.cdx.json (7 Go component(s))
-      sbom: no node_modules — the frontend tree arrives at task 2.1; this SBOM covers the Go build only
+      sbom: no node_modules â€” the frontend tree arrives at task 2.1; this SBOM covers the Go build only
       sbom-check: dist/sbom.cdx.json lists the current component set
       $ make vendor-verify
       all modules verified
       vendor-verify: OK
       ```
       SBOM is CycloneDX 1.5, generated by `scripts/sbom.sh` from
-      `vendor/modules.txt`, `go.sum` and the vendored LICENSE files — the same
+      `vendor/modules.txt`, `go.sum` and the vendored LICENSE files â€” the same
       inputs `gate-license` reads, so the two cannot disagree about what is in
       the build. `release.yml` calls `make sbom` rather than
-      `anchore/sbom-action`: BUILD §3.4 forbids logic that lives only in CI
+      `anchore/sbom-action`: BUILD Â§3.4 forbids logic that lives only in CI
       YAML, and an SBOM nobody can regenerate locally is an SBOM nobody
       checks. `go.sum`'s `h1:` value is recorded as a property named
-      `go:mod:h1`, not as a CycloneDX hash — it is Go's module dirhash, not a
+      `go:mod:h1`, not as a CycloneDX hash â€” it is Go's module dirhash, not a
       file digest, and labelling it SHA-256 would be false.
       The npm side is absent until task 2.1; `sbom.sh` says so rather than
       implying coverage, and fails if `node_modules` appears without the
       generator being extended.
-- [x] 0.14 Benchmark harness — 2026-09-12 (agent host, not reference hardware)
+- [x] 0.14 Benchmark harness â€” 2026-09-12 (agent host, not reference hardware)
       ```
       $ make bench-smoke
       --- timings
@@ -654,16 +654,16 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         sxq query over 10k items, indexed fields: skipped: needs the sxq parser (phase 3)
         steady-state RSS, sierx process: skipped: needs the sierx process (task 1.1)
         cold start to serving: skipped: needs the sierx process (task 1.1)
-      bench-smoke: OK (no scenario errored; thresholds not asserted here — ADR-016)
+      bench-smoke: OK (no scenario errored; thresholds not asserted here â€” ADR-016)
 
       $ make gate-bench
-      gate-bench: no baseline — §12's thresholds are measured on the Pi 5
+      gate-bench: no baseline â€” Â§12's thresholds are measured on the Pi 5
         reference box, which does not exist until task 2.16 (ADR-016).
         Run 'make bench-baseline' there, commit test/bench/baseline.json, then
         this gate becomes meaningful. This exit is expected until then.
       make: *** [gate-bench] Error 1        <- the required behaviour
       ```
-      Six of the nine §12 rows are measurable now and do run; the other three
+      Six of the nine Â§12 rows are measurable now and do run; the other three
       are skipped by name with the reason. `bench-baseline` and `gate-bench`
       were exercised once on this host to prove the round trip (all six inside
       budget on a 2.1GHz Xeon, which says nothing about the Pi) and the
@@ -671,7 +671,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       at task 2.16, and a dev-box baseline committed here would make the gate
       permanently meaningless.
       Thresholds live only in `test/bench/thresholds.go`, with scenario names
-      copied verbatim from §12 — `ThresholdFor` panics on an unknown name,
+      copied verbatim from Â§12 â€” `ThresholdFor` panics on an unknown name,
       because a zero threshold would silently pass and turn a typo into a
       disabled gate.
 
@@ -689,7 +689,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
   ok      github.com/siercks/sierx/internal/store
   ok      github.com/siercks/sierx/test/property
   licenses.sh: 7 Go module(s) checked
-  gate-license: OK (every dependency on the §15.1 allowlist)
+  gate-license: OK (every dependency on the Â§15.1 allowlist)
   all modules verified / vendor-verify: OK
   gate-nodirect: OK (governed tables written only through internal/store)
   gate-notopology: OK (no topology in committable files)
@@ -707,7 +707,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
     max(seq) = 16989
   rollup --verify: items=10000 rollups=10000 mismatches=0
   === conformance: pgdump PASSED
-  bench-smoke: OK (no scenario errored; thresholds not asserted here — ADR-016)
+  bench-smoke: OK (no scenario errored; thresholds not asserted here â€” ADR-016)
     BenchmarkBoardView500-20                 5     853661 ns/op
     BenchmarkItemDetail-20                   5     453083 ns/op
     BenchmarkDescendantRollupDepth6-20       5     154775 ns/op
@@ -717,14 +717,14 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
   prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
   gate-0: GREEN
   ```
-  Note on the benchmark figures: the DGX Spark is not the §12 reference
+  Note on the benchmark figures: the DGX Spark is not the Â§12 reference
   hardware, so these are a smoke run and not a baseline. `gate-bench` still
   refuses to pass without one, which is correct (ADR-016).
 - Human gates:
-  - [x] ADR-002 signed off — 2026-09-12
-  - [x] ADR-005 signed off — 2026-09-12
-  - [x] ADR-012 signed off — 2026-09-12
-  - [ ] Task 0.11 green — `make backup-conformance && make restore-test`.
+  - [x] ADR-002 signed off â€” 2026-09-12
+  - [x] ADR-005 signed off â€” 2026-09-12
+  - [x] ADR-012 signed off â€” 2026-09-12
+  - [ ] Task 0.11 green â€” `make backup-conformance && make restore-test`.
         **Partially met.** The `pgdump` driver is conformance-green against a
         10k-item database, and `restore-test` rotates through it. The
         `pgbackrest` driver has never been run against an installed
@@ -735,7 +735,7 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         human's call, not the agent's.**
 - Pin drift (ADR-019): none. Go 1.27.1, Node 24, PostgreSQL 18.6, goose
   v3.28.0, sqlc v1.31.1, gopter v0.2.9.
-- Deviations: see the list above — eleven, every one in the harness rather
+- Deviations: see the list above â€” eleven, every one in the harness rather
   than the product. Seven were found only by running on real hardware.
 - Open questions raised: `change_event.at` cannot be backdated by the seed
   (needs an ADR before phase 5); ADR-003's "checked per row" rationale is
@@ -896,31 +896,832 @@ coverage.go is restored from the pinned upstream module and must be committed.
 
 ## Phase 1 - REST API, auth, event log
 
-Entry authorized. Planning is in docs/PHASE-1-PLAN.md; no Phase 1 implementation
-or acceptance is claimed by this closeout.
+All 25 implementation tasks are complete. Planning is in docs/PHASE-1-PLAN.md;
+per-task evidence and composite-gate results follow. Human Spark acceptance
+remains pending.
 
-- [ ] 1.1 Server skeleton and executable boot checks - next task.
-- [ ] 1.2 Error model.
-- [ ] 1.3 Local authentication.
-- [ ] 1.4 Proxy authentication.
-- [ ] 1.5 TOTP.
-- [ ] 1.6 Operator bootstrap.
-- [ ] 1.7 Projection registry.
-- [ ] 1.8 Cursor pagination.
-- [ ] 1.9 Projects.
-- [ ] 1.10 Resolved configuration.
-- [ ] 1.11 Item create/read/update/delete with optimistic concurrency.
-- [ ] 1.12 Transitions.
-- [ ] 1.13 Move and reparent.
-- [ ] 1.14 Links.
-- [ ] 1.15 Comments.
-- [ ] 1.16 Hierarchy reads.
-- [ ] 1.17 Item history.
-- [ ] 1.18 Saved views.
-- [ ] 1.19 Preferences.
-- [ ] 1.20 Delta sync.
-- [ ] 1.21 sxq subset.
-- [ ] 1.22 Caching and compression.
-- [ ] 1.23 Concurrent cursor/race tests.
-- [ ] 1.24 Endpoint golden files.
-- [ ] 1.25 Metrics.
+- [x] 1.1 Server skeleton and executable boot checks.
+- [x] 1.2 Error model.
+- [x] 1.3 Local authentication.
+- [x] 1.4 Proxy authentication.
+- [x] 1.5 TOTP.
+- [x] 1.6 Operator bootstrap.
+- [x] 1.7 Projection registry.
+- [x] 1.8 Cursor pagination.
+- [x] 1.9 Projects.
+- [x] 1.10 Resolved configuration.
+- [x] 1.11 Item create/read/update/delete with optimistic concurrency.
+- [x] 1.12 Transitions.
+- [x] 1.13 Move and reparent.
+- [x] 1.14 Links.
+- [x] 1.15 Comments.
+- [x] 1.16 Hierarchy reads.
+- [x] 1.17 Item history.
+- [x] 1.18 Saved views.
+- [x] 1.19 Preferences.
+- [x] 1.20 Delta sync.
+- [x] 1.21 sxq subset.
+- [x] 1.22 Caching and compression.
+- [x] 1.23 Concurrent cursor/race tests.
+- [x] 1.24 Endpoint golden files.
+- [x] 1.25 Metrics.
+
+### Task 1.1 acceptance - 2026-09-18
+
+Owner authorized all Phase 1 implementation locally, on `build/phase-1-api`,
+with a draft PR and hands-on Spark testing before merge. The `build/` prefix
+supersedes BUILD's suggested branch name. Owner also authorized conventional,
+documented and tested defaults for unspecified API behavior.
+
+Added the server entry point, validated environment, pgx pool, chi routing,
+JSON request logs, bounded health checks and graceful shutdown. Request logs
+omit query strings and connection errors. Proxy CIDRs are required only in
+proxy mode. `SIERX_LISTEN_ADDR` is optional and defaults to `:8080`; session
+keys require at least 32 bytes. Health returns `alive` and `database`, with
+200 for reachable and 503 for unavailable. A database outage does not block
+startup. These operational defaults resolve details left open by task 1.1.
+
+Required supporting files beyond the task list: boot tests, Makefile test-api
+target with TEST_ARGS, README usage, environment reference, and vendored chi
+v5.3.2 (MIT). No later endpoint handlers were added.
+
+Actual acceptance ran with Go 1.27.1 in a disposable local Linux container,
+network disabled and a fresh PostgreSQL 18 cluster. Selected output:
+
+```text
+$ make test-api TEST_ARGS='-run TestServerBoot'
+--- PASS: TestServerBoot (1.02s)
+    --- PASS: TestServerBoot/configuration (0.00s)
+    --- PASS: TestServerBoot/reachable (0.00s)
+    --- PASS: TestServerBoot/unavailable (1.01s)
+    --- PASS: TestServerBoot/startup_shutdown (0.00s)
+PASS
+ok      github.com/siercks/sierx/internal/api 1.027s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+ok       github.com/go-chi/chi/v5                                MIT
+licenses.sh: 8 Go module(s) checked
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+This is task acceptance, not the complete Phase 1 gate or human walkthrough.
+
+### Task 1.2 acceptance - 2026-09-18
+
+Added RFC 9457 constructors with locally authored error text, a `current`
+extension for conflict responses, no-store headers, and JSON router/panic
+errors. Supporting router/middleware edits and fixed problem JSON fixtures
+are required to exercise the error model. Golden tests inspect problem.go
+literals to reject dependency-produced error copy.
+
+Actual output from the same isolated offline PostgreSQL test setup:
+
+```text
+$ make test-api
+--- PASS: TestProblemGolden (0.00s)
+--- PASS: TestRouterProblems (0.00s)
+--- PASS: TestServerBoot (1.01s)
+PASS
+ok      github.com/siercks/sierx/internal/api 1.019s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.3 acceptance - 2026-09-18
+
+Added local login/logout/current-user endpoints, Argon2id hashing, secure
+12-hour sessions stored only as SHA-256 hashes, inactive-account enforcement,
+origin checks and bounded login work/attempts. ADR-022 records defaults approved
+under the owner's authorization. Server registration, tests and dependency
+vendoring are required supporting wiring outside the task's auth directory.
+golang.org/x/crypto v0.57.0 and x/sys v0.48.0 are BSD-3-Clause; their module
+requirements advance x/sync to v0.23.0 and x/text to v0.42.0. The license gate
+checked all ten modules. No schema change was needed.
+
+Real isolated-container acceptance:
+
+```text
+$ make test-api
+--- PASS: TestAuthLocal (0.75s)
+--- PASS: TestAuthOriginAndLimits (0.13s)
+--- PASS: TestPasswordHash (0.35s)
+--- PASS: TestProblemGolden (0.00s)
+--- PASS: TestRouterProblems (0.00s)
+--- PASS: TestServerBoot (1.01s)
+PASS
+ok      github.com/siercks/sierx/internal/api 2.241s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+licenses.sh: 10 Go module(s) checked
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.4 acceptance - 2026-09-18
+
+Proxy identity is accepted only from explicitly trusted immediate peers and for
+active pre-provisioned users with NULL local passwords. ADR-022 documents the
+header and account rules. Required supporting edits register the mode in auth
+middleware and exercise spoofed headers, unknown users and local-mode isolation.
+
+```text
+$ make test-api
+--- PASS: TestAuthLocal (0.71s)
+--- PASS: TestAuthOriginAndLimits (0.12s)
+--- PASS: TestPasswordHash (0.33s)
+--- PASS: TestProblemGolden (0.00s)
+--- PASS: TestRouterProblems (0.00s)
+--- PASS: TestAuthProxy (0.12s)
+--- PASS: TestServerBoot (1.01s)
+PASS
+ok      github.com/siercks/sierx/internal/api 2.294s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.5 acceptance - 2026-09-18
+
+Added password-confirmed TOTP enrollment, verification and disable endpoints,
+encrypted account-bound secret storage, single-use hashed recovery codes and
+transactional step replay prevention. Enabling/disabling revokes all sessions.
+ADR-022 records the API, cryptography and recovery defaults. No extra dependency
+or schema column was required. Router, login integration and tests are required
+supporting files. RFC 6238 Appendix B supplies the independent code vectors.
+
+Actual local isolated-container output:
+
+```text
+$ make test-api
+--- PASS: TestTOTP (1.14s)
+PASS
+ok      github.com/siercks/sierx/internal/api 3.621s
+=== RUN   TestTOTPVectors
+--- PASS: TestTOTPVectors (0.00s)
+=== RUN   TestTOTPEncryption
+--- PASS: TestTOTPEncryption (0.00s)
+PASS
+ok      github.com/siercks/sierx/internal/api/auth 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+The earlier auth, proxy, boot and problem tests also passed in this run.
+
+### Task 1.6 acceptance - 2026-09-18
+
+Added environment-driven operator bootstrap. The whole workspace/admin/project
+creation commits atomically under an advisory lock. The existing workspace
+trigger creates seq_counter; the seed configuration is reused without creating
+benchmark items. Re-running with the same identity inputs reports existing IDs
+and changes nothing. Different workspace inputs are refused. Required supporting
+files are the reusable bootstrap implementation, shared config installer, CLI
+registration, environment/README documentation and an executable integration test.
+
+TestBootstrap builds and invokes the real CLI twice against its own newly
+created and migrated database, compares stored rows, checks five config statuses,
+then signs in over HTTP. It also rejects a second workspace. Test fixture cleanup
+now removes the workspace counter before the workspace.
+
+```text
+$ make test-api
+=== RUN   TestBootstrap
+--- PASS: TestBootstrap (0.90s)
+PASS
+ok      github.com/siercks/sierx/internal/api 4.424s
+ok      github.com/siercks/sierx/internal/api/auth 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+All previously added API/auth tests also passed. Phase 1 remains in progress.
+
+### Task 1.7 acceptance - 2026-09-18
+
+Added the field/SQL/type registry, nested and custom-field selection, nearest
+name suggestions, generated client types, gate-gen and its deliberate drift
+proof. Required, optional and rejected field policies are tested without adding
+future handlers. Item detail permits optional fields; fixed-shape project/link
+collections reject fields alongside ADR-007's named fixed-shape endpoints.
+Only the explicitly required generated TypeScript contract starts the web tree.
+
+```text
+$ make gen-fields gate-gen prove-gen
+gate-gen: OK
+gate-gen: OK
+gate-gen: generated fields differ; run make gen-fields
+exit status 1
+prove-gen: drift rejected
+$ make test-api
+--- PASS: TestProjectionGolden (0.00s)
+--- PASS: TestProjectionPolicies (0.00s)
+PASS
+ok      github.com/siercks/sierx/internal/api/projection 0.004s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+The full API suite passed in the same isolated PostgreSQL container run.
+
+### Task 1.8 acceptance - 2026-09-18
+
+Added signed opaque cursors with stable tiebreak and upper boundary, request
+scope binding, limits and offset rejection. ADR-023 documents traversal and
+collection response defaults, including the limits of mutable sorting.
+The database test inserts additional rows between page requests and observes
+each original bounded row once. Cursor tests reject tampering and scope reuse.
+
+```text
+$ make test-api
+=== RUN   TestCursor
+--- PASS: TestCursor (0.00s)
+=== RUN   TestCursorConcurrentInsert
+--- PASS: TestCursorConcurrentInsert (0.01s)
+PASS
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+All other API tests passed in that isolated-container run.
+
+### Task 1.9 acceptance - 2026-09-18
+
+Added administrator-only project creation with atomic config version 1,
+workspace-scoped detail and bounded list reads, archive filtering and the
+reserved-prefix authority. Fixed golden responses cover all three verbs.
+Tests cover member rejection, every reserved prefix, malformed prefixes,
+initial key counter and resolved seed status membership.
+
+Required supporting changes: route registration, response helpers, golden
+fixtures and per-test database creation. This also corrects the bootstrap test:
+pgx ConnString retains its original input even after changing Config.Database,
+so the former test used the container's disposable main database rather than
+the newly named database. Both CLI runs still happened inside the disposable
+container; this run now proves them against the intended separate empty database.
+
+```text
+$ make test-api
+--- PASS: TestBootstrap (1.09s)
+--- PASS: TestProjects (0.46s)
+PASS
+ok      github.com/siercks/sierx/internal/api 5.897s
+ok      github.com/siercks/sierx/internal/api/auth 0.003s
+ok      github.com/siercks/sierx/internal/api/projection 0.003s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.10 acceptance - 2026-09-18
+
+Added one-query resolved configuration with ordered statuses/types, initial
+status keys, enumerated transition arcs and required fields, field definitions
+and a content ETag. Fixed golden JSON covers the seeded wildcard expansion.
+Supporting route/test files verify weak conditional ETags, empty 304 bodies
+and rejection of fields on this fixed representation.
+
+```text
+$ make test-api
+=== RUN   TestResolvedConfig
+--- PASS: TestResolvedConfig (0.47s)
+PASS
+ok      github.com/siercks/sierx/internal/api 6.788s
+ok      github.com/siercks/sierx/internal/api/auth 0.004s
+ok      github.com/siercks/sierx/internal/api/projection 0.004s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (every dependency on the Â§15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.11 acceptance - 2026-09-18
+
+Added projected item reads, validated creation/edits, soft deletion and quoted
+version preconditions. Store checks versions under the workspace sequence lock;
+failed creates roll back keys and sequences. Conflicts include current and
+submitted values. Local creates now record origin_seq; JSON preserves int64
+sequence precision. Leaf rollup point totals correctly retain SQL NULL.
+
+```text
+$ make test-api
+--- PASS: TestItemsCRUD (0.46s)
+--- PASS: TestFailedCreateRollsBack (0.39s)
+--- PASS: TestConcurrentItemEdit (0.45s)
+--- PASS: TestItemSequencePrecision (0.40s)
+ok github.com/siercks/sierx/internal/api 7.601s
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.437s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (10 modules allowed)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.12 acceptance - 2026-09-18
+
+Implemented current-config transitions with atomic editable-field patches,
+required-field errors, version checks and status_changed events. Golden errors
+name to_status and missing assignee. Tests cover every seeded wildcard source,
+terminal dropped, and config-version advancement only on transition.
+
+```text
+$ make test-api
+PASS (including TestTransitions and TestWildcardTransitions)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.403s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (10 modules allowed)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.13 acceptance - 2026-09-18
+
+Added hierarchy move with explained project/cycle/depth errors, single-statement
+subtree rewrite, and rank placement computed under the workspace write lock.
+The store repeats hierarchy validation after serialization. Omitted rank_after
+preserves rank; explicit null prepends in the project ordering. Randomized HTTP
+create/move/delete/transition sequences verify paths and materialized rollups.
+
+```text
+$ make test-api
+--- PASS: TestMove (0.40s)
++ API mutations preserve paths and materialized rollups: OK, passed 8 tests.
+--- PASS: TestAPIHierarchyProperty (3.25s)
+ok github.com/siercks/sierx/internal/api 11.563s
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.381s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.14 acceptance - 2026-09-18
+
+Added inbound/outbound paginated link reads, all five link kinds, cross-project
+creation and deletion with source-item version preconditions. Store now preserves
+supplied link IDs and advances the source item version/change sequence. Nested
+endpoint summaries leave room for later reduced cross-workspace projections;
+Phase 1 resolves targets within the authenticated workspace.
+
+```text
+$ make test-api
+--- PASS: TestLinks (0.38s)
+ok github.com/siercks/sierx/internal/api 12.423s
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.390s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.15 acceptance - 2026-09-18
+
+Added raw Markdown comments, bounded listing, author edits and soft deletion.
+Supporting PATCH/DELETE routes make edited_at and deleted_at actionable. Every
+change uses store.Mutate with an owning-item version check and history event.
+Deleted comment responses retain attribution/timestamps and hide the body.
+
+```text
+$ make test-api
+--- PASS: TestComments (0.49s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.438s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.16 acceptance - 2026-09-18
+
+Added projected, keyset-paginated children/descendant reads with bounded depth,
+and direct materialized rollup reads. Goldens cover each shape and leaf zeros /
+nullable totals; six-level traversal verifies depth filtering and pagination.
+The test inspects the rollup SQL to reject recursion or aggregation on read.
+
+```text
+$ make test-api
+--- PASS: TestHierarchyReads (0.46s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.436s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.17 acceptance - 2026-09-18
+
+Added newest-first event history with signed sequence cursors, actor attribution,
+and field before/after values. Golden history distinguishes moves, transitions
+and ordinary edits. Backdated events preserve timestamps; events arriving after
+the first page do not enter that bounded traversal.
+
+```text
+$ make test-api
+--- PASS: TestItemHistory (0.38s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.425s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+Task ordering note: 1.18 explicitly requires the parser from 1.21. Implementing
+1.21 next as that prerequisite, then returning to 1.18-1.20; no parser bypass or
+placeholder view validation is introduced.
+
+### Task 1.21 acceptance - 2026-09-18 (prerequisite for 1.18)
+
+Added bounded lexer/parser, case-insensitive keywords and JQL aliases, typed
+parameterized compilation, project-aware custom fields, date arithmetic,
+full-text matching and field completion. All SPEC examples are golden cases;
+future hierarchy/sprint functions explain their phase. Item lists now execute
+sxq and page by the requested sort plus ID, with nulls last and now() frozen
+in the authenticated cursor. Integration tests exposed an untyped unused
+first-page parameter; explicitly typing it fixed all default and sorted reads.
+
+```text
+$ make test-sxq
+ok github.com/siercks/sierx/internal/sxq 0.033s
+$ make fuzz-sxq
+fuzz: execs: 25599, new interesting: 83 (total: 89)
+PASS
+ok github.com/siercks/sierx/internal/sxq 6.022s
+$ make test-api
+PASS (including TestSXQItems and all existing API tests)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.443s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.18 acceptance - 2026-09-18
+
+Added saved-view creation with full SXQ parse/type validation and the parser's
+own suggestions. Listing enforces workspace and private/shared ownership before
+pagination. Goldens cover create/list/invalid queries; a second member cannot
+see a private view but can see a shared one.
+
+```text
+$ make test-api
+PASS (including TestViews)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.383s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.19 acceptance - 2026-09-18
+
+Added the ADR-015 preference patch, restricted to theme, reduced_motion and
+display_name, without an item version requirement. Goldens cover valid updates,
+illegal themes and forbidden email changes. Corrected golden normalization to
+replace whole JSON string values, avoiding nondeterministic UUID/email overlap.
+
+```text
+$ make test-api
+--- PASS: TestMePreferences (0.43s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.500s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.20 acceptance - 2026-09-18
+
+Added workspace-scoped, ascending sequence delta reads with next_seq and no
+ETag. Compact event summaries exclude unbounded before/after content, which
+remains available in history. Tests traverse every sequence and verify a
+50-change response is below 20 KB even after fifty large-body item edits.
+
+```text
+$ make test-api
+--- PASS: TestChanges (0.76s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.565s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.22 acceptance - 2026-09-18
+
+Added Brotli v1.2.4 (MIT, vendored) and gzip with quality-aware negotiation,
+Vary and body-free 304 responses. Item/config read tags hash the representation;
+parent rollup changes invalidate caches without fabricating edit-version bumps.
+Tests cover decoded equivalence, q=0, projection variants and delta ETag absence.
+There are no static assets in Phase 1; their routes arrive with the Phase 2 web
+bundle and must use its content fingerprint. No placeholder asset route added.
+
+```text
+$ make test-api
+--- PASS: TestCachingCompression (0.44s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.460s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+gate-license: OK (11 modules allowed)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.23 acceptance - 2026-09-18
+
+Added six HTTP writers plus a live HTTP delta poller, interleaved with a
+200-item store transition transaction. Native gcc/libc headers now support the
+required race detector in the prepared offline image. Disposable CI copies no
+longer create synthetic Git commits or override identity; source SBOM revision
+is explicitly unknown when the copy has no Git history.
+
+```text
+$ make ci-local-prepare
+all modules verified
+ci-local: preparation complete; make ci-local now runs without network access
+$ make test-concurrency  # invokes go test -race
+observed all 544 committed events exactly once across 313 polls, including a 200-item transition
+--- PASS: TestCommitOrderedCursor (1.56s)
+ok github.com/siercks/sierx/test/concurrency 2.587s
+$ bash test/shell/ci-local_test.sh
+ci-local proof: PASS (mock boundary, not container acceptance)
+$ go vet ./test/concurrency/...
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.24 acceptance - 2026-09-18
+
+All 34 current routes have mapped response fixtures, including authentication,
+TOTP, successful moves/transitions and the empty logout response envelope.
+The route inventory also checks authentication boundaries; separate tests check
+cross-workspace isolation and comment authorship. Regeneration is toolchain-
+pinned and checked for drift. Added a real-binary curl walkthrough, operator
+notes and the gate-1/CI wiring. Existing fixture semantics remained unchanged
+when regenerated; only formatting and the newly covered responses were added.
+
+```text
+$ make golden-update
+PASS (all API and SXQ packages)
+$ make test-golden
+--- PASS: TestWorkspaceIsolation (0.68s)
+--- PASS: TestGoldenRouteCoverage (0.00s)
+golden: all endpoint and query fixtures reproduce without drift
+$ make smoke-api
+smoke-api: real CLI bootstrap and curl workflow PASS
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.360s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+The full composite offline gate is pending the final metrics task. The owner's
+Spark walkthrough remains a separate, pending human acceptance item.
+
+### Task 1.25 acceptance - 2026-09-18
+
+Added authenticated administrator-only Prometheus text metrics on the SPEC path
+`/api/v1/metrics`. The format test parses every emitted HELP/TYPE/sample family,
+checks numeric validity, verifies request and duration counters advance, verifies
+in-flight accounting, and rejects ordinary members. Route inventory now covers
+35 routes. Metrics carry no identity labels and require no monitoring service.
+
+```text
+$ make golden-update
+--- PASS: TestMetrics (0.34s)
+--- PASS: TestGoldenRouteCoverage (0.00s)
+PASS (API, authentication, projection and SXQ packages)
+```
+
+The full offline gate is running; the Spark human walkthrough remains pending.
+
+### Full-gate integration correction - 2026-09-18
+
+The first composite run found the Phase 0 property generator retained deleted
+items in its live-item list. Phase 1 correctly rejects a deleted move parent.
+Removed deleted targets from that list and added a deterministic store-level
+regression proving rejection preserves items, events and gap-free sequences.
+The existing property assertions remain intact. The repeated full-gate run
+passed all property tests (20.717s), including TestDeletedParentMoveRollsBack.
+
+### Phase 1 automated closeout - 2026-09-18
+
+All tasks 1.1-1.25 are implemented. No Phase 1 scope cuts were taken.
+The full `make ci-local` run completed with exit status 0 in the prepared
+rootless Podman container, with network disabled and disposable PostgreSQL.
+
+```text
+$ make ci-local
+schema-diff / sqlc-diff: checked-in definitions match generated output
+SQL invariants: 24 checks passed; partition tests passed
+go vet ./... and complete Go test suite: PASS
+license / SBOM / vendor / write-boundary / topology gates: PASS
+seed-determinism: OK
+backup-conformance: OK for: pgdump
+bench-smoke: OK (thresholds not asserted on this host)
+Linux amd64 and arm64 builds: PASS
+gate proofs: PASS
+gate-0: GREEN
+golden: all endpoint and query fixtures reproduce without drift
+fuzz: 30848 executions; PASS
+TestCommitOrderedCursor: 544 events exactly once across 302 polls
+Race-enabled concurrency package: PASS (2.607s)
+gate-gen: OK
+smoke-api: real CLI bootstrap and curl workflow PASS
+gate-1: GREEN (automated; human walkthrough remains required)
+```
+
+The tested source includes the deleted-parent regression fix. Subsequent changes
+only preserve the owner's AGENTS.md and record these results. All branch commits
+retain the existing human author/committer identity with no agent attribution.
+The owner's manual Spark walkthrough must still be recorded before final Phase 1
+acceptance and merge. Existing ADR-021 physical-backup deployment remains Phase
+2.16; smoke benchmarks are not a Spark performance baseline.
+
+### Owner-operated Spark walkthrough - 2026-09-18
+
+The owner ran the manual curl walkthrough on Spark against a separate trial
+database on PostgreSQL 18.6 and supplied the responses in the implementation
+conversation. This records observed results, not an automated rerun. The exact
+Spark checkout SHA and a native Spark gate-1 result remain to be confirmed.
+The completed local offline gate is recorded above. No Phase 1 scope cuts.
+
+Observed manual checks:
+
+- Bootstrap created the workspace, administrator and project; health returned
+  HTTP 200 with `{"alive":true,"database":"reachable"}`.
+- Authenticated administrator read and story creation passed: TRY-1, version 1.
+- Transition without assignee returned HTTP 422 with
+  `Required fields are missing: assignee.` Supplying the administrator assignee
+  succeeded with HTTP 200, status doing, version 2.
+- Created epic TRY-2; moved TRY-1 beneath it with HTTP 200, version 3.
+  Children returned `{"data":[{"key":"TRY-1","title":"My first Spark test"}],"next_cursor":null}`.
+  Rollup returned descendant_count 1 and done_count 0.
+- Created and read back a relates link from TRY-1 to TRY-2 (HTTP 201/200).
+  Created and read back `First comment from the Spark walkthrough.` with the
+  administrator as author (HTTP 201/200); story version advanced to 5.
+- PATCH at version 5 succeeded with title `Spark walkthrough verified`,
+  version 6. Repeating with version 5 returned HTTP 409 containing both current
+  version 6 and submitted edits. History showed successful operations; changes
+  returned sequences 1 through 8 with next_seq 8 and no rejected-edit event.
+- Move to OTH-1 returned HTTP 422:
+  `Cannot move an item from project TRY under a parent in project OTH. Choose a parent in TRY.`
+  Readback: `{"key":"TRY-1","parent":{"key":"TRY-2"},"version":6}`.
+- Created TRY-3, deleted it (HTTP 200, `{"deleted":true,"key":"TRY-3"}`),
+  and read back a deletion timestamp and version 2. Next creation was TRY-4;
+  the deleted key was not reused.
+- TOTP confirmation initially returned 401, then succeeded using the owner's
+  authenticator. Summary: enabled true, sign_in_required true, eight recovery
+  codes. Fresh authenticator login and authenticated account read returned 200.
+  The old-session rejection was reported as passing by the owner, but its raw
+  response was not included. No claim is made about the cause of the first 401
+  or Apple Passwords compatibility.
+- First use of one recovery code returned HTTP 200, `{"authenticated":true}`;
+  reuse returned HTTP 401, `Sign in to continue.` Secrets and codes are omitted.
+- After stopping and restarting the application, health returned 200 and the
+  existing session read returned
+  `{"key":"TRY-1","parent":{"key":"TRY-2"},"title":"Spark walkthrough verified","version":6}`.
+  A fresh password-plus-authenticator login returned HTTP 200,
+  `{"authenticated":true}`.
+
+Manual workflow and the additional checks above passed. Final closeout awaits
+checkout identification and confirmation of the Spark automated-gate status;
+this entry does not claim a Spark performance baseline or physical-backup test.
+
+### Spark automated gate confirmed - 2026-09-18
+
+The owner supplied the final Spark gate output after the manual walkthrough.
+Both automated and manual Phase 1 acceptance checks have now passed. The supplied
+log does not include git log/status output, so the exact tested Spark SHA remains
+an outstanding provenance detail rather than an unreported test failure.
+
+```text
+prove-gates: 6 proven, 3 exempt, 0 without a proof, 0 proof failures
+gate-0: GREEN
+API suite: PASS (14.126s); golden regeneration suite: PASS (14.564s)
+golden: all endpoint and query fixtures reproduce without drift
+SXQ fuzz: 30936 executions; PASS (6.028s)
+TestCommitOrderedCursor: 544 committed events exactly once across 259 polls
+Race-enabled concurrency package: PASS (3.926s)
+gate-gen: OK
+smoke-api: real CLI bootstrap and curl workflow PASS
+gate-1: GREEN (automated; human walkthrough remains required)
+```
+
+The final parenthetical is the gate's fixed reminder; the owner-operated manual
+walkthrough is recorded above and has passed. No further test rerun is requested
+for this documentation-only update. No Phase 1 scope cuts were taken. Release
+review and merge remain user-controlled; no merge is claimed here.
+
+### Phase 1 acceptance complete - 2026-09-18
+
+The owner confirmed the tested Spark checkout after completing both gates:
+
+```text
+ca9a238 (HEAD -> build/phase-1-spark, origin/build/phase-1-api) Record successful offline Phase 1 acceptance gate
+## build/phase-1-spark...origin/build/phase-1-api
+```
+
+The checkout was clean. This resolves the pending checkout-identification and
+gate-confirmation notes above: all 25 Phase 1 tasks, the automated Spark gate,
+and the owner-operated manual walkthrough have passed acceptance at ca9a238.
+Subsequent commits only record acceptance evidence in this file. No Phase 1
+scope cuts were taken. Phase 1 is ready for final PR review and the owner's
+merge; no merge has been performed as part of this acceptance record.
+
+### Hosted CI PostgreSQL client correction - 2026-09-18
+
+Both failed hosted runs supplied by the owner selected pg_dump 16.15 against
+PostgreSQL 18.6. Although client 18 was installed and psql reported 18.6, the
+runner's command lookup still selected an older dump client. The failed dump
+then appeared as deletion of the entire schema in the drift comparison.
+
+The workflow now prepends /usr/lib/postgresql/18/bin through GITHUB_PATH so all
+subsequent PostgreSQL commands use the installed version 18 suite. Schema diff
+checks dump success before comparing; snapshot generation preserves the saved
+file on failed or partial dumps. Regression coverage checks those failures,
+successful normalization, and genuine drift detection. The existing schema-only
+exception in the backup-boundary gate is extended only to its exact test file.
+
+This corrects hosted CI tooling and diagnostics, not application behavior or
+migrations. The Spark manual results remain valid. Hosted CI must rerun on the
+published fix before merge; earlier failed hosted checks are not waived.
+
+Validation of the correction:
+
+```text
+bash test/shell/schema_test.sh: PASS
+make ci-local: exit 0
+gate-0: GREEN (including backup-boundary proof cases)
+golden: all endpoint and query fixtures reproduce without drift
+SXQ fuzz: 20485 executions; PASS
+Race-enabled concurrency package: PASS (2.965s)
+gate-gen: OK
+smoke-api: real CLI bootstrap and curl workflow PASS
+gate-1: GREEN (automated; human walkthrough remains required)
+```
+
+### Pre-merge GitHub check hardening - 2026-09-18
+
+Added separate read-only workflow-lint and go-vulnerabilities jobs for pull
+requests, main/build pushes, manual dispatch and weekly scans after merge.
+Tools are pinned to actionlint v1.7.12 and govulncheck v1.8.0; ShellCheck checks
+embedded workflow shell commands. Local make targets reproduce the checks.
+Online advisory lookups remain outside the offline gate. All workflow Actions,
+including release Actions, are pinned to verified upstream commit SHAs and
+checkout does not persist its credential. Existing Dependabot updates the pins.
+
+The offline gate now checks all three PostgreSQL client versions before
+migrations and the server major when DATABASE_URL is exported. Regression
+tests reject each old client and incompatible or malformed server versions.
+
+```text
+make check-workflows: PASS (actionlint and ShellCheck)
+make check-vulnerabilities: PASS; zero reachable/imported-package vulnerabilities
+module-only advisory: GO-2026-5932, unused x/crypto/openpgp; no suppression
+postgres-tools proof: PASS
+make ci-local: exit 0; gate-0 and gate-1 GREEN
+SXQ fuzz: 59765 executions; PASS
+smoke-api: real CLI bootstrap and curl workflow PASS
+```
+
+Repository settings are still pending authenticated owner action. Public API
+inspection returned no rulesets; legacy protection and secret settings were
+not readable without authentication. Browser automation failed to initialize.
+docs/GITHUB-CHECKS.md supplies the exact main-branch rules and secret-protection
+settings to apply after the new jobs appear. Required checks are gate,
+workflow-lint and go-vulnerabilities. Hosted runs and settings confirmation are
+required before merge; this entry does not claim those settings are enabled.

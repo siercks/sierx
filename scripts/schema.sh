@@ -61,7 +61,10 @@ create_db_sql() {
 
 case ${1:-} in
   snapshot)
-    dump "$DATABASE_URL" > "$SNAPSHOT"
+    dumpfile=$(mktemp)
+    trap 'rm -f "$dumpfile"' EXIT
+    dump "$DATABASE_URL" > "$dumpfile" || die "pg_dump failed; check the PostgreSQL client version and connection. Snapshot unchanged."
+    cat "$dumpfile" > "$SNAPSHOT"
     echo "schema-snapshot: wrote $SNAPSHOT ($(grep -c '^CREATE TABLE' "$SNAPSHOT") CREATE TABLE statements)"
     ;;
   diff)
@@ -69,9 +72,11 @@ case ${1:-} in
     scratch=$(url_for_db "$SCRATCH_DB")
     psql "$(admin_url)" -X -q -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $SCRATCH_DB" \
                                                   -c "$(create_db_sql "$SCRATCH_DB")"
-    trap 'psql "$(admin_url)" -X -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true' EXIT
+    dumpfile=$(mktemp)
+    trap 'rm -f "$dumpfile"; psql "$(admin_url)" -X -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true' EXIT
     DATABASE_URL=$scratch bash scripts/migrate.sh up >/dev/null 2>&1 || die "from-scratch migration failed"
-    if diff -u "$SNAPSHOT" <(dump "$scratch"); then
+    dump "$scratch" > "$dumpfile" || die "pg_dump failed; check the PostgreSQL client version and connection. Schema comparison not run."
+    if diff -u "$SNAPSHOT" "$dumpfile"; then
       echo "schema-diff: from-scratch migration matches $SNAPSHOT"
     else
       die "from-scratch migration differs from $SNAPSHOT (above). Either a migration was edited after the snapshot or the snapshot is stale."

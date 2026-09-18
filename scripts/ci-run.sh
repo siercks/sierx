@@ -9,7 +9,6 @@ sha256sum --check --quiet /opt/prepared-inputs.sha256 || {
 }
 git init -q
 git add -A
-git -c user.name=ci -c user.email=ci@example.test commit -qm snapshot
 mkdir -p bin
 cp /opt/sierx-tools/* bin/
 export GOPROXY=off GOSUMDB=off
@@ -31,4 +30,4 @@ export SIERX_SESSION_KEY=ci-only-not-a-secret-000000000000000000000000
 export SIERX_TRUSTED_PROXIES= SIERX_BACKUP_DRIVERS=pgdump
 export PGBACKREST_REPO_TYPE=posix PGBACKREST_REPO_PATH=.backups/physical
 export SIERX_DUMP_PATH=.backups/logical
-make gate-0
+make gate-1

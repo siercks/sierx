@@ -4,6 +4,18 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
+.PHONY: test-api
+test-api: ## API tests; filter with TEST_ARGS='-run TestServerBoot'
+	@bash scripts/test-go.sh ./internal/api/... ./internal/config/... $(TEST_ARGS) -count=1
+
+.PHONY: gen-fields gate-gen prove-gen
+gen-fields: ## Generate client fields from the API registry
+	@go run ./internal/api/projection/cmd/genfields
+gate-gen: ## Assert generated API fields have not drifted
+	@bash scripts/gate-gen.sh
+prove-gen: ## Prove generated field drift is rejected
+	@bash scripts/gate-gen.sh --prove
+
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \
@@ -113,6 +125,31 @@ gate-nodirect: ## Governed tables written only through internal/store (task 0.8)
 prove-nodirect: ## Plant direct writes in a scratch copy and assert the gate goes red
 	@bash scripts/gate-nodirect.sh --prove
 
+.PHONY: test-sxq fuzz-sxq
+.PHONY: test-concurrency
+.PHONY: golden-update test-golden smoke-api gate-1
+golden-update: ## Regenerate endpoint/query fixtures using the pinned Go toolchain
+	@bash scripts/golden.sh update
+
+test-golden: ## Regenerate fixtures and fail on any drift or uncovered route
+	@bash scripts/golden.sh check
+
+smoke-api: ## Bootstrap a disposable workspace and exercise the real server with curl
+	@bash scripts/smoke-api.sh
+
+gate-1: gate-0 ## Complete Phase 1 automated gate; Spark walkthrough remains human acceptance
+	@$(MAKE) --no-print-directory test-api test-golden test-sxq fuzz-sxq test-concurrency gate-gen smoke-api
+	@echo "gate-1: GREEN (automated; human walkthrough remains required)"
+
+test-concurrency: ## Concurrent API writers plus delta poller, including a 200-item transaction
+	@bash scripts/test-go.sh ./test/concurrency/... -race -count=1 -timeout=5m
+
+test-sxq: ## Query grammar and normalized SQL golden corpus
+	@go test ./internal/sxq -count=1
+
+fuzz-sxq: ## Bounded fuzz run for parser safety and literal parameter binding
+	@go test ./internal/sxq -run '^$$' -fuzz '^FuzzCompile$$' -fuzztime=5s -parallel=2
+
 test-store: ## store.Mutate unit-of-work tests against the dev database (task 0.8)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@bash scripts/test-go.sh ./internal/store/... -count=1
@@ -167,6 +204,9 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: ## The phase-0 gate: every check that must pass before phase 1
+	@bash test/shell/postgres-tools_test.sh
+	@bash scripts/check-postgres-tools.sh
+	@bash test/shell/schema_test.sh
 	@bash test/shell/test-go_test.sh
 	@bash test/shell/ci-local_test.sh
 	@python3 -m unittest discover -s test/python -p "test_*.py"
@@ -200,7 +240,7 @@ gate-0: ## The phase-0 gate: every check that must pass before phase 1
 prove-gates: ## Every gate-* target in the Makefile has a proof, and it passes (task 0.12)
 	@bash scripts/prove-gates.sh
 
-ci-local: ## Run gate-0 the way CI does, in a container, offline
+ci-local: ## Run gate-1 the way CI does, in a container, offline
 	@bash scripts/ci-local.sh run
 
 sbom: ## Generate the release SBOM (CycloneDX 1.5) from vendor/ and go.sum (task 0.13)
@@ -210,5 +250,12 @@ sbom-check: ## Validate the generated SBOM format and all stable inventory/build
 	@bash scripts/sbom.sh --check "$(or $(SBOM_OUT),dist/sbom.cdx.json)"
 
 .PHONY: ci-local-prepare sbom sbom-check check
+.PHONY: check-workflows check-vulnerabilities
+check-workflows: ## Validate GitHub Actions workflows (online pinned tool installation)
+	@bash scripts/security-check.sh workflows
+
+check-vulnerabilities: ## Scan reachable Go vulnerabilities using the current online database
+	@bash scripts/security-check.sh vulnerabilities
+
 ci-local-prepare: ## Prepare the local CI container and caches while online
 	@bash scripts/ci-local.sh prepare

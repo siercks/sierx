@@ -204,12 +204,13 @@ func (q *Queries) InsertItemType(ctx context.Context, arg InsertItemTypeParams) 
 }
 
 const insertLink = `-- name: InsertLink :one
-INSERT INTO item_link (from_item_id, to_item_id, kind, created_by)
-VALUES ($1, $2, $3, $4)
+INSERT INTO item_link (id, from_item_id, to_item_id, kind, created_by)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, from_item_id, to_item_id, kind, created_at, created_by
 `
 
 type InsertLinkParams struct {
+	ID         pgtype.UUID
 	FromItemID pgtype.UUID
 	ToItemID   pgtype.UUID
 	Kind       string
@@ -218,6 +219,7 @@ type InsertLinkParams struct {
 
 func (q *Queries) InsertLink(ctx context.Context, arg InsertLinkParams) (ItemLink, error) {
 	row := q.db.QueryRow(ctx, insertLink,
+		arg.ID,
 		arg.FromItemID,
 		arg.ToItemID,
 		arg.Kind,
