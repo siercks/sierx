@@ -914,7 +914,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.13 Move and reparent.
 - [x] 1.14 Links.
 - [x] 1.15 Comments.
-- [ ] 1.16 Hierarchy reads.
+- [x] 1.16 Hierarchy reads.
 - [ ] 1.17 Item history.
 - [ ] 1.18 Saved views.
 - [ ] 1.19 Preferences.
@@ -1312,6 +1312,24 @@ $ make test-api
 PASS (all API packages)
 $ make test-store
 ok github.com/siercks/sierx/internal/store 0.438s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+### Task 1.16 acceptance - 2026-09-18
+
+Added projected, keyset-paginated children/descendant reads with bounded depth,
+and direct materialized rollup reads. Goldens cover each shape and leaf zeros /
+nullable totals; six-level traversal verifies depth filtering and pagination.
+The test inspects the rollup SQL to reject recursion or aggregation on read.
+
+```text
+$ make test-api
+--- PASS: TestHierarchyReads (0.46s)
+PASS (all API packages)
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.436s
 $ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.

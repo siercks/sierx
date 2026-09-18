@@ -1,16 +1,22 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/siercks/sierx/internal/api/projection"
 	"net/http"
 )
 
 // jsonPage applies bounded ID keyset pagination to an authored SELECT returning
 // id (uuid) and doc (jsonb). The base query must enforce visibility itself.
 func (s *Server) jsonPage(w http.ResponseWriter, r *http.Request, base string, args ...any) {
+	s.projectedPage(w, r, base, nil, args...)
+}
+
+func (s *Server) projectedPage(w http.ResponseWriter, r *http.Request, base string, fields []string, args ...any) {
 	limit, err := PageLimit(r)
 	if err != nil {
 		requestProblem(w, err.Error())
@@ -58,7 +64,18 @@ func (s *Server) jsonPage(w http.ResponseWriter, r *http.Request, base string, a
 			page.NextCursor = &token
 			break
 		}
-		page.Data = append(page.Data, json.RawMessage(raw))
+		if fields == nil {
+			page.Data = append(page.Data, json.RawMessage(raw))
+		} else {
+			var doc map[string]any
+			d := json.NewDecoder(bytes.NewReader(raw))
+			d.UseNumber()
+			if err := d.Decode(&doc); err != nil {
+				WriteProblem(w, InternalError())
+				return
+			}
+			page.Data = append(page.Data, projection.Apply(doc, fields))
+		}
 		c.After = id
 	}
 	if rows.Err() != nil {
