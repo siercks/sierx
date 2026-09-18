@@ -1570,3 +1570,53 @@ retain the existing human author/committer identity with no agent attribution.
 The owner's manual Spark walkthrough must still be recorded before final Phase 1
 acceptance and merge. Existing ADR-021 physical-backup deployment remains Phase
 2.16; smoke benchmarks are not a Spark performance baseline.
+
+### Owner-operated Spark walkthrough - 2026-09-18
+
+The owner ran the manual curl walkthrough on Spark against a separate trial
+database on PostgreSQL 18.6 and supplied the responses in the implementation
+conversation. This records observed results, not an automated rerun. The exact
+Spark checkout SHA and a native Spark gate-1 result remain to be confirmed.
+The completed local offline gate is recorded above. No Phase 1 scope cuts.
+
+Observed manual checks:
+
+- Bootstrap created the workspace, administrator and project; health returned
+  HTTP 200 with `{"alive":true,"database":"reachable"}`.
+- Authenticated administrator read and story creation passed: TRY-1, version 1.
+- Transition without assignee returned HTTP 422 with
+  `Required fields are missing: assignee.` Supplying the administrator assignee
+  succeeded with HTTP 200, status doing, version 2.
+- Created epic TRY-2; moved TRY-1 beneath it with HTTP 200, version 3.
+  Children returned `{"data":[{"key":"TRY-1","title":"My first Spark test"}],"next_cursor":null}`.
+  Rollup returned descendant_count 1 and done_count 0.
+- Created and read back a relates link from TRY-1 to TRY-2 (HTTP 201/200).
+  Created and read back `First comment from the Spark walkthrough.` with the
+  administrator as author (HTTP 201/200); story version advanced to 5.
+- PATCH at version 5 succeeded with title `Spark walkthrough verified`,
+  version 6. Repeating with version 5 returned HTTP 409 containing both current
+  version 6 and submitted edits. History showed successful operations; changes
+  returned sequences 1 through 8 with next_seq 8 and no rejected-edit event.
+- Move to OTH-1 returned HTTP 422:
+  `Cannot move an item from project TRY under a parent in project OTH. Choose a parent in TRY.`
+  Readback: `{"key":"TRY-1","parent":{"key":"TRY-2"},"version":6}`.
+- Created TRY-3, deleted it (HTTP 200, `{"deleted":true,"key":"TRY-3"}`),
+  and read back a deletion timestamp and version 2. Next creation was TRY-4;
+  the deleted key was not reused.
+- TOTP confirmation initially returned 401, then succeeded using the owner's
+  authenticator. Summary: enabled true, sign_in_required true, eight recovery
+  codes. Fresh authenticator login and authenticated account read returned 200.
+  The old-session rejection was reported as passing by the owner, but its raw
+  response was not included. No claim is made about the cause of the first 401
+  or Apple Passwords compatibility.
+- First use of one recovery code returned HTTP 200, `{"authenticated":true}`;
+  reuse returned HTTP 401, `Sign in to continue.` Secrets and codes are omitted.
+- After stopping and restarting the application, health returned 200 and the
+  existing session read returned
+  `{"key":"TRY-1","parent":{"key":"TRY-2"},"title":"Spark walkthrough verified","version":6}`.
+  A fresh password-plus-authenticator login returned HTTP 200,
+  `{"authenticated":true}`.
+
+Manual workflow and the additional checks above passed. Final closeout awaits
+checkout identification and confirmation of the Spark automated-gate status;
+this entry does not claim a Spark performance baseline or physical-backup test.
