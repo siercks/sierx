@@ -63,6 +63,7 @@ var (
 	ErrEmpty = errors.New("store: mutation is empty")
 	// ErrVersionConflict maps to 409 (§5.4).
 	ErrVersionConflict = errors.New("store: item version conflict")
+	ErrInvalidMove     = errors.New("store: invalid hierarchy move")
 )
 
 // Result reports what a mutation did. HighestSeq is the value a client can use
@@ -192,7 +193,7 @@ func (s *Store) flush(ctx context.Context, tx pgx.Tx, m *Mutation) (Result, erro
 			}
 
 		case changeReparent:
-			if err := s.applyReparent(ctx, q, m, c.reparen, seq); err != nil {
+			if err := s.applyReparent(ctx, tx, q, m, c.reparen, seq); err != nil {
 				return Result{}, err
 			}
 
@@ -400,7 +401,7 @@ func (s *Store) applyUpdate(ctx context.Context, q *gen.Queries, m *Mutation, up
 	return nil
 }
 
-func (s *Store) applyReparent(ctx context.Context, q *gen.Queries, m *Mutation, r *ItemReparent, seq int64) error {
+func (s *Store) applyReparent(ctx context.Context, db gen.DBTX, q *gen.Queries, m *Mutation, r *ItemReparent, seq int64) error {
 	item, err := q.GetItem(ctx, toPgUUID(r.ID))
 	if err != nil {
 		return fmt.Errorf("reparent %s: %w", r.ID, err)
@@ -411,16 +412,27 @@ func (s *Store) applyReparent(ctx context.Context, q *gen.Queries, m *Mutation, 
 		if err != nil {
 			return fmt.Errorf("reparent %s: new parent %s: %w", r.ID, *r.NewParentID, err)
 		}
-		if parent.ProjectID != item.ProjectID {
-			return fmt.Errorf("store: cross-project move rejected (ADR-012): %s", r.ID)
+		if parent.ProjectID != item.ProjectID || parent.DeletedAt.Valid {
+			return ErrInvalidMove
 		}
 		// §5.3: reject a move that would make the item its own ancestor. The
 		// database trigger rejects it too; this produces a usable error instead
 		// of a constraint violation.
 		if isDescendantOrSelf(parent.Path, item.Path) {
-			return fmt.Errorf("store: reparenting %s under %s would make it its own ancestor (§5.3)", r.ID, *r.NewParentID)
+			return ErrInvalidMove
 		}
 		newParentPath = parent.Path
+	}
+	var height int
+	if err := db.QueryRow(ctx, `SELECT max(nlevel(path))-nlevel($1::ltree)+1 FROM item WHERE path <@ $1::ltree`, item.Path).Scan(&height); err != nil {
+		return err
+	}
+	depth := 0
+	if newParentPath != "" {
+		depth = strings.Count(newParentPath, ".") + 1
+	}
+	if depth+height > 8 {
+		return ErrInvalidMove
 	}
 	// The old path is dirty (its former ancestors lose descendants) and so is
 	// the new one (its new ancestors gain them).
@@ -439,6 +451,45 @@ func (s *Store) applyReparent(ctx context.Context, q *gen.Queries, m *Mutation, 
 	}
 	for _, row := range rows {
 		m.touchedPaths = append(m.touchedPaths, row.Path)
+	}
+	if r.SetRank {
+		for attempt := 0; attempt < 2; attempt++ {
+			ranks, err := q.ListProjectRanks(ctx, item.ProjectID)
+			if err != nil {
+				return err
+			}
+			lo, hi := "", ""
+			found := r.RankAfter == nil
+			for _, candidate := range ranks {
+				if candidate.ID == item.ID {
+					continue
+				}
+				if found {
+					hi = candidate.Rank
+					break
+				}
+				if fromPgUUID(candidate.ID) == *r.RankAfter {
+					lo = candidate.Rank
+					found = true
+				}
+			}
+			if !found {
+				return ErrInvalidMove
+			}
+			rank, err := RankBetween(lo, hi)
+			if err != nil {
+				return err
+			}
+			if RankNeedsRebalance(rank) {
+				if err := rebalanceProjectRanks(ctx, db, q, fromPgUUID(item.ProjectID), ranks); err != nil {
+					return err
+				}
+				continue
+			}
+			_, err = db.Exec(ctx, `UPDATE item SET rank=$2 WHERE id=$1`, r.ID.String(), rank)
+			return err
+		}
+		return ErrRankOrder
 	}
 	return nil
 }

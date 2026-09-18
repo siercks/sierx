@@ -53,6 +53,7 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Patch("/api/v1/items/{key}", s.updateItem)
 	s.Router.With(s.requireAuth).Delete("/api/v1/items/{key}", s.deleteItem)
 	s.Router.With(s.requireAuth).Post("/api/v1/items/{key}/transition", s.transitionItem)
+	s.Router.With(s.requireAuth).Post("/api/v1/items/{key}/move", s.moveItem)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

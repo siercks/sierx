@@ -130,6 +130,8 @@ type ItemUpdate struct {
 type ItemReparent struct {
 	ID          uuid.UUID
 	NewParentID *uuid.UUID
+	SetRank     bool
+	RankAfter   *uuid.UUID
 }
 
 // LinkChange is a link create or delete (§4.6).
