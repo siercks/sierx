@@ -130,7 +130,25 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       goose: successfully migrated database to version: 1
       all migrations applied: 1 versions
       ```
-- [ ] 0.4 Schema: all of SPEC §4
+- [x] 0.4 Schema: all of SPEC §4 — 2026-09-12, against PostgreSQL 18.6 (native)
+      ```
+      $ make migrate-updown-up && make schema-snapshot && make schema-diff
+      == up
+      goose: successfully migrated database to version: 7
+      all migrations applied: 7 versions
+      == down-to 0
+      goose: no migrations to run. current version: 0
+      clean at zero: 0 tables, 0 extensions
+      == up again
+      goose: successfully migrated database to version: 7
+      all migrations applied: 7 versions
+      schema-snapshot: wrote docs/schema.sql (24 CREATE TABLE statements)
+      schema-diff: from-scratch migration matches docs/schema.sql
+      ```
+      Also proven: editing a migration after the snapshot turns `schema-diff`
+      red. 24 = 21 tables in §4 + 3 monthly `change_event` partitions
+      (2026-09 … 2026-11). `seq_counter` (§4.7) is created here; task 0.6 adds
+      the per-workspace row mechanism.
 - [ ] 0.5 Invariant enforcement in the database
 - [ ] 0.6 Sequence counter and partition maintenance
 - [ ] 0.7 sqlc wiring

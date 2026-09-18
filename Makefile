@@ -6,7 +6,8 @@ SHELL := /usr/bin/env bash
 
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
         db-up db-down db-psql db-reset db-pin \
-        migrate-up migrate-down migrate-status migrate-updown-up
+        migrate-up migrate-down migrate-status migrate-updown-up \
+        schema-snapshot schema-diff
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -55,3 +56,9 @@ migrate-status: ## Show migration status
 
 migrate-updown-up: ## up -> down to zero -> up, asserting clean at each step
 	@bash scripts/migrate.sh updown-up
+
+schema-snapshot: ## Dump the live schema to docs/schema.sql (deliberate, human-run) (task 0.4)
+	@bash scripts/schema.sh snapshot
+
+schema-diff: ## Migrate a scratch DB from zero and diff it against docs/schema.sql
+	@bash scripts/schema.sh diff
