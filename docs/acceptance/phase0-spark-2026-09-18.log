@@ -1,0 +1,263 @@
+cd ~/sierx
+make gate-0
+test-go proof: missing .env and environment rejected before Go runs
+test-go proof: empty .env value rejected before Go runs
+test-go proof: .env loaded literally; arguments preserved
+test-go proof: exported environment wins over .env
+test-go proof: explicitly empty environment override rejected before Go runs
+test-go proof: Go failure exit status preserved
+test-go proof: PASS
+go         OK    go1.27.1 (go.mod pins 1.27.1)
+node       OK    v24.21.0 (.nvmrc pins 24)
+podman     OK    podman version 4.9.3
+psql       OK    psql 18.6
+database   OK    encoding UTF8, collation C
+signoff    INFO  ADR-010 **deployment** repository target — set at task 2.16 in the host
+backup     OK    repository type posix, path set, SIERX_ENV=dev
+== up
+2026/09/18 10:40:34 goose: no migrations to run. current version: 9
+all migrations applied: 9 versions
+== down-to 0
+2026/09/18 10:40:34 OK   0009_seq.sql (12.21ms)
+2026/09/18 10:40:34 OK   0008_invariants.sql (3.91ms)
+2026/09/18 10:40:34 OK   0007_sprints_comments_views.sql (6.03ms)
+2026/09/18 10:40:34 OK   0006_rollup_links_events.sql (9.1ms)
+2026/09/18 10:40:34 OK   0005_item.sql (11.51ms)
+2026/09/18 10:40:34 OK   0004_config.sql (6.68ms)
+2026/09/18 10:40:34 OK   0003_project.sql (3.03ms)
+2026/09/18 10:40:34 OK   0002_identity.sql (6.13ms)
+2026/09/18 10:40:34 OK   0001_extensions.sql (10.51ms)
+2026/09/18 10:40:34 goose: no migrations to run. current version: 0
+clean at zero: 0 tables, 0 extensions
+== up again
+2026/09/18 10:40:34 OK   0001_extensions.sql (13.67ms)
+2026/09/18 10:40:34 OK   0002_identity.sql (4.96ms)
+2026/09/18 10:40:34 OK   0003_project.sql (3.39ms)
+2026/09/18 10:40:34 OK   0004_config.sql (9.01ms)
+2026/09/18 10:40:34 OK   0005_item.sql (7.39ms)
+2026/09/18 10:40:34 OK   0006_rollup_links_events.sql (10.33ms)
+2026/09/18 10:40:34 OK   0007_sprints_comments_views.sql (5.98ms)
+2026/09/18 10:40:34 OK   0008_invariants.sql (3.31ms)
+2026/09/18 10:40:34 OK   0009_seq.sql (1.56ms)
+2026/09/18 10:40:34 goose: successfully migrated database to version: 9
+all migrations applied: 9 versions
+NOTICE:  database "sierx_schemadiff" does not exist, skipping
+schema-diff: from-scratch migration matches docs/schema.sql
+psql:test/sql/invariants_test.sql:94: NOTICE:  ok   raised  status.name update  [23001 status 03000000-0000-7000-8000-000000000001 is immutable: key, name, category cannot chang]
+psql:test/sql/invariants_test.sql:96: NOTICE:  ok   raised  status.key update  [23001 status 03000000-0000-7000-8000-000000000001 is immutable: key, name, category cannot chang]
+psql:test/sql/invariants_test.sql:98: NOTICE:  ok   raised  status.category update  [23001 status 03000000-0000-7000-8000-000000000001 is immutable: key, name, category cannot chang]
+psql:test/sql/invariants_test.sql:100: NOTICE:  ok   raised  item_type.name update  [23001 item_type 04000000-0000-7000-8000-000000000001 is immutable: key, name, level cannot chang]
+psql:test/sql/invariants_test.sql:102: NOTICE:  ok   raised  item_type.level update  [23001 item_type 04000000-0000-7000-8000-000000000001 is immutable: key, name, level cannot chang]
+psql:test/sql/invariants_test.sql:104: NOTICE:  ok   allowed item_type.is_idea update (not immutable by spec)
+psql:test/sql/invariants_test.sql:110: NOTICE:  ok   raised  depth-9 insert  [23514 item 05000000-0000-7000-8000-000000000009 would be at depth 9, maximum is 8 (SPEC §5.3)]
+psql:test/sql/invariants_test.sql:113: NOTICE:  ok   allowed depth-8 exists (positive control)
+psql:test/sql/invariants_test.sql:118: NOTICE:  ok   raised  path not ending in own id  [23514 item 06000000-0000-7000-8000-000000000001 path 05000000-0000-7000-8000-000000000001 does n]
+psql:test/sql/invariants_test.sql:123: NOTICE:  ok   raised  parent_id set, path penultimate label is someone else  [23514 item 06000000-0000-7000-8000-000000000002 path 05000000-0000-7000-8000-000000000002.060000]
+psql:test/sql/invariants_test.sql:126: NOTICE:  ok   raised  parent_id NULL, path has two labels  [23514 item 06000000-0000-7000-8000-000000000003 has no parent but path 05000000-0000-7000-8000-0]
+psql:test/sql/invariants_test.sql:129: NOTICE:  ok   raised  parent_id set, single-label path  [23514 item 06000000-0000-7000-8000-000000000004 path 06000000-0000-7000-8000-000000000004 disagr]
+psql:test/sql/invariants_test.sql:132: NOTICE:  ok   raised  update parent_id without rewriting path  [23514 item 05000000-0000-7000-8000-000000000003 path 05000000-0000-7000-8000-000000000001.050000]
+psql:test/sql/invariants_test.sql:138: NOTICE:  ok   raised  self-ancestry reparent (root under its grandchild)  [23514 reparenting item 05000000-0000-7000-8000-000000000001 under 05000000-0000-7000-8000-000000]
+psql:test/sql/invariants_test.sql:142: NOTICE:  ok   raised  reparent under itself  [23514 reparenting item 05000000-0000-7000-8000-000000000002 under 05000000-0000-7000-8000-000000]
+psql:test/sql/invariants_test.sql:151: NOTICE:  ok   allowed legal subtree reparent in one statement
+psql:test/sql/invariants_test.sql:156: NOTICE:  ok   allowed subtree paths consistent after reparent
+psql:test/sql/invariants_test.sql:161: NOTICE:  ok   raised  item pointing at another project's status  [23503 insert or update on table "item" violates foreign key constraint "item_status_same_project]
+psql:test/sql/invariants_test.sql:164: NOTICE:  ok   raised  item pointing at another project's type  [23503 insert or update on table "item" violates foreign key constraint "item_type_same_project"]
+psql:test/sql/invariants_test.sql:167: NOTICE:  ok   raised  item pointing at a nonexistent config version  [23503 insert or update on table "item" violates foreign key constraint "item_config_version_exis]
+psql:test/sql/invariants_test.sql:172: NOTICE:  ok   raised  duplicate rank within a project (immediate)  [23505 duplicate key value violates unique constraint "item_project_rank_uniq"]
+psql:test/sql/invariants_test.sql:180: NOTICE:  ok   allowed single-statement rank swap with the constraint immediate
+psql:test/sql/invariants_test.sql:182: NOTICE:  ok   raised  rank collision surviving a statement raises immediately  [23505 duplicate key value violates unique constraint "item_project_rank_uniq"]
+psql:test/sql/invariants_test.sql:187: NOTICE:  ok   allowed same collision tolerated mid-transaction when deferred
+psql:test/sql/invariants_test.sql:198: NOTICE:  test-sql: 24 checks passed
+psql:test/sql/partitions_test.sql:58: NOTICE:  ok   ensure(1): first run created 0, second run created 0, change_event_2026_10 present
+psql:test/sql/partitions_test.sql:58: NOTICE:  ok   ensure(6): created 4 more, then 0
+psql:test/sql/partitions_test.sql:58: NOTICE:  ok   each new workspace got a seq_counter row at zero (3)
+psql:test/sql/partitions_test.sql:58: NOTICE:  ok   event routed to the current-month partition
+psql:test/sql/partitions_test.sql:58: NOTICE:  test-partitions: passed
+fetching sqlc v1.31.1 (arm64) ...
+sqlc-diff: checked-in generated code matches fresh output
+?       github.com/siercks/sierx/cmd/sierxctl   [no test files]
+=== RUN   TestMutateAllocatesOneSeqPerEvent
+--- PASS: TestMutateAllocatesOneSeqPerEvent (0.05s)
+=== RUN   TestMutateRejectsChangeWithoutEvents
+--- PASS: TestMutateRejectsChangeWithoutEvents (0.02s)
+=== RUN   TestMutateEmptyIsAnError
+--- PASS: TestMutateEmptyIsAnError (0.02s)
+=== RUN   TestMutateCallbackErrorRollsBack
+--- PASS: TestMutateCallbackErrorRollsBack (0.02s)
+=== RUN   TestMutatePathAndKey
+--- PASS: TestMutatePathAndKey (0.04s)
+=== RUN   TestMutateRollupsAreMaintained
+--- PASS: TestMutateRollupsAreMaintained (0.05s)
+=== RUN   TestMutateReparentRewritesSubtreeAndRollups
+--- PASS: TestMutateReparentRewritesSubtreeAndRollups (0.06s)
+=== RUN   TestMutateRejectsSelfAncestryAndCrossProject
+--- PASS: TestMutateRejectsSelfAncestryAndCrossProject (0.03s)
+=== RUN   TestMutateSoftAndHardDelete
+--- PASS: TestMutateSoftAndHardDelete (0.04s)
+=== RUN   TestMutateVersionIncrements
+--- PASS: TestMutateVersionIncrements (0.03s)
+=== RUN   TestMutateConfigVersionOnlyOnCreateAndTransition
+--- PASS: TestMutateConfigVersionOnlyOnCreateAndTransition (0.04s)
+=== RUN   TestMutateSeqGapFreeUnderConcurrency
+--- PASS: TestMutateSeqGapFreeUnderConcurrency (0.19s)
+=== RUN   TestMutateRankOrderAndRebalance
+--- PASS: TestMutateRankOrderAndRebalance (0.10s)
+PASS
+ok      github.com/siercks/sierx/internal/store 0.714s
+?       github.com/siercks/sierx/internal/store/gen     [no test files]
+?       github.com/siercks/sierx/internal/store/seed    [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/siercks/sierx/test/bench     0.008s [no tests to run]
+=== RUN   TestPropertySubtreeMovesWholesale
++ moving a node moves its whole subtree: OK, passed 10 tests.
+Elapsed time: 492.9929ms
+--- PASS: TestPropertySubtreeMovesWholesale (0.49s)
+=== RUN   TestPropertyRankIsStrictTotalOrder
++ per-project ranks are a strict total order matching insertion order: OK,
+   passed 10 tests.
+Elapsed time: 728.988484ms
+--- PASS: TestPropertyRankIsStrictTotalOrder (0.73s)
+=== RUN   TestPropertyRankBetweenAlwaysStrictlyBetween
++ RankBetween lands strictly between its bounds: OK, passed 200 tests.
+Elapsed time: 871.807µs
++ RankBetween rejects inverted bounds: OK, passed 200 tests.
+Elapsed time: 525.871µs
+--- PASS: TestPropertyRankBetweenAlwaysStrictlyBetween (0.00s)
+=== RUN   TestRankRebalance5000
+--- PASS: TestRankRebalance5000 (16.94s)
+=== RUN   TestPropertyRollupsMatchAggregate
++ rollups equal a fresh aggregate over descendants: OK, passed 12 tests.
+Elapsed time: 813.8563ms
+--- PASS: TestPropertyRollupsMatchAggregate (0.81s)
+=== RUN   TestPropertyRollupCountEqualsItemCount
++ count(item_rollup) == count(item): OK, passed 12 tests.
+Elapsed time: 745.931836ms
+--- PASS: TestPropertyRollupCountEqualsItemCount (0.75s)
+=== RUN   TestPropertyPathsStayConsistent
++ paths agree with parent_id and contain no cycles: OK, passed 12 tests.
+Elapsed time: 741.938722ms
+--- PASS: TestPropertyPathsStayConsistent (0.74s)
+PASS
+ok      github.com/siercks/sierx/test/property  20.480s
+ok       github.com/jackc/pgpassfile                             MIT
+ok       github.com/jackc/pgservicefile                          MIT
+ok       github.com/jackc/pgx/v5                                 MIT
+ok       github.com/jackc/puddle/v2                              MIT
+ok       github.com/leanovate/gopter                             MIT
+ok       golang.org/x/sync                                       BSD-3-Clause
+ok       golang.org/x/text                                       BSD-3-Clause
+licenses.sh: 7 Go module(s) checked
+licenses.sh: no node_modules — the frontend tree arrives at task 2.1; nothing to check on the npm side
+gate-license: OK (every dependency on the §15.1 allowlist)
+all modules verified
+vendor-verify: OK
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+gate-nobackupleak: OK (no backup tool named outside the drivers)
+NOTICE:  database "sierx_seed_a" does not exist, skipping
+NOTICE:  database "sierx_seed_b" does not exist, skipping
+run A: 676463497501eb668e44646dd8cd110c
+run B: 676463497501eb668e44646dd8cd110c
+run C (--seed 8): 923258d09d482dbf4c5d634ece8dc7bd
+seed-determinism: OK (same seed identical, different seed differs)
+seed: workspace=01a0b52d-bf6f-7ed2-89f6-af6a721dd35a items=10000 max_depth=6 links=500 events=16989
+seed: checksum=311d29c77c053ab3ea49afb249e973a1
+=== conformance: pgdump
+source: 15443 item(s)
+--- describe
+pgdump driver; pg_dump 18.6; target dir pgdump, keep 8
+--- contract
+contract: OK
+--- backup
+backup id: pgdump-20260918T154157Z
+--- verify
+pgdump: verified pgdump-20260918T154157Z.dump (167 archive entries)
+--- restore-to scratch
+NOTICE:  database "sierx_restore_check" does not exist, skipping
+pgdump: restored pgdump-20260918T154157Z.dump
+--- row counts
+  20 tables, all counts equal
+--- content checksum
+  e5da871e3ff3affead63a4869a529e8e
+--- event sequence high-water mark
+  max(seq) = 16989
+--- rollup --verify on the restored copy (ADR-005 control 2)
+rollup --verify: items=15443 rollups=15443 mismatches=0
+=== conformance: pgdump PASSED
+backup-conformance: OK for: pgdump
+--- timings
+BenchmarkBoardView500-20                       5            641135 ns/op
+BenchmarkItemDetail-20                         5            988584 ns/op
+BenchmarkDescendantRollupDepth6-20             5            106403 ns/op
+BenchmarkDeltaSync50-20                        5            174976 ns/op              8207 resp_bytes
+BenchmarkFullTextSearch-20                     5           5145039 ns/op
+BenchmarkRollupRecompute200-20                 5          99053824 ns/op
+--- skipped scenarios (by name)
+  sxq query over 10k items, indexed fields: skipped: needs the sxq parser (phase 3)
+  steady-state RSS, sierx process: skipped: needs the sierx process (task 1.1)
+  cold start to serving: skipped: needs the sierx process (task 1.1)
+  (test) BenchmarkSXQQuery10k
+  (test) BenchmarkSteadyStateRSS
+  (test) BenchmarkColdStart
+bench-smoke: OK (no scenario errored; thresholds not asserted here — ADR-016)
+=== discovering gates from the Makefile
+  gate-0
+  gate-bench
+  gate-license
+  gate-nobackupleak
+  gate-nodirect
+  gate-notopology
+
+=== gate-0
+  exempt: composite: runs the other gates, so its failure modes are theirs. Proving it would mean proving each again.
+
+=== gate-bench
+  exempt: advisory by ADR-016 until reference hardware exists at task 2.16. Its one testable behaviour — exiting nonzero with no baseline — is asserted below rather than by planting a violation.
+
+=== gate-license
+  proof: make prove-license
+prove: AGPL-3.0 module: gate went red — OK
+prove: MPL-2.0 module: gate went red — OK
+prove: SSPL-1.0 module: gate went red — OK
+prove: BSL-1.1 module: gate went red — OK
+prove: unclassifiable license: gate went red — OK
+prove: module with no license file: gate went red — OK
+prove: clean tree: gate GREEN — OK
+
+=== gate-nobackupleak
+  proof: scripts/gate-nobackupleak.sh --prove
+prove: pg_restore in the Makefile: gate went red — OK
+prove: pgbackrest in a make target: gate went red — OK
+prove: pg_dump named in Go source: gate went red — OK
+prove: wal-g in a non-driver script: gate went red — OK
+prove: clean tree: gate GREEN — OK
+
+=== gate-nodirect
+  proof: scripts/gate-nodirect.sh --prove
+prove: INSERT INTO item from internal/api: gate went red — OK
+prove: lowercase multi-line UPDATE item: gate went red — OK
+prove: DELETE FROM comment: gate went red — OK
+prove: INSERT INTO sprint_item: gate went red — OK
+prove: TRUNCATE item_link: gate went red — OK
+prove: item_type/item_rollup writes and a plain SELECT stay green — OK
+prove: clean tree: gate GREEN — OK
+
+=== gate-notopology
+  proof: scripts/gate-notopology.sh --prove
+prove: rfc1918 192.168/16: gate went red — OK
+prove: rfc1918 10/8: gate went red — OK
+prove: rfc1918 172.16/12: gate went red — OK
+prove: .lan hostname: gate went red — OK
+prove: .internal hostname: gate went red — OK
+prove: .env value leak: gate went red — OK
+prove: narrowed enumerated value: gate GREEN — OK
+prove: .env == example: gate GREEN — OK
+prove: clean tree: gate GREEN — OK
+
+=== gate-bench: asserting it refuses to pass without a baseline
+  gate-bench exits nonzero with no baseline — OK
+
+prove-gates: 5 proven, 2 exempt, 0 without a proof, 0 proof failures
+prove-gates: OK
+gate-0: GREEN

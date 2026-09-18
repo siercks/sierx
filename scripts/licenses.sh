@@ -212,6 +212,7 @@ prove() {
 }
 
 case ${1:-check} in
+  --library) : ;; # Shared classifier and allowlist for the SBOM generator.
   check)   check "$(git rev-parse --show-toplevel)" ;;
   list)    load_allowlist
            while IFS=$'\t' read -r mod dir; do

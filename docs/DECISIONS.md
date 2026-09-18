@@ -866,3 +866,47 @@ task, and a PostgreSQL major bump requires `stanza-upgrade` and a restore test
 request — which is automatic, since they run on all pull requests. Plus a note in
 `PROGRESS.md` at each phase exit recording whether any pin is more than one cycle
 behind, so drift is visible at a gate rather than at an incident.
+
+
+## ADR-020 - Owner-directed schedule and initial deployment environment
+
+**Status:** accepted by explicit owner direction in the takeover conversation,
+2026-09-18. **Deviation:** supersedes SPEC section 0 rule 5 and the corresponding
+BUILD calendar requirement. SPEC itself remains unchanged as the design record.
+
+There is no Phase 2 calendar deadline. The original October 10 date is historical;
+the ranked cut list is available for deliberate scope decisions, not automatic
+cuts on a clock. Small tasks, phase gates and the seven-day real-use gate remain.
+
+The Spark is the initial test and deployment host for using sierx to track its
+own development. The Pi is not required at present. Keep disposable acceptance
+databases separate from the persistent backlog. Preserve Linux amd64/arm64,
+environment-based configuration and deployment portability. Spark measurements
+may describe the Spark, but cannot satisfy a performance claim about smaller
+hardware. Choose representative hardware before asserting the small-host budget;
+that choice must not be silently replaced with the faster Spark baseline.
+
+This decision does not approve a backup exception, certify the untested local
+CI container, authorize production operation or sign off Phase 1 entry.
+
+
+## ADR-021 - Accepted Phase 0 backup exception and Phase 1 entry
+
+**Status:** approved by the owner, 2026-09-18, in the takeover conversation.
+**Scope:** amends Phase 0 entry/exit requirements in BUILD for task 0.11;
+retains the deployment durability requirements of ADR-010 and SPEC 14.2.
+
+The offline Phase 0 gate passed on the Spark with pgdump conformance, including
+15,438 restored items and zero rollup mismatches. The owner approved deferring
+pgBackRest conformance and cipher-immutability validation to task 2.16 and
+entering Phase 1. Task 0.11 remains partially implemented; approval does not
+turn an untested driver into a supported driver.
+
+Before the deployed backlog becomes relied-upon data, configure encrypted
+off-machine backup and prove an isolated physical restore and cipher checks.
+Keep the physical driver out of the configured driver list until conformance
+passes. Do not relax backup or restore requirements to achieve deployment.
+
+The owner's instruction also authorizes publishing the reviewed Phase 0
+closeout. Phase 1 implementation follows BUILD task order and acceptance;
+this decision is not acceptance of any Phase 1 code.
