@@ -1,0 +1,10 @@
+{
+  "query": "due_date \u003c now() + 7d and status.category in (open, active)",
+  "where": "((i.due_date \u003c $1::text::date) AND (s.category IN ($2,$3)))",
+  "order": "i.id",
+  "params": [
+    "2026-09-25",
+    "open",
+    "active"
+  ]
+}

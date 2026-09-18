@@ -1,0 +1,12 @@
+{
+  "data": [
+    {
+      "key": "SRX-1",
+      "status": {
+        "category": "open"
+      },
+      "title": "Original"
+    }
+  ],
+  "next_cursor": null
+}

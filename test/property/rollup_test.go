@@ -2,7 +2,9 @@ package property
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"uuid"
 
@@ -134,7 +136,46 @@ func (e *env) apply(t *testing.T, ops []op) {
 			}); err != nil {
 				t.Fatalf("soft delete %s: %v", id, err)
 			}
+			live = append(live[:idx], live[idx+1:]...)
 		}
+	}
+}
+
+func TestDeletedParentMoveRollsBack(t *testing.T) {
+	e := newEnv(t)
+	parent := e.create(t, nil, "todo", nil)
+	child := e.create(t, nil, "todo", nil)
+	ctx := context.Background()
+	if _, err := e.st.Mutate(ctx, e.wsID, func(m *store.Mutation) error { m.SoftDelete(parent); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	before := e.snapshot(t)
+	var beforeSeq, afterSeq int64
+	seq := func(target *int64) {
+		t.Helper()
+		if err := e.pool.QueryRow(ctx, `SELECT coalesce(max(seq),0) FROM change_event WHERE workspace_id=$1`, pg(e.wsID)).Scan(target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seq(&beforeSeq)
+	if _, err := e.st.Mutate(ctx, e.wsID, func(m *store.Mutation) error {
+		m.Reparent(store.ItemReparent{ID: child, NewParentID: &parent})
+		return nil
+	}); !errors.Is(err, store.ErrInvalidMove) {
+		t.Fatalf("move under deleted parent: %v", err)
+	}
+	seq(&afterSeq)
+	if !reflect.DeepEqual(before, e.snapshot(t)) || afterSeq != beforeSeq {
+		t.Fatal("rejected move changed items or events")
+	}
+	result, err := e.st.Mutate(ctx, e.wsID, func(m *store.Mutation) error { m.SoftDelete(child); return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = result
+	seq(&afterSeq)
+	if afterSeq != beforeSeq+1 {
+		t.Fatal("rejected move consumed a sequence")
 	}
 }
 

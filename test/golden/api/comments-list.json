@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "author": {
+        "display_name": "Author",
+        "id": "author-1"
+      },
+      "body": "**Raw** \u003cscript\u003eexample\u003c/script\u003e",
+      "created_at": "timestamp",
+      "deleted_at": null,
+      "edited_at": null,
+      "id": "comment-1",
+      "item": "SRX-1"
+    }
+  ],
+  "next_cursor": null
+}

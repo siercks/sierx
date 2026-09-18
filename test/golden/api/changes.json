@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "actor_id": "author-1",
+      "at": "timestamp",
+      "field": null,
+      "item_id": "item-1",
+      "kind": "created",
+      "seq": 1
+    }
+  ],
+  "next_seq": 1
+}

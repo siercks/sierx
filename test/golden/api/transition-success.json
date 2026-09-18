@@ -1,0 +1,44 @@
+{
+  "assignee": {
+    "display_name": "Test user",
+    "id": "author-1"
+  },
+  "body": null,
+  "change_seq": 3,
+  "config_version": 1,
+  "created_at": "timestamp",
+  "deleted_at": null,
+  "due_date": null,
+  "fields": {},
+  "id": "item-1",
+  "key": "SRX-1",
+  "parent": null,
+  "points": null,
+  "project": {
+    "key_prefix": "SRX",
+    "name": "Backlog"
+  },
+  "rank": "n",
+  "rollup": {
+    "descendant_count": 0,
+    "done_count": 0,
+    "earliest_start": null,
+    "latest_due": null,
+    "points_done": null,
+    "points_total": null
+  },
+  "start_date": null,
+  "status": {
+    "category": "active",
+    "key": "doing",
+    "name": "In Progress"
+  },
+  "title": "Original",
+  "type": {
+    "key": "story",
+    "level": 1,
+    "name": "Story"
+  },
+  "updated_at": "timestamp",
+  "version": 2
+}

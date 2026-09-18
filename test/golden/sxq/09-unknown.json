@@ -1,0 +1,4 @@
+{
+  "query": "stats = todo",
+  "error": "unknown field \"stats\"; try \"status\""
+}

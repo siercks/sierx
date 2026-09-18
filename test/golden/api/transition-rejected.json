@@ -1,0 +1,6 @@
+{
+  "detail": "to_status is not an allowed transition from the current status.",
+  "status": 422,
+  "title": "Unprocessable Content",
+  "type": "about:blank"
+}

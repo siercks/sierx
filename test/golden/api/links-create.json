@@ -1,0 +1,13 @@
+{
+  "created_at": "timestamp",
+  "from": {
+    "key": "SRX-1",
+    "title": "Original"
+  },
+  "id": "link-1",
+  "kind": "blocks",
+  "to": {
+    "key": "OTH-1",
+    "title": "Dependency"
+  }
+}
