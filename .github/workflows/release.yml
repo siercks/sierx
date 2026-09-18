@@ -44,12 +44,12 @@ jobs:
         env:
           GOARCH: ${{ matrix.arch }}
 
-      - name: generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: dist/sbom-${{ matrix.arch }}.spdx.json
+      # SBOM via make, not an action: BUILD §3.4 — nothing may live only in
+      # CI YAML, and an SBOM nobody can regenerate locally is an SBOM nobody
+      # checks. scripts/sbom.sh reads the same inputs as gate-license, so the
+      # two cannot disagree about what is in the build.
+      - run: make sbom SBOM_OUT=dist/sbom-${{ matrix.arch }}.cdx.json
+      - run: make sbom-check SBOM_OUT=dist/sbom-${{ matrix.arch }}.cdx.json
 
       - uses: actions/upload-artifact@v4
         with:

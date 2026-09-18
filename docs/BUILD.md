@@ -8,6 +8,14 @@
 ADR-010 still blocked on one input — see §4.0.
 **Audience:** a coding agent executing the build, and the human reviewing it.
 
+**Takeover amendment (2026-09-18):** ADR-020 supersedes the calendar deadline and
+Pi-only staging requirement below. Initial staging is the Spark; smaller-host
+performance acceptance remains a separate, explicitly selected hardware check.
+The original deadline and deadline-triggered cuts are historical. Task 0.12
+requires `make ci-local-prepare` while online followed by `make ci-local`
+offline, with the real container result recorded. Read the current handover
+and latest progress correction before interpreting older completion claims.
+
 ---
 
 ## Changelog

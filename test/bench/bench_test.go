@@ -24,7 +24,7 @@ const (
 	// be grepped for what is still unmeasured.
 	reasonNoAPI     = "skipped: needs the HTTP API (phase 1)"
 	reasonNoProcess = "skipped: needs the sierx process (task 1.1)"
-	reasonNoSXQ     = "skipped: needs the sxq parser (phase 3)"
+	reasonNoSXQ     = "skipped: needs the sxq parser (phase 1)"
 )
 
 func pool(tb testing.TB) *pgxpool.Pool {
