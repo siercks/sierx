@@ -9,7 +9,6 @@ sha256sum --check --quiet /opt/prepared-inputs.sha256 || {
 }
 git init -q
 git add -A
-git -c user.name=ci -c user.email=ci@example.test commit -qm snapshot
 mkdir -p bin
 cp /opt/sierx-tools/* bin/
 export GOPROXY=off GOSUMDB=off

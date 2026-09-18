@@ -921,7 +921,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.20 Delta sync.
 - [x] 1.21 sxq subset.
 - [x] 1.22 Caching and compression.
-- [ ] 1.23 Concurrent cursor/race tests.
+- [x] 1.23 Concurrent cursor/race tests.
 - [ ] 1.24 Endpoint golden files.
 - [ ] 1.25 Metrics.
 
@@ -1456,4 +1456,27 @@ $ make gate-license gate-nodirect gate-notopology
 gate-license: OK (11 modules allowed)
 gate-nodirect: OK (governed tables written only through internal/store)
 gate-notopology: OK (no topology in committable files)
+```
+
+### Task 1.23 acceptance - 2026-09-18
+
+Added six HTTP writers plus a live HTTP delta poller, interleaved with a
+200-item store transition transaction. Native gcc/libc headers now support the
+required race detector in the prepared offline image. Disposable CI copies no
+longer create synthetic Git commits or override identity; source SBOM revision
+is explicitly unknown when the copy has no Git history.
+
+```text
+$ make ci-local-prepare
+all modules verified
+ci-local: preparation complete; make ci-local now runs without network access
+$ make test-concurrency  # invokes go test -race
+observed all 544 committed events exactly once across 313 polls, including a 200-item transition
+--- PASS: TestCommitOrderedCursor (1.56s)
+ok github.com/siercks/sierx/test/concurrency 2.587s
+$ bash test/shell/ci-local_test.sh
+ci-local proof: PASS (mock boundary, not container acceptance)
+$ go vet ./test/concurrency/...
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
 ```

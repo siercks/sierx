@@ -38,7 +38,7 @@ generate() {
   local version
   version=$(git describe --tags --always --dirty 2>/dev/null || echo unknown)
   local commit
-  commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+  commit=$(git rev-parse --verify HEAD 2>/dev/null || echo unknown)
 
   # Collect module name, version, licence and go.sum hash into a TSV that
   # python turns into JSON. Keeping the parsing in shell and the serialising in
