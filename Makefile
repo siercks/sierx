@@ -4,6 +4,10 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
+.PHONY: test-api
+test-api: ## API tests; filter with TEST_ARGS='-run TestServerBoot'
+	@bash scripts/test-go.sh ./internal/api/... ./internal/config/... $(TEST_ARGS) -count=1
+
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
         db-up db-down db-psql db-reset db-pin \
         migrate-up migrate-down migrate-status migrate-updown-up \

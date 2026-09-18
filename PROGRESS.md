@@ -899,7 +899,7 @@ coverage.go is restored from the pinned upstream module and must be committed.
 Entry authorized. Planning is in docs/PHASE-1-PLAN.md; no Phase 1 implementation
 or acceptance is claimed by this closeout.
 
-- [ ] 1.1 Server skeleton and executable boot checks - next task.
+- [x] 1.1 Server skeleton and executable boot checks.
 - [ ] 1.2 Error model.
 - [ ] 1.3 Local authentication.
 - [ ] 1.4 Proxy authentication.
@@ -924,3 +924,45 @@ or acceptance is claimed by this closeout.
 - [ ] 1.23 Concurrent cursor/race tests.
 - [ ] 1.24 Endpoint golden files.
 - [ ] 1.25 Metrics.
+
+### Task 1.1 acceptance - 2026-09-18
+
+Owner authorized all Phase 1 implementation locally, on `build/phase-1-api`,
+with a draft PR and hands-on Spark testing before merge. The `build/` prefix
+supersedes BUILD's suggested branch name. Owner also authorized conventional,
+documented and tested defaults for unspecified API behavior.
+
+Added the server entry point, validated environment, pgx pool, chi routing,
+JSON request logs, bounded health checks and graceful shutdown. Request logs
+omit query strings and connection errors. Proxy CIDRs are required only in
+proxy mode. `SIERX_LISTEN_ADDR` is optional and defaults to `:8080`; session
+keys require at least 32 bytes. Health returns `alive` and `database`, with
+200 for reachable and 503 for unavailable. A database outage does not block
+startup. These operational defaults resolve details left open by task 1.1.
+
+Required supporting files beyond the task list: boot tests, Makefile test-api
+target with TEST_ARGS, README usage, environment reference, and vendored chi
+v5.3.2 (MIT). No later endpoint handlers were added.
+
+Actual acceptance ran with Go 1.27.1 in a disposable local Linux container,
+network disabled and a fresh PostgreSQL 18 cluster. Selected output:
+
+```text
+$ make test-api TEST_ARGS='-run TestServerBoot'
+--- PASS: TestServerBoot (1.02s)
+    --- PASS: TestServerBoot/configuration (0.00s)
+    --- PASS: TestServerBoot/reachable (0.00s)
+    --- PASS: TestServerBoot/unavailable (1.01s)
+    --- PASS: TestServerBoot/startup_shutdown (0.00s)
+PASS
+ok      github.com/siercks/sierx/internal/api 1.027s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+ok       github.com/go-chi/chi/v5                                MIT
+licenses.sh: 8 Go module(s) checked
+gate-license: OK (every dependency on the §15.1 allowlist)
+gate-nodirect: OK (governed tables written only through internal/store)
+gate-notopology: OK (no topology in committable files)
+```
+
+This is task acceptance, not the complete Phase 1 gate or human walkthrough.
