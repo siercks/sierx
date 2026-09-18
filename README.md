@@ -27,6 +27,13 @@ directly; export them before starting it. `SIERX_LISTEN_ADDR` defaults to `:8080
 `GET /api/v1/healthz` returns `alive: true` and `database: reachable` (200) or
 `database: unavailable` (503). A database outage does not prevent process startup.
 
+After migrations, export the `SIERX_BOOTSTRAP_*` settings shown in `.env.example`
+and run `go run ./cmd/sierxctl bootstrap`. This creates one workspace, an admin
+and an empty project with the standard configuration. Run it again with the
+same identity settings to inspect the existing IDs without changing data. In
+proxy mode the administrator has no local password. Bootstrap never runs the
+benchmark seed or creates a second workspace.
+
 ## Getting started
 
 ```bash

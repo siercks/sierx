@@ -15,6 +15,8 @@ func main() {
 	}
 	var err error
 	switch os.Args[1] {
+	case "bootstrap":
+		err = runBootstrap(context.Background(), os.Args[2:])
 	case "partitions":
 		err = runPartitions(context.Background(), os.Args[2:])
 	case "seed":
@@ -34,6 +36,7 @@ func main() {
 }
 
 func usage() {
+	fmt.Fprintln(os.Stderr, "  sierxctl bootstrap (SIERX_BOOTSTRAP_* environment variables)")
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  sierxctl partitions ensure --months-ahead N")
 	fmt.Fprintln(os.Stderr, "  sierxctl seed [--seed N] [--items N] [--projects N] [--max-depth N]")

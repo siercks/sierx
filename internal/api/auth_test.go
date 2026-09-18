@@ -47,6 +47,7 @@ func authFixture(t *testing.T) (*Server, string, string, string) {
 	t.Cleanup(func() {
 		_, _ = p.Exec(ctx, `DELETE FROM membership WHERE workspace_id=$1`, wid)
 		_, _ = p.Exec(ctx, `DELETE FROM user_account WHERE id=$1`, uid)
+		_, _ = p.Exec(ctx, `DELETE FROM seq_counter WHERE workspace_id=$1`, wid)
 		_, _ = p.Exec(ctx, `DELETE FROM workspace WHERE id=$1`, wid)
 		p.Close()
 	})
