@@ -922,7 +922,7 @@ or acceptance is claimed by this closeout.
 - [x] 1.21 sxq subset.
 - [x] 1.22 Caching and compression.
 - [x] 1.23 Concurrent cursor/race tests.
-- [ ] 1.24 Endpoint golden files.
+- [x] 1.24 Endpoint golden files.
 - [ ] 1.25 Metrics.
 
 ### Task 1.1 acceptance - 2026-09-18
@@ -1480,3 +1480,32 @@ $ go vet ./test/concurrency/...
 $ make gate-license gate-nodirect gate-notopology
 All three gates OK.
 ```
+
+### Task 1.24 acceptance - 2026-09-18
+
+All 34 current routes have mapped response fixtures, including authentication,
+TOTP, successful moves/transitions and the empty logout response envelope.
+The route inventory also checks authentication boundaries; separate tests check
+cross-workspace isolation and comment authorship. Regeneration is toolchain-
+pinned and checked for drift. Added a real-binary curl walkthrough, operator
+notes and the gate-1/CI wiring. Existing fixture semantics remained unchanged
+when regenerated; only formatting and the newly covered responses were added.
+
+```text
+$ make golden-update
+PASS (all API and SXQ packages)
+$ make test-golden
+--- PASS: TestWorkspaceIsolation (0.68s)
+--- PASS: TestGoldenRouteCoverage (0.00s)
+golden: all endpoint and query fixtures reproduce without drift
+$ make smoke-api
+smoke-api: real CLI bootstrap and curl workflow PASS
+$ make test-store
+ok github.com/siercks/sierx/internal/store 0.360s
+$ go vet ./internal/api/... ./internal/config/... ./cmd/sierx
+$ make gate-license gate-nodirect gate-notopology
+All three gates OK.
+```
+
+The full composite offline gate is pending the final metrics task. The owner's
+Spark walkthrough remains a separate, pending human acceptance item.

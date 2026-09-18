@@ -67,6 +67,7 @@ func TestAuthLocal(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("login %d %s", w.Code, w.Body)
 		}
+		assertGolden(t, "auth-login", w.Body.Bytes(), nil)
 		cookies := w.Result().Cookies()
 		if len(cookies) != 1 {
 			t.Fatal("missing cookie")
@@ -94,6 +95,9 @@ func TestAuthLocal(t *testing.T) {
 	}
 	if w := apiCall(s, "POST", "/api/v1/auth/logout", "", c); w.Code != 204 {
 		t.Fatalf("logout %d", w.Code)
+	} else {
+		body, _ := json.Marshal(map[string]any{"status": w.Code, "body": w.Body.String()})
+		assertGolden(t, "auth-logout", body, nil)
 	}
 	if w := apiCall(s, "GET", "/api/v1/me", "", c); w.Code != 401 {
 		t.Fatal("revoked session accepted")

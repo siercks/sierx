@@ -1,1 +1,41 @@
-{"id":"item-1","key":"SRX-1","title":"Server edit","body":null,"version":2,"change_seq":2,"config_version":1,"rank":"n","points":null,"start_date":null,"due_date":null,"created_at":"timestamp","updated_at":"timestamp","deleted_at":null,"status":{"key":"todo","name":"To Do","category":"open"},"assignee":null,"type":{"key":"story","name":"Story","level":1},"parent":null,"project":{"key_prefix":"SRX","name":"Backlog"},"fields":{},"rollup":{"descendant_count":0,"done_count":0,"points_total":null,"points_done":null,"earliest_start":null,"latest_due":null}}
+{
+  "assignee": null,
+  "body": null,
+  "change_seq": 2,
+  "config_version": 1,
+  "created_at": "timestamp",
+  "deleted_at": null,
+  "due_date": null,
+  "fields": {},
+  "id": "item-1",
+  "key": "SRX-1",
+  "parent": null,
+  "points": null,
+  "project": {
+    "key_prefix": "SRX",
+    "name": "Backlog"
+  },
+  "rank": "n",
+  "rollup": {
+    "descendant_count": 0,
+    "done_count": 0,
+    "earliest_start": null,
+    "latest_due": null,
+    "points_done": null,
+    "points_total": null
+  },
+  "start_date": null,
+  "status": {
+    "category": "open",
+    "key": "todo",
+    "name": "To Do"
+  },
+  "title": "Server edit",
+  "type": {
+    "key": "story",
+    "level": 1,
+    "name": "Story"
+  },
+  "updated_at": "timestamp",
+  "version": 2
+}

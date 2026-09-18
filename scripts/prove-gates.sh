@@ -20,6 +20,7 @@ cd "$(git rev-parse --show-toplevel)"
 # claim someone can argue with.
 declare -A EXEMPT=(
   [gate-0]="composite: runs the other gates, so its failure modes are theirs. Proving it would mean proving each again."
+  [gate-1]="composite: runs gate-0 plus endpoint goldens, fuzzing, race checks, generation and curl smoke; their assertions define its failures."
   [gate-bench]="advisory by ADR-016 until reference hardware exists at task 2.16. Its one testable behaviour — exiting nonzero with no baseline — is asserted below rather than by planting a violation."
 )
 

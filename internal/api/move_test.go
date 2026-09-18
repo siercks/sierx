@@ -33,6 +33,7 @@ func TestMove(t *testing.T) {
 	if doc["version"] != float64(2) || doc["parent"].(map[string]any)["key"] != "SRX-2" {
 		t.Fatal(doc)
 	}
+	assertGolden(t, "move-success", w.Body.Bytes(), itemReplacements(doc))
 	var correct bool
 	if err := s.Pool.QueryRow(context.Background(), `SELECT (SELECT rank FROM item WHERE key='SRX-2')<(SELECT rank FROM item WHERE key='SRX-1') AND (SELECT rank FROM item WHERE key='SRX-1')<(SELECT rank FROM item WHERE key='SRX-3') AND (SELECT nlevel(path) FROM item WHERE key='SRX-3')=3`).Scan(&correct); err != nil || !correct {
 		t.Fatalf("rank/subtree %v %v", correct, err)

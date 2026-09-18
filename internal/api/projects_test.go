@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -22,17 +23,28 @@ func fixtureSession(t *testing.T, s *Server, email string) *http.Cookie {
 
 func assertGolden(t *testing.T, name string, got []byte, replacements map[string]string) {
 	t.Helper()
-	text := string(got)
-	want, err := os.ReadFile(filepath.Join("..", "..", "test", "golden", "api", name+".json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var a, b any
-	if err = json.Unmarshal([]byte(text), &a); err != nil {
+	d := json.NewDecoder(bytes.NewReader(got))
+	d.UseNumber()
+	if err := d.Decode(&a); err != nil {
 		t.Fatal(err)
 	}
 	a = normalizeGolden(a, replacements)
-	if err = json.Unmarshal(want, &b); err != nil {
+	path := filepath.Join("..", "..", "test", "golden", "api", name+".json")
+	if os.Getenv("SIERX_GOLDEN_UPDATE") == "1" {
+		raw, _ := json.MarshalIndent(a, "", "  ")
+		if err := os.WriteFile(path, append(raw, '\n'), 0644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d = json.NewDecoder(bytes.NewReader(want))
+	d.UseNumber()
+	if err = d.Decode(&b); err != nil {
 		t.Fatal(err)
 	}
 	aa, _ := json.Marshal(a)

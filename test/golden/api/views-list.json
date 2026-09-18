@@ -1,1 +1,13 @@
-{"data":[{"id":"view-1","name":"Mine","query":"status=todo order by rank","layout":"list","shared":false,"owner_id":"author-1"}],"next_cursor":null}
+{
+  "data": [
+    {
+      "id": "view-1",
+      "layout": "list",
+      "name": "Mine",
+      "owner_id": "author-1",
+      "query": "status=todo order by rank",
+      "shared": false
+    }
+  ],
+  "next_cursor": null
+}

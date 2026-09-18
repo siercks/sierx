@@ -1,1 +1,6 @@
-{"type":"about:blank","title":"Bad Request","status":400,"detail":"theme must be system, light, dark, light-hc or dark-hc."}
+{
+  "detail": "theme must be system, light, dark, light-hc or dark-hc.",
+  "status": 400,
+  "title": "Bad Request",
+  "type": "about:blank"
+}

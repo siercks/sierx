@@ -33,6 +33,9 @@ func TestTransitions(t *testing.T) {
 	if doc["version"] != float64(2) || doc["status"].(map[string]any)["key"] != "doing" {
 		t.Fatal(doc)
 	}
+	replacements := itemReplacements(doc)
+	replacements[actor] = "author-1"
+	assertGolden(t, "transition-success", w.Body.Bytes(), replacements)
 	var count int
 	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM change_event WHERE kind='status_changed' AND old_value='"todo"'::jsonb AND new_value='"doing"'::jsonb`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("status event %d %v", count, err)

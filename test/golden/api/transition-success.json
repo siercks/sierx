@@ -1,7 +1,10 @@
 {
-  "assignee": null,
+  "assignee": {
+    "display_name": "Test user",
+    "id": "author-1"
+  },
   "body": null,
-  "change_seq": 1,
+  "change_seq": 3,
   "config_version": 1,
   "created_at": "timestamp",
   "deleted_at": null,
@@ -26,9 +29,9 @@
   },
   "start_date": null,
   "status": {
-    "category": "open",
-    "key": "todo",
-    "name": "To Do"
+    "category": "active",
+    "key": "doing",
+    "name": "In Progress"
   },
   "title": "Original",
   "type": {
@@ -37,5 +40,5 @@
     "name": "Story"
   },
   "updated_at": "timestamp",
-  "version": 1
+  "version": 2
 }
