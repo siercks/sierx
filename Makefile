@@ -11,7 +11,8 @@ SHELL := /usr/bin/env bash
         sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store \
         seed seed-determinism rollup-verify \
         gate-license prove-license vendor-verify test-property \
-        backup-conformance restore-test gate-nobackupleak prove-nobackupleak
+        backup-conformance restore-test gate-nobackupleak prove-nobackupleak \
+        bench-smoke bench-baseline gate-bench
 
 # `make db-psql -- -c "select 1"`: make consumes `--` and leaves the words in
 # MAKECMDGOALS; swallow them as no-op goals and hand them to db.sh, which
@@ -129,3 +130,12 @@ gate-nobackupleak: ## No backup tool named outside the drivers (ADR-017)
 
 prove-nobackupleak: ## Plant tool names outside the drivers and assert the gate goes red
 	@bash scripts/gate-nobackupleak.sh --prove
+
+bench-smoke: ## Run every §12 scenario once, assert none errors, name the skips (ADR-016)
+	@bash scripts/bench.sh smoke
+
+bench-baseline: ## Capture reference-hardware numbers into test/bench/baseline.json
+	@bash scripts/bench.sh baseline
+
+gate-bench: ## Assert the §12 thresholds against the baseline (reference hardware only)
+	@bash scripts/bench.sh gate

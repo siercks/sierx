@@ -441,14 +441,15 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
         should be loud every week.
       - `gate-nobackupleak`'s allowlist gained two entries beyond the two
         ADR-017 names, each with its reason in the script: `.env.example`
-        (`SIERX_BACKUP_DRIVERS` and `PGBACKREST_*` are how a driver is
+        (the driver list and repository variables are how a driver is
         *selected* — naming them in configuration is the ADR's mechanism, and
         BUILD Appendix B fixes the names) and `scripts/schema.sh` (a
         `--schema-only` structural snapshot for drift detection: no data, no
         restore path, still needed if every driver were replaced).
       - Once modules were vendored, `vendor/` tripped gate-notopology (a
-        dependency's `.gitignore` names `mise.local.toml`) and
-        gate-nobackupleak (pgx's Rakefile names `pg_dump`). All three
+        dependency's `.gitignore` lists a dev-tool config file whose name ends
+        in one of the internal-hostname suffixes) and gate-nobackupleak (pgx's
+        Rakefile names a dump tool). All three
         content gates now exclude `vendor/`: third-party source is not this
         project's configuration and is not edited here.
 - [ ] 0.12 CI skeleton, proven to fail
@@ -482,7 +483,40 @@ Gate: `make gate-0`. Tasks in order; one commit each (BUILD §3.3).
       Still to do before this box is checked: the per-release SBOM, which
       belongs with `release.yml` in task 0.12 (BUILD task 0.12 step 2: "SBOM
       per release"), so it is written there and referenced here.
-- [ ] 0.14 Benchmark harness
+- [x] 0.14 Benchmark harness — 2026-09-12 (agent host, not reference hardware)
+      ```
+      $ make bench-smoke
+      --- timings
+      BenchmarkBoardView500                  5     1440152 ns/op
+      BenchmarkItemDetail                    5      580556 ns/op
+      BenchmarkDescendantRollupDepth6        5      121237 ns/op
+      BenchmarkDeltaSync50                   5      347681 ns/op     7050 resp_bytes
+      BenchmarkFullTextSearch                5      936019 ns/op
+      BenchmarkRollupRecompute200            5    46960326 ns/op
+      --- skipped scenarios (by name)
+        sxq query over 10k items, indexed fields: skipped: needs the sxq parser (phase 3)
+        steady-state RSS, sierx process: skipped: needs the sierx process (task 1.1)
+        cold start to serving: skipped: needs the sierx process (task 1.1)
+      bench-smoke: OK (no scenario errored; thresholds not asserted here — ADR-016)
+
+      $ make gate-bench
+      gate-bench: no baseline — §12's thresholds are measured on the Pi 5
+        reference box, which does not exist until task 2.16 (ADR-016).
+        Run 'make bench-baseline' there, commit test/bench/baseline.json, then
+        this gate becomes meaningful. This exit is expected until then.
+      make: *** [gate-bench] Error 1        <- the required behaviour
+      ```
+      Six of the nine §12 rows are measurable now and do run; the other three
+      are skipped by name with the reason. `bench-baseline` and `gate-bench`
+      were exercised once on this host to prove the round trip (all six inside
+      budget on a 2.1GHz Xeon, which says nothing about the Pi) and the
+      baseline was then **deleted**: it must be captured on reference hardware
+      at task 2.16, and a dev-box baseline committed here would make the gate
+      permanently meaningless.
+      Thresholds live only in `test/bench/thresholds.go`, with scenario names
+      copied verbatim from §12 — `ThresholdFor` panics on an unknown name,
+      because a zero threshold would silently pass and turn a typo into a
+      disabled gate.
 
 ### Phase 0 exit
 

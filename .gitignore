@@ -27,3 +27,4 @@ coverage*
 
 # backup artifacts (dumps, restore-test rotation counter)
 .backups/
+

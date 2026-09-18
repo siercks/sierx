@@ -566,8 +566,8 @@ func TestMutateSeqGapFreeUnderConcurrency(t *testing.T) {
 				_, err := f.st.Mutate(ctx, f.wsID, func(m *store.Mutation) error {
 					m.Create(store.ItemInsert{
 						ProjectID: f.projectID, ItemTypeID: f.typeID, StatusID: f.todo,
-						Title:     fmt.Sprintf("w%d-i%d", w, i),
-						OriginID:  f.originID,
+						Title:    fmt.Sprintf("w%d-i%d", w, i),
+						OriginID: f.originID,
 					})
 					return nil
 				})

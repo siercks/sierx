@@ -81,20 +81,20 @@ func (m *Mutation) Actor() (uuid.UUID, bool) { return m.actorID, m.hasActor }
 // by callers: path must end in the item's own id (§5.3) and keys come from the
 // project's monotonic counter (§A.1).
 type ItemInsert struct {
-	ID           uuid.UUID
-	ProjectID    uuid.UUID
-	ItemTypeID   uuid.UUID
-	StatusID     uuid.UUID
-	ParentID     *uuid.UUID
-	Title        string
-	Body         *string
-	AssigneeID   *uuid.UUID
-	Points       *float64
-	StartDate    *string // date, not timestamptz (§A.3)
-	DueDate      *string
-	Fields       map[string]any
-	OriginID     uuid.UUID
-	OriginSeq    *int64
+	ID            uuid.UUID
+	ProjectID     uuid.UUID
+	ItemTypeID    uuid.UUID
+	StatusID      uuid.UUID
+	ParentID      *uuid.UUID
+	Title         string
+	Body          *string
+	AssigneeID    *uuid.UUID
+	Points        *float64
+	StartDate     *string // date, not timestamptz (§A.3)
+	DueDate       *string
+	Fields        map[string]any
+	OriginID      uuid.UUID
+	OriginSeq     *int64
 	ConfigVersion *int32
 
 	// resolved during flush
