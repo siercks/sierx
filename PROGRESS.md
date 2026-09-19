@@ -1813,6 +1813,12 @@ optional platform packages, enter inventory/SBOM; missing or unapproved licenses
 fail. A green composite gate and accepted release still require the remaining
 hosted and operator evidence below.
 
+The first Linux run after that decision exposed a case-only evidence-path bug:
+`svg-tags` ships `LICENSE`, while the evidence record said `license`. Windows
+had resolved the wrong case silently. The record now uses the exact filename,
+and the negative controls enumerate each path segment so a case mismatch fails
+on case-insensitive development filesystems too.
+
 The offline Linux gate-2, hosted checks on the published revision, native published
 images, Spark HTTPS/HTTP3/restart/rollback, encrypted off-machine physical restore,
 restored application/authentication, Brave/manual review, real SRX-1 cutover and
