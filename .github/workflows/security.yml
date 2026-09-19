@@ -59,5 +59,4 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
-      - run: npm --prefix web ci
-      - run: make check-web-vulnerabilities
+      - run: make check-web-supply-chain

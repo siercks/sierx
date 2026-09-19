@@ -9,12 +9,17 @@ reaches the default branch.
 - `go-vulnerabilities`: govulncheck v1.8.0 fails for known vulnerabilities reachable
   from the Go source. Findings outside reachable code may be reported without
   failure; this is not a claim that every dependency is vulnerability-free.
+- `frontend-vulnerabilities`: installs the exact npm lockfile without lifecycle
+  scripts, verifies registry integrity hashes, registry signatures/provenance,
+  and the license policy (including negative drift tests), then fails on known
+  moderate-or-higher npm advisories.
 
 Run locally with the pinned Go toolchain, make, Bash and ShellCheck installed:
 
 ```sh
 make check-workflows
 make check-vulnerabilities
+make check-web-supply-chain
 ```
 
 These targets fetch pinned tool versions through Go's module checksum mechanism;
@@ -69,7 +74,11 @@ References:
 ## Phase 2 additions
 
 Keep the separate workflow-lint and go-vulnerabilities checks. Add
-frontend-vulnerabilities to required checks after its first hosted run. The main
+frontend-vulnerabilities to required checks after its first hosted run. Its
+license portion is default-deny: an unknown license, a copyleft license, a
+package using another package's narrow exception, or a stale exact-version
+exception fails. The advisory portion uses the current npm registry database,
+so it remains an online scheduled/PR check. The main
 gate now invokes gate-2; frontend preparation downloads the exact lockfile and
 Playwright browsers before offline execution. Build the web assets before running
 Go source scans because the application embeds those assets. Release publication

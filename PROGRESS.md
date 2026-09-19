@@ -1800,12 +1800,18 @@ each browser run. Session-expired dialog drafts survive reauthentication, and de
 returns focus to the dated item's heading. Guardrail scripts now fail if their
 required shell utilities are absent, rather than treating a failed scan as empty.
 
-The license gate is intentionally **RED pending owner policy input** for MIT-0,
-PSF-2.0, Python-2.0 and CC-BY-4.0. No MPL dependency remains and no blocked license
-has been allowed. The missing svg-tags metadata has a hash-verified MIT license-file
-evidence record. All npm components, including optional platform packages, enter
-inventory/SBOM; missing or unapproved licenses fail. There is no claimed green
-composite gate or accepted release while this decision remains open.
+The owner approved MIT-0 and PSF-2.0 as generally permitted dependencies and
+exact-package approvals for Python-2.0 `argparse@2.0.1` and CC-BY-4.0
+`caniuse-lite@1.0.30001810`. No MPL dependency remains and no copyleft license
+has been allowed. Exact approvals fail on package, version or declared-license
+drift and cannot authorize another package. The online frontend supply-chain
+check performs a clean, lifecycle-script-free install, verifies registry
+signatures/provenance, runs the license negative controls and checks known npm
+advisories at moderate severity or above. The missing svg-tags metadata has a
+hash-verified MIT license-file evidence record. All npm components, including
+optional platform packages, enter inventory/SBOM; missing or unapproved licenses
+fail. A green composite gate and accepted release still require the remaining
+hosted and operator evidence below.
 
 The offline Linux gate-2, hosted checks on the published revision, native published
 images, Spark HTTPS/HTTP3/restart/rollback, encrypted off-machine physical restore,

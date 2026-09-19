@@ -56,6 +56,9 @@ load_allowlist() {
     [[ -z ${verb:-} || $verb == \#* ]] && continue
     case $verb in
       allow) ALLOWED+=("$a") ;;
+      allow-package)
+        [[ $rest == --* ]] || { echo "licenses.sh: allow-package $a has no '-- reason'" >&2; exit 2; }
+        ;;
       block) BLOCKED+=("$a") ;;
       resolve)
         [[ $rest == --* ]] || { echo "licenses.sh: resolve $a has no '-- reason'" >&2; exit 2; }

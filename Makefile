@@ -251,7 +251,7 @@ sbom-check: ## Validate the generated SBOM format and all stable inventory/build
 	@bash scripts/sbom.sh --check "$(or $(SBOM_OUT),dist/sbom.cdx.json)"
 
 .PHONY: ci-local-prepare sbom sbom-check check
-.PHONY: check-workflows check-vulnerabilities
+.PHONY: check-workflows check-vulnerabilities check-web-supply-chain
 check-workflows: ## Validate GitHub Actions workflows (online pinned tool installation)
 	@bash scripts/security-check.sh workflows
 
@@ -304,6 +304,12 @@ gate-browser: web-build web-test ## Real database + embedded build over HTTPS, C
 gate-accessibility: gate-browser ## MIT HTML Validate and browser accessibility assertions (owner-approved replacement for axe)
 gate-keyboard: gate-browser ## Keyboard workflow is part of the real-browser gate
 check-web-vulnerabilities: ## Online npm vulnerability assessment, separate from offline gate
+	@npm --prefix web audit --audit-level=moderate
+
+check-web-supply-chain: ## Verify npm integrity, license policy, drift controls and advisories
+	@npm --prefix web ci --ignore-scripts
+	@cd web && node scripts/licenses.mjs --prove
+	@npm --prefix web audit signatures
 	@npm --prefix web audit --audit-level=moderate
 
 gate-virtualization: web-build

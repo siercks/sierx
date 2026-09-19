@@ -1703,15 +1703,17 @@ make ci-local && bash scripts/prove-gates.sh
 **Files.** `scripts/licenses.sh`, `.licenses-allowlist`, `Makefile`
 
 **Steps.** `go-licenses check` plus an npm-side checker against the §15.1
-allowlist (MIT, Apache-2.0, BSD-2, BSD-3, ISC, Unlicense, CC0, PostgreSQL, Zlib).
+allowlist (MIT, MIT-0, Apache-2.0, BSD-2, BSD-3, ISC, Unlicense, CC0,
+PostgreSQL, Zlib, PSF-2.0), plus exact-package approvals recorded by the owner.
 Blocked: GPL, LGPL, AGPL, MPL, SSPL, BSL — note that SSPL and BSL are not
 copyleft and slip past a "no GPL family" rule, so they must be named explicitly.
 Dual-licensed packages are resolved to their permitted arm **only if** the
 allowlist file records which arm was taken and why. Vendor Go modules;
 `go mod verify` in CI.
 
-**Acceptance.** `make gate-license`, plus one negative test: add a known AGPL
-module in a scratch branch and assert the gate goes red.
+**Acceptance.** `make gate-license`, plus negative controls proving that AGPL,
+MPL, unknown licenses, license drift and attempts to reuse another package's
+exact approval make the gate go red.
 
 ### Task 0.14 — Benchmark harness
 
