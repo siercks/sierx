@@ -9,6 +9,9 @@
 #
 # `--prove` plants a leak in a scratch copy and asserts the gate goes red.
 set -euo pipefail
+for required_tool in git grep tr sed awk xargs; do
+  command -v "$required_tool" >/dev/null || { echo "gate prerequisite missing: $required_tool" >&2; exit 2; }
+done
 
 TOOLS=(pgbackrest pg_dump pg_restore wal-g)
 # Allowlist, with the reason each entry is here. ADR-017 names the first two;

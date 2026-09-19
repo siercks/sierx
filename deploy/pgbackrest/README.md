@@ -16,6 +16,33 @@ every operation.
 
 ---
 
+## Phase 2 implementation and first acceptance
+
+The physical `restore-to` verb is implemented. It creates a fresh private restore
+cluster, replays recovery there, then transports that recovered database into the
+new scratch database required by the shared driver contract. Configure
+PGBACKREST_RESTORE_PATH outside source PGDATA and a distinct unprivileged
+PGBACKREST_RESTORE_PORT. PostgreSQL 18 server/client tools must be available to
+the data-directory owner. No caller-supplied directory is removed or overwritten.
+
+Use the transport-specific PGBACKREST_SFTP_* or PGBACKREST_S3_* variables in
+`.env.example`, render the private config, then configure PostgreSQL continuous
+WAL archiving with the selected stanza/config. Verify the repository is genuinely
+off-machine. SFTP requires a verified known-hosts file and strict key checking.
+
+Run shared conformance on nonempty quiescent trial data, then
+`make backup-cipher-check BACKUP_DRIVER=pgbackrest`. The latter requires encrypted
+repository metadata and rejects access with cipher=none or an incorrect key. It
+never rewrites the repository or its protected config. Successful encrypted
+backup alone is not enough: compare restored counts, all table checksums,
+sequence state and rollups, and exercise login/deep links through the restored
+application using the hook in [the walkthrough](../../docs/PHASE-2-WALKTHROUGH.md).
+
+The scheduled backup runner chooses a full backup on Sunday and incremental
+backups on other days. It verifies each backup and applies retention. Install its
+timer only after conformance. Physical acceptance has not been run on this Windows
+development host; this document does not claim a usable production backup.
+
 ## PostgreSQL major upgrade
 
 The order matters, and getting it wrong is how a repository becomes unusable
@@ -57,26 +84,14 @@ restore test is green on the new version.
 
 ---
 
-## Adding a second repository (`repo2`)
+## Multiple repositories
 
-pgBackRest supports several repositories on one stanza, which is how an
-off-box copy is added without giving up the local one.
-
-1. Add the `repo2-*` keys to `pgbackrest.conf.tmpl`, mirroring the `repo1-*`
-   block, with their own placeholders. Set the cipher type and passphrase at
-   the same time as the rest — see the warning below.
-2. Add the new variables to the host env file and to `.env.example` (types and
-   placeholders only, never values).
-3. Re-render the config and run `init`, which creates the stanza in the new
-   repository.
-4. Take a backup to `repo2` and run conformance against it:
-   ```bash
-   PGBACKREST_REPO=2 bash scripts/backup/driver.sh pgbackrest backup
-   PGBACKREST_REPO=2 make backup-conformance
-   ```
-5. `make restore-test` rotates across drivers and repositories, so a secondary
-   that has never been restored from cannot stay untested (ADR-010). Confirm a
-   rotation has actually reached `repo2` before considering it live.
+The current renderer and cipher check support repository 1 only. Choose its
+off-machine destination before acceptance. A second repository needs an explicit
+template/driver extension and conformance for that destination; selecting
+PGBACKREST_REPO=2 today is rejected. Existing restore-test rotation is across
+drivers, not automatic repository selection. Do not claim a second destination
+is protected until it is configured, tested and included in actual rotation.
 
 **Encryption cannot be changed on an existing stanza.** `repo-cipher-type` and
 `repo-cipher-pass` are fixed when the stanza is created; changing either means

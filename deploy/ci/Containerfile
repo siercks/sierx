@@ -8,16 +8,19 @@ FROM ${PG_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git make python3 curl ca-certificates podman gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 COPY --from=go /usr/local/go /usr/local/go
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/bin/ /usr/local/bin/
+COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
+ENV npm_config_cache=/opt/npm-cache PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 ENV PATH="/usr/local/go/bin:${PATH}" GOPATH=/opt/go GOCACHE=/opt/go-build GOTOOLCHAIN=local
 WORKDIR /opt/prepared
 COPY . .
+RUN npm --prefix web ci && cd web && npx --no-install playwright install --with-deps chromium firefox webkit
 RUN git init -q && git add -A && \
     go mod download && go mod verify && \
     bash -c 'source scripts/tool.sh; tool_path goose; tool_path sqlc' && \
     mkdir /opt/sierx-tools && cp bin/goose bin/sqlc /opt/sierx-tools/ && \
     sha256sum go.mod go.sum scripts/tool.sh .nvmrc deploy/ci/Containerfile \
-      scripts/ci-run.sh deploy/quadlet/sierx-postgres.container > /opt/prepared-inputs.sha256
+      scripts/ci-run.sh deploy/quadlet/sierx-postgres.container web/package.json web/package-lock.json > /opt/prepared-inputs.sha256
 COPY scripts/ci-run.sh /usr/local/bin/sierx-ci-run.sh
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/sierx-ci-run.sh"]

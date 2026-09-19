@@ -30,9 +30,7 @@ load_allowlist
 
 generate() {
   local target=$1
-  if [[ -d node_modules || -d web/node_modules || -f package-lock.json || -f web/package-lock.json ]]; then
-    die "frontend dependencies present; extend the SBOM inventory before generating"
-  fi
+  (cd web && node scripts/licenses.mjs)
   mkdir -p "$(dirname "$target")"
 
   local version
@@ -92,6 +90,29 @@ with open(tsv) as f:
             comp["properties"] = [{"name": "go:mod:h1", "value": h1}]
         components.append(comp)
 
+from urllib.parse import quote
+with open("web/package-lock.json") as f:
+    lock = json.load(f)
+with open("web/licenses.json") as f:
+    license_evidence = json.load(f)
+resolutions = {}
+with open('.licenses-allowlist') as f:
+    for line in f:
+        if line.startswith('resolve npm:'):
+            _,name,license,*_ = line.split()
+            resolutions[name[4:]] = license
+for path, package in lock["packages"].items():
+    if not path:
+        continue
+    name = path.rsplit("node_modules/", 1)[-1]
+    purl = f"pkg:npm/{quote(name, safe='/')}@{package['version']}"
+    components.append({"type": "library", "bom-ref": purl + "#" + path,
+        "name": name, "version": package["version"], "purl": purl,
+        "scope": "optional" if package.get("dev") or package.get("optional") else "required",
+        "licenses": [{"expression": resolutions.get(f"{name}@{package['version']}", package.get("license") or license_evidence[f"{name}@{package['version']}"]["license"])}],
+        "properties": [{"name": "npm:integrity", "value": package["integrity"]},
+                       {"name": "npm:resolved", "value": package["resolved"]}]})
+
 bom = {
     "bomFormat": "CycloneDX",
     "specVersion": "1.5",
@@ -118,15 +139,10 @@ bom = {
 with open(target, "w") as f:
     json.dump(bom, f, indent=2, sort_keys=False)
     f.write("\n")
-print(f"sbom: wrote {target} ({len(components)} Go component(s))")
+print(f"sbom: wrote {target} ({len(components)} Go and npm component(s))")
 PY
 
-  if [[ ! -d node_modules ]]; then
-    echo "sbom: no node_modules — the frontend tree arrives at task 2.1; this SBOM covers the Go build only"
-  else
-    echo "sbom: node_modules present but npm components are not yet collected — extend sbom.sh at task 2.1" >&2
-    return 1
-  fi
+
 }
 
 case ${1:-} in

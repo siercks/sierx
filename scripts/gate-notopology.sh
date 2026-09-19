@@ -30,6 +30,9 @@
 #
 # Excluded from the scan: this script (it carries the patterns).
 set -euo pipefail
+for required_tool in git grep tr sed awk xargs; do
+  command -v "$required_tool" >/dev/null || { echo "gate prerequisite missing: $required_tool" >&2; exit 2; }
+done
 
 SELF=scripts/gate-notopology.sh
 

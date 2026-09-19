@@ -86,4 +86,17 @@ jobs:
           # PG18 tool suite, not just psql (whose wrapper may choose differently).
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
-      - run: make gate-1
+      - run: make web-prepare
+      - run: make gate-2
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: frontend-review
+          if-no-files-found: ignore
+          path: |
+            web/dist/budget.json
+            web/dist/composition.html
+            web/test-results/**/detail-light.png
+            web/test-results/**/backlog-light.png
+            web/test-results/**/bootstrap-network.json

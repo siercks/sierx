@@ -169,6 +169,7 @@ gate-license: ## Every dependency on the §15.1 license allowlist (task 0.13)
 
 prove-license: ## Plant AGPL/MPL/SSPL/BSL/unknown dependencies and assert the gate goes red
 	@bash scripts/licenses.sh --prove
+	@cd web && node scripts/licenses.mjs --prove
 
 vendor-verify: ## go mod verify plus a check that vendor/ matches go.mod
 	@bash test/shell/vendor-verify_test.sh
@@ -203,7 +204,7 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # (§3.4), so anything that must hold before phase 1 belongs here, in this
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
-gate-0: ## The phase-0 gate: every check that must pass before phase 1
+gate-0: web-build ## The phase-0 gate: every check that must pass before phase 1
 	@bash test/shell/postgres-tools_test.sh
 	@bash scripts/check-postgres-tools.sh
 	@bash test/shell/schema_test.sh
@@ -259,3 +260,67 @@ check-vulnerabilities: ## Scan reachable Go vulnerabilities using the current on
 
 ci-local-prepare: ## Prepare the local CI container and caches while online
 	@bash scripts/ci-local.sh prepare
+
+# Frontend gates run entirely from the prepared npm graph.
+.PHONY: web-prepare web-build gen-routes gate-routes gate-bundle prove-routes prove-bundle
+web-prepare: ## Online npm and pinned browser preparation
+	@npm --prefix web ci
+	@cd web && npx --no-install playwright install --with-deps chromium firefox webkit
+web-build: ## Build and precompress the browser application
+	@npm --prefix web run build
+gen-routes: ## Generate the Go document route table
+	@npm --prefix web run routes
+gate-routes: ## Check generated route contracts
+	@npm --prefix web run gate:routes
+prove-routes:
+	@cd web && node scripts/routes.mjs --prove
+gate-bundle: web-build ## Enforce Brotli first-route and lazy-chunk budgets
+prove-bundle: web-build
+	@cd web && node scripts/bundle.mjs --prove
+
+.PHONY: gate-2 gate-browser gate-accessibility gate-keyboard gate-contrast gate-stylelint gate-markdown gate-lint-focus web-test
+web-test: ## Browser-client unit tests
+	@npm --prefix web test -- --exclude 'test/browser/**'
+gate-2: gate-1 gate-bundle gate-routes gate-contrast gate-stylelint gate-markdown gate-lint-focus gate-browser gate-virtualization
+	@echo "gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)"
+gate-contrast:
+	@cd web && npx --no-install vitest run src/themes/tokens.test.ts
+prove-contrast:
+	@cd web && npx --no-install vitest run src/themes/tokens.test.ts -t rejects
+gate-stylelint:
+	@cd web && node scripts/style-gate.mjs
+prove-stylelint:
+	@cd web && node scripts/style-gate.mjs --prove
+gate-lint-focus:
+	@cd web && node scripts/style-gate.mjs
+prove-lint-focus:
+	@cd web && node scripts/style-gate.mjs --prove
+gate-markdown:
+	@cd web && npx --no-install vitest run src/markdown/render.test.ts
+prove-markdown:
+	@cd web && npx --no-install vitest run src/markdown/render.test.ts
+gate-browser: web-build web-test ## Real database + embedded build over HTTPS, Chromium and Firefox
+	@SIERX_BROWSER_TEST=1 bash scripts/test-go.sh ./internal/api -run '^TestBrowserAcceptance$$' -count=1 -timeout=20m
+gate-accessibility: gate-browser ## MIT HTML Validate and browser accessibility assertions (owner-approved replacement for axe)
+gate-keyboard: gate-browser ## Keyboard workflow is part of the real-browser gate
+check-web-vulnerabilities: ## Online npm vulnerability assessment, separate from offline gate
+	@npm --prefix web audit --audit-level=moderate
+
+gate-virtualization: web-build
+	@SIERX_BROWSER_TEST=1 SIERX_BROWSER_SCALE=1 bash scripts/test-go.sh ./internal/api -run '^TestBrowserAcceptance$$' -count=1 -timeout=20m
+
+.PHONY: release-binaries release-image release-manifest deploy-plan deploy-apply deploy-timer backup-cipher-check
+release-binaries: ## Build the browser and binaries on the matching native runner
+	@bash scripts/release.sh binaries
+release-image: ## Publish one architecture's tested release artifact
+	@ARCH="$(ARCH)" TAG="$(TAG)" bash scripts/release.sh image
+release-manifest: ## Combine the two published image digests and write the pull manifest
+	@TAG="$(TAG)" bash scripts/release.sh manifest
+deploy-plan: ## Validate private host inputs and inspect the selected release
+	@python3 scripts/deploy.py plan
+deploy-apply: ## Apply the selected digest with HTTPS health verification and rollback
+	@python3 scripts/deploy.py apply
+deploy-timer: ## Install the pull timer after manual deployment acceptance
+	@python3 scripts/deploy.py install-timer
+backup-cipher-check: ## Verify the selected physical repository's cipher cannot be changed
+	@bash scripts/backup/driver.sh "$(BACKUP_DRIVER)" cipher-check

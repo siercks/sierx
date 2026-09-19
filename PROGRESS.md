@@ -3,7 +3,7 @@
 The agent's only progress claim. Append and check boxes; never rewrite history.
 A checked box with no pasted acceptance output is treated as red (BUILD Â§0.4).
 
-**Current phase:** 1
+**Current phase:** 2 (implementation in progress; acceptance pending)
 **Phase 2 deadline anchor:** 2026-09-12
 **Phase 2 deadline:** none (owner direction, ADR-020; original 2026-10-10 date retired)
 
@@ -1725,3 +1725,100 @@ docs/GITHUB-CHECKS.md supplies the exact main-branch rules and secret-protection
 settings to apply after the new jobs appear. Required checks are gate,
 workflow-lint and go-vulnerabilities. Hosted runs and settings confirmation are
 required before merge; this entry does not claim those settings are enabled.
+
+
+## Phase 2 entry — 2026-09-18
+
+Owner authorized all Phase 2 code and tests. Baseline main is
+561df396f73058a77d9a34370d9e407528490dbc (merged PR #5). Work uses an isolated
+checkout on build/phase-2-frontend; existing checkouts are preserved.
+Owner will walk through Brave (Chromium), with Firefox also available, and
+will run the supplied Spark commands. No production operation is implied.
+Task 2.1 starts with minimal real route components/handlers; task 2.4 enriches
+their data. All Phase 2 acceptance remains pending until actual results exist.
+
+### Phase 2 accessibility tooling decision
+
+The owner explicitly rejected an MPL exception for axe-core and its adapter.
+Both packages have been removed. Accessibility acceptance uses MIT HTML Validate
+plus browser assertions for names, targets, focus, keyboard behavior and zoom.
+This is an owner-directed replacement, not a claim of axe equivalence or WCAG
+certification. Manual Brave and Firefox review remains required. Newest Vite /
+Tailwind toolchains also brought MPL Lightning CSS; compatible Vite 7 and
+Tailwind 3 lines replace them. Vitest 4.1.11 fixes GHSA-82fw-gwwq-j7x9; npm audit
+reported zero findings after that update.
+
+
+### Phase 2 code candidate and local validation - 2026-09-18
+
+Tasks 2.1-2.15 now have a React browser implementation: real login and second
+factors, four token palettes/five preferences, safely injected authorized state,
+projected paginated/virtualized lists, URL queries, lossless sequence handling,
+focused change-feed polling, item/detail/action/comment/link flows, draft-preserving
+errors and conflicts, and keyboard/accessibility checks. Generated API fields were
+preserved. The source now enforces LF for platform-independent golden data.
+
+Tasks 2.16 and 2.18 have native release build targets, embedded/precompressed assets,
+rootless app/Caddy Quadlets, digest-based pull deployment with rollback, release
+smoke checks, physical restore/cipher checks, a restored-app hook, backup scheduling,
+and an explicit accepted-cutover command. These are implemented code, **not**
+evidence that production deployment or physical recovery has passed. Host operation
+is reserved to the owner. The walkthrough and acceptance record enumerate inputs
+and separate disposable testing, trial deployment and persistent real data.
+
+Task 2.17 experiment: Preact 10.29.8 (MIT) was installed outside the application
+and temporarily aliased in the build. It measured 50,025 bytes initial JS, 2,932
+bytes CSS and 40,703 bytes item chunk. The same 32 then-existing browser checks
+passed in Chromium and Firefox. The alias was reverted: complete Linux gate
+compatibility remains unverified, while React is already well within budget.
+No Preact dependency or experiment alias is shipped in the candidate.
+
+Actual local results (Windows, disposable PostgreSQL 18.6, Go 1.27.1, Node 24):
+
+```text
+SIERX_BROWSER_TEST=1 go test -mod=vendor ./... -count=1 -timeout=20m: PASS
+  includes 36 real HTTPS/database browser checks across Chromium and Firefox
+SIERX_BROWSER_TEST=1 SIERX_BROWSER_SCALE=1 go test -mod=vendor ./internal/api
+  -run '^TestBrowserAcceptance$' -count=1 -timeout=20m: PASS
+  10,000 items, signed pagination, bounded DOM and retained keyboard focus
+frontend unit tests: 16 PASS (contrast, hostile Markdown, cache rollback/int64, feed, fields)
+route generation/check and negative controls: PASS
+bundle, style/focus and contrast negative controls: PASS
+repository mutation/topology/backup abstraction negative controls: PASS
+Python operational/input/snapshot/SBOM tests: 10 PASS
+  includes simulated failed-health rollback and first-install stop behavior
+Linux amd64 and arm64 Go compilation with embedded frontend: PASS
+actionlint 1.7.12 with ShellCheck: PASS
+reachable Go vulnerability scan: 0; one unused module-only advisory remains
+npm audit: 0 vulnerabilities
+```
+
+A pagination mismatch between bootstrap and browser continuation was found and
+fixed by normalizing the empty query consistently. Second-factor tests use separate
+accounts and a fresh attempt window per browser; throttling remains active within
+each browser run. Session-expired dialog drafts survive reauthentication, and deletion
+returns focus to the dated item's heading. Guardrail scripts now fail if their
+required shell utilities are absent, rather than treating a failed scan as empty.
+
+The license gate is intentionally **RED pending owner policy input** for MIT-0,
+PSF-2.0, Python-2.0 and CC-BY-4.0. No MPL dependency remains and no blocked license
+has been allowed. The missing svg-tags metadata has a hash-verified MIT license-file
+evidence record. All npm components, including optional platform packages, enter
+inventory/SBOM; missing or unapproved licenses fail. There is no claimed green
+composite gate or accepted release while this decision remains open.
+
+The offline Linux gate-2, hosted checks on the published revision, native published
+images, Spark HTTPS/HTTP3/restart/rollback, encrypted off-machine physical restore,
+restored application/authentication, Brave/manual review, real SRX-1 cutover and
+seven-day primary use still need recorded evidence. GitHub rule enumeration found
+no rulesets; the token could not read legacy status-check protection (403), so
+repository administration settings remain owner-verifiable. No settings were changed.
+
+Use docs/PHASE-2-WALKTHROUGH.md and docs/PHASE-2-ACCEPTANCE.md for the next actions.
+Do not mark Phase 2 accepted or begin Phase 3 from this candidate alone.
+
+Final React bundle (decimal bytes, Brotli quality 11): initial JS 100,976 /
+250,000; initial CSS 2,941 / 20,000; item lazy chunk 40,904 / 60,000; login
+lazy chunk 612 / 60,000. Composition and sanitized initial-network evidence are
+captured as review artifacts. SVG-tag license evidence and the rendered token
+checks are independent of package metadata omissions and CSS formatting.

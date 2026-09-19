@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Sierx backup; Sunday full, other days incremental
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+Unit=sierx-backup.service
+
+[Install]
+WantedBy=timers.target

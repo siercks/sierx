@@ -19,6 +19,12 @@ cd "$(git rev-parse --show-toplevel)"
 # This list is the only place a gate escapes a proof, and every entry is a
 # claim someone can argue with.
 declare -A EXEMPT=(
+  [gate-virtualization]="integration assertion: loads 10k real database items and bounds DOM growth while scrolling; fails if list stops virtualizing."
+  [gate-2]="composite: gate-1 plus frontend and browser assertions; each component has its own proof."
+  [gate-browser]="integration assertions: real HTTPS/database workflow failures fail Playwright and Go; accessibility negative controls run in the suite."
+  [gate-accessibility]="alias of the integration browser gate; intentional unlabeled controls are rejected in the browser suite."
+  [gate-keyboard]="alias of the integration browser gate; tests assert focus reachability and prohibit pointer events."
+
   [gate-0]="composite: runs the other gates, so its failure modes are theirs. Proving it would mean proving each again."
   [gate-1]="composite: runs gate-0 plus endpoint goldens, fuzzing, race checks, generation and curl smoke; their assertions define its failures."
   [gate-bench]="advisory by ADR-016 until reference hardware exists at task 2.16. Its one testable behaviour — exiting nonzero with no baseline — is asserted below rather than by planting a violation."
