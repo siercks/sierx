@@ -49,6 +49,26 @@ that manifest to the deployment channel until the revision's required checks pas
 The existing manual multistage `scripts/release-image.sh` path is for a builder
 with both platform capabilities; native hosted builds are preferred.
 
+With an authenticated GitHub CLI, dispatch and inspect the branch build as
+follows. Set `RUN_ID` to the numeric ID printed by `gh run list`, and confirm
+that `headSha` is the revision accepted in step 1:
+
+```bash
+gh auth status
+gh workflow run release.yml --ref build/phase-2-frontend
+gh run list --workflow release.yml --branch build/phase-2-frontend --limit 5
+RUN_ID=replace-with-run-id
+gh run view "$RUN_ID" --json headSha,status,conclusion,url
+gh run watch "$RUN_ID" --exit-status
+install -d -m 700 "$HOME/.local/share/sierx/release-review"
+gh run download "$RUN_ID" --name deployment-manifest \
+  --dir "$HOME/.local/share/sierx/release-review"
+python3 -m json.tool "$HOME/.local/share/sierx/release-review/release.json"
+```
+
+The GitHub web interface is an equivalent route when `gh` is unavailable.
+Review the full revision and image digest before publishing the manifest.
+
 Publish the reviewed `release.json` to an owner-controlled HTTPS URL. The target
 pulls this manifest; there is no inbound deployment webhook or self-hosted runner.
 Use immutable app and Caddy image digests. Registry authentication, if necessary,
@@ -76,6 +96,19 @@ SIERX_SESSION_KEY, SIERX_AUTH_MODE=local, SIERX_BASE_URL and
 SIERX_LISTEN_ADDR=127.0.0.1:<chosen app port>. Protect and back up the session key:
 it also protects second-factor state. Keep all host files outside Git.
 
+Create the protected files and enable user services after logout:
+
+```bash
+sudo loginctl enable-linger "$USER"
+loginctl show-user "$USER" -p Linger
+install -d -m 700 "$HOME/.config/sierx"
+umask 077
+touch "$HOME/.config/sierx/app.env" "$HOME/.config/sierx/deploy.env"
+chmod 600 "$HOME/.config/sierx/app.env" "$HOME/.config/sierx/deploy.env"
+${EDITOR:-nano} "$HOME/.config/sierx/app.env"
+${EDITOR:-nano} "$HOME/.config/sierx/deploy.env"
+```
+
 Create a private `~/.config/sierx/deploy.env` with these required inputs:
 
 | Variable | Meaning |
@@ -86,13 +119,52 @@ Create a private `~/.config/sierx/deploy.env` with these required inputs:
 | SIERX_BASE_URL | Real HTTPS origin matching app.env |
 | SIERX_APP_PORT | Unprivileged loopback application port |
 
-Load the private environment into the operator shell using your host's protected
-configuration procedure, then:
+After the fresh trial database exists, load `app.env` and apply migrations. This
+does not reset or seed the database:
 
 ```bash
+set -a
+. "$HOME/.config/sierx/app.env"
+set +a
+make migrate-up
+make migrate-status
+```
+
+Load the private deployment environment into the operator shell, then apply the
+reviewed release:
+
+```bash
+set -a
+. "$HOME/.config/sierx/deploy.env"
+set +a
 make deploy-plan
 make deploy-apply
 systemctl --user status sierx.service sierx-caddy.service
+```
+
+Bootstrap the empty trial workspace with the `sierxctl` binary from the accepted
+release image. The password is read without echo and is inherited by the
+temporary container rather than placed in its command line:
+
+```bash
+DEPLOYED_IMAGE=$(python3 -c 'import json,pathlib; print(json.loads((pathlib.Path.home()/".local/share/sierx/current.json").read_text())["image"])')
+export SIERX_BOOTSTRAP_WORKSPACE_SLUG=trial
+export SIERX_BOOTSTRAP_WORKSPACE_NAME='Sierx trial'
+export SIERX_BOOTSTRAP_ADMIN_EMAIL='replace-with-private-admin-email'
+export SIERX_BOOTSTRAP_ADMIN_NAME='Administrator'
+export SIERX_BOOTSTRAP_PROJECT_PREFIX=SRX
+export SIERX_BOOTSTRAP_PROJECT_NAME='Sierx backlog'
+read -rsp 'Initial administrator password: ' SIERX_BOOTSTRAP_ADMIN_PASSWORD
+export SIERX_BOOTSTRAP_ADMIN_PASSWORD
+printf '\n'
+podman run --rm --network host \
+  --env-file "$HOME/.config/sierx/app.env" \
+  -e SIERX_BOOTSTRAP_WORKSPACE_SLUG -e SIERX_BOOTSTRAP_WORKSPACE_NAME \
+  -e SIERX_BOOTSTRAP_ADMIN_EMAIL -e SIERX_BOOTSTRAP_ADMIN_NAME \
+  -e SIERX_BOOTSTRAP_ADMIN_PASSWORD -e SIERX_BOOTSTRAP_PROJECT_PREFIX \
+  -e SIERX_BOOTSTRAP_PROJECT_NAME \
+  --entrypoint /usr/local/bin/sierxctl "$DEPLOYED_IMAGE" bootstrap
+unset SIERX_BOOTSTRAP_ADMIN_PASSWORD
 ```
 
 The apply command checks image revision labels, keeps old hashed assets for open
@@ -135,6 +207,26 @@ SIERX_SMOKE_PASSWORD, optional SIERX_SMOKE_CODE, and SIERX_SMOKE_ITEM, then run
 secure cookies, private HTML and useful deep-link state. Run it before and after
 `systemctl --user restart sierx.service`; the item fingerprint should stay equal.
 Use a fresh valid second factor for each login. No password is printed.
+
+Keep those values in another protected file and run the smoke check on both
+sides of an application restart:
+
+```bash
+umask 077
+touch "$HOME/.config/sierx/smoke.env"
+chmod 600 "$HOME/.config/sierx/smoke.env"
+${EDITOR:-nano} "$HOME/.config/sierx/smoke.env"
+set -a
+. "$HOME/.config/sierx/smoke.env"
+set +a
+python3 scripts/release-smoke.py
+systemctl --user restart sierx.service
+systemctl --user is-active sierx.service sierx-caddy.service
+python3 scripts/release-smoke.py
+journalctl --user -u sierx.service -u sierx-caddy.service --since '-10 minutes' --no-pager
+```
+
+Compare the two printed item fingerprints; they must match.
 
 ## 5. Prove recovery before cutover
 

@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 const evidence = JSON.parse(readFileSync('licenses.json', 'utf8'));
@@ -28,6 +28,16 @@ export function accepted(license, component) {
 const entries = Object.entries(lock.packages).filter(([p]) => p !== '');
 assert(entries.length > 0, 'Missing npm inventory');
 const matchedPackageAllowances = new Set();
+function assertExactPath(root, relative, component) {
+  let current = root;
+  for (const segment of relative.split('/')) {
+    assert(
+      readdirSync(current).includes(segment),
+      `License evidence path/case drift: ${component}/${relative}`,
+    );
+    current = `${current}/${segment}`;
+  }
+}
 for (const [path, pkg] of entries) {
   assert(
     pkg.version &&
@@ -45,6 +55,7 @@ for (const [path, pkg] of entries) {
       override.reason && override.file && !override.file.includes('..'),
       'Invalid license evidence',
     );
+    assertExactPath(path, override.file, `${name}@${pkg.version}`);
     const actual = createHash('sha256')
       .update(readFileSync(`${path}/${override.file}`))
       .digest('hex');
@@ -103,5 +114,12 @@ if (process.argv.includes('--prove')) {
   assert(accepted('CC-BY-4.0', 'npm:caniuse-lite@1.0.30001810'));
   assert(!accepted('CC-BY-4.0', 'npm:caniuse-lite@1.0.30001811'));
   assert(!accepted('MPL-2.0', 'npm:caniuse-lite@1.0.30001810'));
+  assert.throws(() =>
+    assertExactPath(
+      'node_modules/svg-tags',
+      'license',
+      'svg-tags@1.0.0',
+    ),
+  );
   console.log('npm license negative controls: PASS');
 }
