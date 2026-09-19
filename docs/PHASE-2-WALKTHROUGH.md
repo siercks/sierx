@@ -14,14 +14,18 @@ git clone --branch build/phase-2-frontend https://github.com/siercks/sierx.git s
 cd sierx-phase2
 git status --short
 git rev-parse HEAD
+sudo apt-get update
+sudo apt-get install -y shellcheck
 make ci-local-prepare
 make ci-local
 make check-workflows
 make check-vulnerabilities
-make check-web-vulnerabilities
+make check-web-supply-chain
 ```
 
-Record the full revision before running commands. `ci-local-prepare` downloads
+Record the full revision before running commands. The package commands install
+the host prerequisite for workflow lint on Debian/Ubuntu systems; use the host's
+equivalent package manager elsewhere. `ci-local-prepare` downloads
 native toolchains, npm packages and pinned browsers. `ci-local` runs the complete
 `gate-2` in a disposable network-disabled container with its own database. It does
 not mount the host database, host environment file, production ports or sockets.
