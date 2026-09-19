@@ -21,6 +21,9 @@
 # `--prove` plants a violation in a scratch copy and asserts the gate goes red;
 # prove-gates.sh (task 0.12) discovers gate-* targets and calls this.
 set -euo pipefail
+for required_tool in git grep tr sed awk xargs; do
+  command -v "$required_tool" >/dev/null || { echo "gate prerequisite missing: $required_tool" >&2; exit 2; }
+done
 
 TABLES=(item item_link sprint_item comment)
 ALLOW=(

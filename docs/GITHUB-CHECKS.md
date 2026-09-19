@@ -64,3 +64,13 @@ References:
 - https://docs.github.com/en/code-security/how-tos/secure-your-secrets/prevent-future-leaks/enable-push-protection
 - https://go.dev/doc/security/vuln/
 - https://github.com/rhysd/actionlint
+
+
+## Phase 2 additions
+
+Keep the separate workflow-lint and go-vulnerabilities checks. Add
+frontend-vulnerabilities to required checks after its first hosted run. The main
+gate now invokes gate-2; frontend preparation downloads the exact lockfile and
+Playwright browsers before offline execution. Build the web assets before running
+Go source scans because the application embeds those assets. Release publication
+is separate from the operator-controlled deployment manifest channel.

@@ -21,8 +21,7 @@ updates:
       - dependency-name: toolchain
 
   - package-ecosystem: npm
-    directory: /
-    # The frontend tree (/web) is added at task 2.1; extend `directories` then.
+    directories: ["/", "/web"]
     schedule:
       interval: weekly
     groups:

@@ -1,0 +1,17 @@
+{
+  servers {
+    protocols h1 h2 h3
+  }
+}
+@SIERX_HOST@ {
+  handle /assets/* {
+    root * /srv/sierx
+    file_server {
+      precompressed br gzip
+    }
+    header Cache-Control "public, max-age=31536000, immutable"
+  }
+  handle {
+    reverse_proxy 127.0.0.1:@SIERX_APP_PORT@
+  }
+}

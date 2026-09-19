@@ -1036,3 +1036,21 @@ Counters reset on restart; the current scrape counts as in flight and completes
 after its response. No Prometheus server or Grafana is installed. Responses use
 Prometheus text 0.0.4 and no-store; no user, workspace, item or raw URL labels are
 exported. Metrics are observational snapshots, not transactionally consistent.
+
+
+## ADR-024 - Phase 2 accessibility checks without MPL dependencies
+**Date:** 2026-09-18  **Status:** accepted by owner
+**Spec refs:** §13, §15.1; BUILD tasks 2.6 and 2.14
+**Deviation:** replaces the named axe implementation, preserves the MPL block.
+**Context:** axe-core and its Playwright adapter require MPL-2.0. The owner
+explicitly chose “Keep MPL blocked; choose another audit approach.”
+**Decision:** use MIT-licensed HTML Validate WCAG rules plus browser assertions
+for accessible names, target sizes, keyboard reachability, focus restoration,
+text resizing and reduced motion. Token tests measure all declared contrast
+pairs across four palettes; browser tests cover all five theme preferences.
+Vite 7 and Tailwind 3 avoid the MPL Lightning CSS graph in newer toolchains.
+**Consequence:** this is not axe-equivalent coverage or an accessibility
+certification. Manual keyboard, visual and assistive-technology review remains
+part of acceptance. No copyleft policy exception is taken.
+**Enforcement:** gate-accessibility/gate-browser, gate-contrast, gate-lint-focus;
+intentional unnamed controls and invalid HTML must fail the browser audit.

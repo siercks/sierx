@@ -12,6 +12,7 @@ git add -A
 mkdir -p bin
 cp /opt/sierx-tools/* bin/
 export GOPROXY=off GOSUMDB=off
+npm --prefix web ci --offline --ignore-scripts
 
 # The entire cluster lives in the container layer, never the image's PGDATA
 # volume or a host directory. The loopback socket is private to this container.
@@ -30,4 +31,4 @@ export SIERX_SESSION_KEY=ci-only-not-a-secret-000000000000000000000000
 export SIERX_TRUSTED_PROXIES= SIERX_BACKUP_DRIVERS=pgdump
 export PGBACKREST_REPO_TYPE=posix PGBACKREST_REPO_PATH=.backups/physical
 export SIERX_DUMP_PATH=.backups/logical
-make gate-1
+make gate-2

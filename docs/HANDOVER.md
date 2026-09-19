@@ -9,33 +9,24 @@ true. Read it once; `PROGRESS.md` is the running state thereafter.
 
 ---
 
-## 0. Current state (accepted closeout, 2026-09-18)
+## 0. Current state (Phase 2 code candidate, 2026-09-18)
 
-The owner accepted Phase 0 with physical-backup validation deferred to task
-2.16, authorized pushing the closeout, and authorized Phase 1. Current phase:
-**1**. The next implementation task is BUILD 1.1; the interaction milestones
-are described in docs/PHASE-1-PLAN.md.
+Phase 1 is merged as PR #5 at 561df396f73058a77d9a34370d9e407528490dbc.
+The owner authorized implementation through the end of Phase 2 code. The
+frontend and deployment/recovery tooling are implemented; see PROGRESS and
+docs/PHASE-2-ACCEPTANCE.md for measured results and pending acceptance. Work is on
+build/phase-2-frontend in an isolated checkout. Brave/Chromium is the primary
+walkthrough browser; Firefox is available. The owner executes Spark commands.
 
-The actual offline container gate passed on the Spark after restoring a
-vendored source file excluded by an overly broad ignore rule. All 13 store
-and seven property-suite tests ran, 24 SQL assertions passed, the stronger
-SBOM/vendor checks passed, and restoration matched 20 tables and 15,438 items
-with zero rollup mismatches. Full evidence is in
-`docs/acceptance/phase0-offline-spark-2026-09-18.log`.
+ADR-020 removes deadlines and the immediate Pi requirement. Spark measurements
+are not small-host certification. ADR-021 requires verified encrypted off-machine
+physical backup and an isolated restore before the deployed backlog is relied on.
+Seven days of actual primary-backlog use and human design/copy/keyboard reviews
+remain acceptance requirements, not outcomes implied by implementation.
 
-- Task 0.12 is accepted; earlier pending statements in historical entries are
-  superseded by the final PROGRESS acceptance block.
-- Task 0.11 remains partial. Physical restore and cipher immutability are not
-  tested. The owner approved deferral, with encrypted off-machine backup and
-  an isolated physical restore required before relying on the deployed backlog.
-- There is no deadline (ADR-020). The Spark is the first test/deployment host;
-  the Pi is not required now. Spark timings do not establish small-host budgets.
-- Keep the existing Go/PostgreSQL architecture, phase boundaries, accessibility
-  requirements and scope discipline. Browser UI implementation remains Phase 2.
-- Always separate disposable acceptance databases from persistent application
-  data. gate-0 intentionally runs migrations down to zero; ci-local isolates it.
-- Repository BUILD v1.6 plus recorded amendments supersedes the attached v1.1.
-  The database image is already digest-pinned.
+Never run the destructive phase gate against persistent backlog data. Use the
+isolated offline CI container. The historical acceptance evidence is preserved
+in PROGRESS and docs/acceptance.
 
 Sections 1-3 below are historical pre-build context, not current status.
 

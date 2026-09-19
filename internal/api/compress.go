@@ -61,7 +61,7 @@ func encodingChoice(header string) (string, bool) {
 func compression(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Enrollment and recovery responses carry fresh authentication secrets.
-		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || strings.HasPrefix(r.URL.Path, "/assets/") {
 			next.ServeHTTP(w, r)
 			return
 		}
