@@ -6,7 +6,7 @@ Status: code candidate; host, recovery and owner acceptance are pending.
 |---|---|
 | React frontend, budgets, themes and routes | Implemented; local automated checks pass |
 | API and browser item workflows | Implemented; local real PostgreSQL/HTTPS checks pass |
-| License inventory | MPL remains blocked; narrow additional permissive-license decision pending |
+| License inventory | MIT-0 and PSF-2.0 approved; exact-package Python-2.0 and CC-BY-4.0 approvals; copyleft drift remains blocked |
 | Offline gate-2 on exact candidate | Run on Spark; not yet claimed |
 | Hosted workflow/vulnerability checks | Candidate must pass before release |
 | Brave walkthrough | Owner pending; Chromium is not identical to Brave |

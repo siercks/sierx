@@ -1054,3 +1054,26 @@ certification. Manual keyboard, visual and assistive-technology review remains
 part of acceptance. No copyleft policy exception is taken.
 **Enforcement:** gate-accessibility/gate-browser, gate-contrast, gate-lint-focus;
 intentional unnamed controls and invalid HTML must fail the browser audit.
+
+
+## ADR-025 - Narrow permissive dependency licenses and npm supply-chain checks
+**Date:** 2026-09-18  **Status:** accepted by owner
+**Spec refs:** §15.1, §15.2; BUILD task 0.13
+**Context:** the Phase 2 npm graph contains MIT-0 and PSF-2.0 dependencies plus
+Python-2.0 `argparse@2.0.1` and CC-BY-4.0 `caniuse-lite@1.0.30001810`. These are
+non-copyleft licenses, but the default-deny allowlist correctly required an
+explicit decision. The latter two are legacy-code and data licenses that should
+not become general software-license policy.
+**Decision:** permit MIT-0 and PSF-2.0 generally. Permit Python-2.0 and
+CC-BY-4.0 only for the named exact package versions and retain their reasons in
+the policy. Keep Sierx and its original code Apache-2.0; keep every existing
+copyleft and source-available block.
+**Consequence:** upgrading either narrowly approved package requires a fresh
+license decision. Third-party notices remain governed by each dependency's
+terms. Automated checks reduce dependency risk but do not prove that signed or
+advisory-free package code is benign.
+**Enforcement:** the offline license gate rejects unknown or changed licenses,
+stale exact approvals and attempts to reuse another package's approval. The
+online frontend supply-chain job performs a clean install without lifecycle
+scripts, verifies lockfile integrity and registry signatures/provenance, and
+fails on known moderate-or-higher advisories.

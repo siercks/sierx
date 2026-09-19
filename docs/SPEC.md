@@ -915,13 +915,23 @@ Environment variables only, no config file. Required: `DATABASE_URL`, `SIERX_AUT
 
 ### 15.1 Dependency allowlist
 
-Permitted: MIT, Apache-2.0, BSD-2, BSD-3, ISC, Unlicense, CC0, PostgreSQL, Zlib.
+Permitted: MIT, MIT-0, Apache-2.0, BSD-2, BSD-3, ISC, Unlicense, CC0,
+PostgreSQL, Zlib, PSF-2.0. Python-2.0 and CC-BY-4.0 require an exact
+package-and-version approval with a recorded reason; they are not generally
+permitted software licenses.
 
 Blocked: **GPL, LGPL, AGPL, MPL, SSPL, BSL.** Note that SSPL and BSL are not copyleft and therefore slip past a "no GPL family" rule, but both restrict exactly the commercial optionality this posture exists to preserve.
 
 ### 15.2 Enforcement
 
-`go-licenses check` plus an npm-side license checker against the allowlist, failing the build. Roughly an hour of work, and it catches the transitive dependency no one would audit by hand. Verified permissive at time of writing: PostgreSQL (PostgreSQL license), `ltree` (ships with PostgreSQL), shadcn/ui (MIT). Everything else is the gate's job, not a human's.
+`go-licenses check` plus an npm-side license checker against the allowlist,
+failing the build. Exact-package approvals fail when the package version or
+declared license changes and cannot authorize a different package. Online
+security CI also verifies npm registry signatures/provenance and checks the
+current advisory database. Roughly an hour of work, and it catches the
+transitive dependency no one would audit by hand. Verified permissive at time
+of writing: PostgreSQL (PostgreSQL license), `ltree` (ships with PostgreSQL),
+shadcn/ui (MIT). Everything else is the gate's job, not a human's.
 
 ### 15.3 Clean-room discipline ⚠
 

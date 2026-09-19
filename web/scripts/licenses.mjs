@@ -2,24 +2,32 @@ import { readFileSync, existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 const evidence = JSON.parse(readFileSync('licenses.json', 'utf8'));
+const policy = readFileSync('../.licenses-allowlist', 'utf8');
 const resolutions = new Map(
   [
-    ...readFileSync('../.licenses-allowlist', 'utf8').matchAll(
+    ...policy.matchAll(
       /^resolve\s+(\S+)\s+(\S+)\s+--\s+(.+)$/gm,
     ),
   ].map((m) => [m[1], m[2]]),
 );
+const packageAllowances = new Map(
+  [...policy.matchAll(/^allow-package\s+(\S+)\s+(\S+)\s+--\s+(.+)$/gm)].map(
+    (m) => [m[1], { license: m[2], reason: m[3] }],
+  ),
+);
 const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
-const policy = readFileSync('../.licenses-allowlist', 'utf8');
 const allowed = new Set(
   [...policy.matchAll(/^allow\s+(\S+)/gm)].map((m) => m[1]),
 );
-export function accepted(license) {
+export function accepted(license, component) {
   if (!license) return false;
-  return allowed.has(license);
+  return (
+    allowed.has(license) || packageAllowances.get(component)?.license === license
+  );
 }
 const entries = Object.entries(lock.packages).filter(([p]) => p !== '');
 assert(entries.length > 0, 'Missing npm inventory');
+const matchedPackageAllowances = new Set();
 for (const [path, pkg] of entries) {
   assert(
     pkg.version &&
@@ -28,8 +36,9 @@ for (const [path, pkg] of entries) {
     `Unpinned package: ${path}`,
   );
   const name = path.split('node_modules/').at(-1);
+  const component = `npm:${name}@${pkg.version}`;
   const override = evidence[`${name}@${pkg.version}`];
-  const resolution = resolutions.get(`npm:${name}@${pkg.version}`);
+  const resolution = resolutions.get(component);
   let license = pkg.license;
   if (!license && override) {
     assert(
@@ -50,8 +59,9 @@ for (const [path, pkg] of entries) {
     );
     license = resolution;
   }
+  if (packageAllowances.has(component)) matchedPackageAllowances.add(component);
   assert(
-    accepted(license),
+    accepted(license, component),
     `${path}: license ${license ?? 'UNKNOWN'} is not approved`,
   );
   if (!pkg.optional) {
@@ -65,6 +75,12 @@ for (const [path, pkg] of entries) {
       `Version drift ${path}`,
     );
   }
+}
+for (const component of packageAllowances.keys()) {
+  assert(
+    matchedPackageAllowances.has(component),
+    `Stale package license allowance: ${component}`,
+  );
 }
 console.log(
   `npm licenses: ${entries.length} lockfile components verified (including platform-specific optional packages)`,
@@ -81,5 +97,11 @@ if (process.argv.includes('--prove')) {
     'MIT AND MPL-2.0',
   ])
     assert(!accepted(license));
+  assert(accepted('Python-2.0', 'npm:argparse@2.0.1'));
+  assert(!accepted('Python-2.0', 'npm:another-parser@2.0.1'));
+  assert(!accepted('GPL-3.0', 'npm:argparse@2.0.1'));
+  assert(accepted('CC-BY-4.0', 'npm:caniuse-lite@1.0.30001810'));
+  assert(!accepted('CC-BY-4.0', 'npm:caniuse-lite@1.0.30001811'));
+  assert(!accepted('MPL-2.0', 'npm:caniuse-lite@1.0.30001810'));
   console.log('npm license negative controls: PASS');
 }

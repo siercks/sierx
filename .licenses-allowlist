@@ -2,6 +2,10 @@
 #
 # Format: one directive per line, `#` starts a comment.
 #   allow  <spdx>            permitted license
+#   allow-package <package> <spdx> -- <reason>
+#                            exact package/version exception. The reason is
+#                            mandatory and the gate fails if the package or
+#                            declared license changes.
 #   block  <spdx>            rejected, named explicitly
 #   resolve <module> <spdx> -- <reason>
 #                            a dual-licensed module resolved to one arm. The
@@ -21,6 +25,8 @@ allow Unlicense
 allow CC0-1.0
 allow PostgreSQL
 allow Zlib
+allow MIT-0
+allow PSF-2.0
 
 # Copyleft.
 block GPL-2.0
@@ -40,3 +46,9 @@ block Commons-Clause
 # Resolutions. None taken so far; every dependency is single-licensed.
 # Example of the required form:
 #   resolve example.com/mod MIT -- dual MIT/GPL-2.0; MIT arm taken, no GPL code linked
+
+# Narrow approvals for permissive licenses that are unsuitable as general
+# software-license policy. Both are build-time transitive dependencies and are
+# absent from the shipped browser bundle and runtime image.
+allow-package npm:argparse@2.0.1 Python-2.0 -- legacy permissive license; transitive Stylelint configuration parser
+allow-package npm:caniuse-lite@1.0.30001810 CC-BY-4.0 -- attribution license applies to browser compatibility data used by Autoprefixer
