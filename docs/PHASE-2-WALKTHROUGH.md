@@ -95,6 +95,9 @@ Create `~/.config/sierx/app.env` with permissions **0600**. Supply DATABASE_URL,
 SIERX_SESSION_KEY, SIERX_AUTH_MODE=local, SIERX_BASE_URL and
 SIERX_LISTEN_ADDR=127.0.0.1:<chosen app port>. Protect and back up the session key:
 it also protects second-factor state. Keep all host files outside Git.
+The repository default publishes the rootless PostgreSQL container on loopback
+port 55432 and keeps 5432 inside the container. Keep that explicit port in
+DATABASE_URL, or choose another free unprivileged host port.
 
 Create the protected files and enable user services after logout:
 

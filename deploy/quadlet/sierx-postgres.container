@@ -37,9 +37,11 @@ Environment="POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8"
 # The postgres:18 image keeps PGDATA under /var/lib/postgresql/18/; mount the
 # parent so the initdb'd cluster lands on the named volume.
 Volume=sierx-pgdata:/var/lib/postgresql:Z
-# Loopback only. The host port is substituted from DATABASE_URL by scripts/db.sh
-# when it installs the unit; Quadlet does not expand env vars in PublishPort.
-PublishPort=127.0.0.1:5432:5432
+# Loopback only. PostgreSQL remains on its standard container port while the
+# host defaults to 55432 to avoid colliding with an existing host installation.
+# scripts/db.sh substitutes the host port from DATABASE_URL when it installs the
+# unit; Quadlet does not expand env vars in PublishPort.
+PublishPort=127.0.0.1:55432:5432
 # §14.3: pg_stat_statements on, slow-statement logging at 200 ms.
 Exec=postgres -c shared_preload_libraries=pg_stat_statements -c log_min_duration_statement=200ms
 HealthCmd=pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}

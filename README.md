@@ -50,3 +50,8 @@ cp .env.example .env            # then generate the two secrets it names
 make bootstrap-check            # go, node, podman, psql, required inputs
 make help                       # every target, one line each
 ```
+
+The example publishes the rootless PostgreSQL container only on
+`127.0.0.1:55432`; PostgreSQL continues to use port 5432 inside the container.
+Set a different explicit port in the private `DATABASE_URL` if 55432 is already
+occupied.
