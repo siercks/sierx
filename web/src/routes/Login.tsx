@@ -61,8 +61,8 @@ export default function Login() {
             />
           </label>
           <small id="code-help">
-            Enter a code if two-factor authentication is enabled for your
-            account.
+            Leave this blank unless two-factor authentication is enabled for
+            your account. Codes are ignored until enrollment is complete.
           </small>
           {error && (
             <p className="error" role="alert">

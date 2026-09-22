@@ -16,6 +16,7 @@ import { Shell } from '../components/Shell';
 import { ItemActions, ActionForm } from '../components/ItemActions';
 import { Dialog } from '../components/ui/dialog';
 import { renderMarkdown } from '../markdown/render';
+import { historyAction, historyValue } from '../history';
 type Comment = {
   id: string;
   body: string | null;
@@ -33,7 +34,7 @@ type Link = {
 type History = {
   seq: number | bigint;
   kind: string;
-  field: string;
+  field: string | null;
   at: string;
   actor: { display_name: string } | null;
   old_value: unknown;
@@ -55,6 +56,14 @@ function Markdown({ text }: { text: string }) {
       dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
     />
   );
+}
+function format(value: unknown): string {
+  if (value === null || value === undefined) return 'Not set';
+  if (typeof value === 'object')
+    return JSON.stringify(value, (_, nested) =>
+      typeof nested === 'bigint' ? String(nested) : nested,
+    );
+  return String(value);
 }
 function usePages<T>(
   workspace: string,
@@ -151,6 +160,7 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
     `/items/${item.key}/history`,
     state.history,
   );
+  const statuses = config.data?.statuses ?? state.config.statuses;
   return (
     <>
       <p className="muted" style={{ marginTop: '1rem' }}>
@@ -287,15 +297,21 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                 <li className="panel" key={String(h.seq)}>
                   <p>
                     <strong>{h.actor?.display_name ?? 'System'}</strong>{' '}
-                    {h.kind.replaceAll('_', ' ')} {h.field}{' '}
+                    {historyAction(h)}{' '}
                     <time dateTime={h.at}>
                       {new Date(h.at).toLocaleString()}
                     </time>
                   </p>
                   {h.field && (
                     <div>
-                      <p>Before: {format(h.old_value)}</p>
-                      <p>After: {format(h.new_value)}</p>
+                      <p>
+                        Before:{' '}
+                        {historyValue(h, h.old_value, statuses)}
+                      </p>
+                      <p>
+                        After:{' '}
+                        {historyValue(h, h.new_value, statuses)}
+                      </p>
                     </div>
                   )}
                 </li>
@@ -400,12 +416,4 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
       </div>
     </>
   );
-}
-function format(value: unknown): string {
-  if (value === null || value === undefined) return 'Not set';
-  if (typeof value === 'object')
-    return JSON.stringify(value, (_, v) =>
-      typeof v === 'bigint' ? String(v) : v,
-    );
-  return String(value);
 }
