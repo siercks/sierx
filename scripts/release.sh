@@ -24,6 +24,21 @@ case ${1:-} in
     mkdir -p "dist/runtime-$arch"
     tar -xzf "dist/assets-$arch.tar.gz" -C "dist/runtime-$arch"
     docker build --platform "linux/$arch" --build-arg "TARGETARCH=$arch" --label "org.opencontainers.image.revision=$revision" -f deploy/Containerfile.release -t "$image:$tag-$arch" .
+    runtime=$(mktemp -d)
+    container=$(docker create --platform "linux/$arch" "$image:$tag-$arch")
+    cleanup_image_check() {
+      [[ -z ${container:-} ]] || docker rm -f "$container" >/dev/null 2>&1 || true
+      [[ -z ${runtime:-} ]] || rm -rf "$runtime"
+    }
+    trap cleanup_image_check EXIT
+    docker export "$container" | tar -xf - -C "$runtime" usr/local/bin/sierx usr/local/bin/sierxctl
+    [[ -x $runtime/usr/local/bin/sierx && -x $runtime/usr/local/bin/sierxctl ]] || {
+      echo 'Release image entry points are not executable' >&2
+      exit 1
+    }
+    cleanup_image_check
+    container= runtime=
+    trap - EXIT
     docker push "$image:$tag-$arch"
     docker image inspect --format '{{index .RepoDigests 0}}' "$image:$tag-$arch" > "dist/image-$arch.txt"
     ;;
