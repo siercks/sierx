@@ -10,10 +10,18 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Password hashes use Argon2id with a random salt and fixed resource bounds.
-func HashPassword(password string) (string, error) {
+// ValidatePassword enforces the shared local-password length policy.
+func ValidatePassword(password string) error {
 	if len(password) < 12 || len(password) > 1024 {
-		return "", fmt.Errorf("password must contain 12 to 1024 bytes")
+		return fmt.Errorf("password must contain 12 to 1024 bytes")
+	}
+	return nil
+}
+
+// HashPassword uses Argon2id with a random salt and fixed resource bounds.
+func HashPassword(password string) (string, error) {
+	if err := ValidatePassword(password); err != nil {
+		return "", err
 	}
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
