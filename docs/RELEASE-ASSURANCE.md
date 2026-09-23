@@ -34,7 +34,8 @@ Repeat on native arm64. Gather `dist/image-ARCH.txt` and
 `dist/acceptance-ARCH.json` for both architectures into the same revision's `dist/`,
 then run `make release-manifest TAG=<full-revision>`. These are the same targets
 used by CI. Native tests acquire the pinned goose tool and PostgreSQL image while
-connected. A subsequent offline delivery branch will package these prerequisites.
+connected. Cached exact-digest images are reused; an absent image is pulled.
+A subsequent offline delivery branch will package these prerequisites.
 
 The former `scripts/release-image.sh` alternative now delegates native candidate
 construction to the canonical recipe. Its old `SIERX_RELEASE_IMAGE` shortcut
@@ -91,3 +92,25 @@ archive/internal-registry input, internal/supplied TLS and trusted offline
 verification. Its exit test installs on a fresh host with external egress blocked,
 then proves operation, update, rollback and recovery. UI work follows the existing
 browser contracts and must introduce no mandatory public asset dependencies.
+
+## Local validation - 2026-09-23
+
+The uplift working source passed the full prepared, network-disabled Linux
+`make ci-local` gate, including Chromium/Firefox workflow and 10,000-item scale
+checks, Markdown mutation proof and unit-generation proof. Final focused checks
+covered the subsequently tightened restore-target guard, Python evidence/runner
+tests, workflow lint and shell lint. This is local evidence, not a hosted run at
+the final branch revision.
+
+On native amd64 WSL Ubuntu (Podman 4.9.3/systemd 255), the canonical image built
+from `9fbdbee6ae5ca938c920ecf6416104959cb7b661` passed the packaged-image checks.
+Its local image digest was
+`sha256:47bef955e17d837ccff1ed7701113d50cbd13f8de246ae0d64f64b90ae888187`.
+A derived image with a deliberately missing entrypoint failed specifically at
+application startup and removed the prior acceptance file. Promotion-validator
+tests also reject missing/failed/stale architecture evidence and changed index
+children. No candidate was published during these local tests.
+
+Native arm64 execution, hosted registry staging/promotion and operator-host
+deployment/recovery remain unverified for this branch. These results do not
+establish Phase 2 completion or air-gap deployment support.

@@ -1851,5 +1851,13 @@ Deployment, physical recovery, enrolled-account manual security review, real
 cutover, seven-day use and design sign-off still require owner evidence.
 
 Release-assurance changes and validation are recorded in
- docs/RELEASE-ASSURANCE.md and the PR/change review. Do not infer a green gate for
+docs/RELEASE-ASSURANCE.md and the PR/change review. Do not infer a green gate for
 this branch from the earlier revision's results.
+
+The uplift implementation now includes native candidate tests before promotion,
+exact-digest evidence checks, real Markdown/unit negative controls, selected-test
+execution checks, unit installer coverage and host-based restore orchestration.
+The local offline source gate and native amd64 candidate acceptance passed;
+a broken-entrypoint candidate failed without leaving acceptance evidence.
+The precise scope and remaining native arm64/hosted/operator checks are recorded
+in docs/RELEASE-ASSURANCE.md. No release was published by this local work.
