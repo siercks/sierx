@@ -64,6 +64,28 @@ with open(path, "w") as f:
     f.write(text.replace(placeholder, value))
 PY
   done
+  # Optional repository transport inputs remain private and are rendered only
+  # for the selected transport. Never interpolate shell or permit INI injection.
+  python3 - "$tmp" <<'PYCONF'
+import os, sys
+kind=os.environ.get('PGBACKREST_REPO_TYPE')
+fields={
+ 'sftp': [('sftp-host','SFTP_HOST'),('sftp-host-user','SFTP_USER'),('sftp-private-key-file','SFTP_PRIVATE_KEY'),('sftp-known-host','SFTP_KNOWN_HOSTS')],
+ 's3': [('s3-bucket','S3_BUCKET'),('s3-endpoint','S3_ENDPOINT'),('s3-region','S3_REGION'),('s3-key','S3_KEY'),('s3-key-secret','S3_SECRET')],
+ 'posix': []
+}
+if kind not in fields: raise SystemExit('Unsupported repository type')
+extra=[]
+for option,suffix in fields[kind]:
+    key='PGBACKREST_'+suffix; value=os.environ.get(key,'')
+    if not value or any(c in value for c in '\r\n\0'): raise SystemExit(key+' must be a single nonempty value')
+    extra.append('repo1-'+option+'='+value)
+if kind=='sftp': extra.append('repo1-sftp-host-key-check-type=strict')
+path=sys.argv[1]
+with open(path) as f: text=f.read()
+text=text.replace('[global]','[global]\n'+'\n'.join(extra))
+with open(path,'w') as f: f.write(text)
+PYCONF
   if grep -q '@[A-Z_]*@' "$tmp"; then
     die "unsubstituted placeholder remains: $(grep -o '@[A-Z_]*@' "$tmp" | sort -u | tr '\n' ' ')"
   fi

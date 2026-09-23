@@ -56,6 +56,9 @@ load_allowlist() {
     [[ -z ${verb:-} || $verb == \#* ]] && continue
     case $verb in
       allow) ALLOWED+=("$a") ;;
+      allow-package)
+        [[ $rest == --* ]] || { echo "licenses.sh: allow-package $a has no '-- reason'" >&2; exit 2; }
+        ;;
       block) BLOCKED+=("$a") ;;
       resolve)
         [[ $rest == --* ]] || { echo "licenses.sh: resolve $a has no '-- reason'" >&2; exit 2; }
@@ -122,27 +125,13 @@ check() {
 
   echo "licenses.sh: $n Go module(s) checked"
 
-  # npm side. No frontend tree until phase 2; say so rather than pass quietly.
-  if [[ -d $root/node_modules ]]; then
-    local pkg name lic npm=0
-    while IFS= read -r pkg; do
-      name=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("name",""))' "$pkg" 2>/dev/null || true)
-      lic=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); l=d.get("license") or d.get("licenses"); print(l if isinstance(l,str) else (l[0].get("type") if isinstance(l,list) and l else ""))' "$pkg" 2>/dev/null || true)
-      [[ -z $name ]] && continue
-      npm=$((npm + 1))
-      if [[ -z $lic ]]; then
-        echo "MISSING  npm:$name — no license field"; rc=1
-      elif in_list "$lic" "${BLOCKED[@]}"; then
-        echo "BLOCKED  npm:$name — $lic (SPEC §15.1)"; rc=1
-      elif in_list "$lic" "${ALLOWED[@]}"; then
-        printf 'ok       %-55s %s\n' "npm:$name" "$lic"
-      else
-        echo "UNKNOWN  npm:$name — $lic is neither allowed nor blocked"; rc=1
-      fi
-    done < <(find "$root/node_modules" -mindepth 2 -maxdepth 3 -name package.json 2>/dev/null)
-    echo "licenses.sh: $npm npm package(s) checked"
+  if [[ -f $root/web/package.json ]]; then
+    (cd "$root/web" && node scripts/licenses.mjs) || rc=1
+  elif [[ -f web/package.json ]]; then
+    # Scratch Go-license proofs still validate the actual frontend inventory.
+    (cd web && node scripts/licenses.mjs) || rc=1
   else
-    echo "licenses.sh: no node_modules — the frontend tree arrives at task 2.1; nothing to check on the npm side"
+    echo "Missing frontend manifest/inventory" >&2; rc=1
   fi
 
   if [[ $rc -eq 0 ]]; then

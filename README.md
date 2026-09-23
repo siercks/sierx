@@ -17,6 +17,14 @@ nothing that `make` does not.
 sierx is licensed under the Apache License 2.0 - see `LICENSE` and `NOTICE`.
 Dependencies are held to a permissive allowlist enforced in the build.
 
+## Phase 2 browser candidate
+
+Start with [the Phase 2 walkthrough](docs/PHASE-2-WALKTHROUGH.md). It separates
+safe disposable testing from deployment, recovery and real-backlog cutover.
+Build the frontend with `npm --prefix web ci` and `make web-build` before building
+the embedded Go server. The exact phase-exit status remains in PROGRESS and the
+[acceptance record](docs/PHASE-2-ACCEPTANCE.md).
+
 ## API development
 
 Run `make test-api TEST_ARGS='-run TestServerBoot'` to select an API test.
@@ -42,3 +50,8 @@ cp .env.example .env            # then generate the two secrets it names
 make bootstrap-check            # go, node, podman, psql, required inputs
 make help                       # every target, one line each
 ```
+
+The example publishes the rootless PostgreSQL container only on
+`127.0.0.1:55432`; PostgreSQL continues to use port 5432 inside the container.
+Set a different explicit port in the private `DATABASE_URL` if 55432 is already
+occupied.

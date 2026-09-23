@@ -1,0 +1,18 @@
+[Unit]
+Description=Sierx backlog
+After=network-online.target sierx-postgres.service
+
+[Container]
+Image=@SIERX_IMAGE@
+ContainerName=sierx
+Network=host
+EnvironmentFile=%h/.config/sierx/app.env
+ReadOnly=true
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

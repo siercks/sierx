@@ -50,6 +50,8 @@ parse_url() {
   PGPORT_=${hostport#*:}; [[ $hostport == *:* ]] || PGPORT_=5432
   PGDB_=${rest%%\?*}
   [[ -n $PGUSER_ && -n $PGDB_ ]] || die "could not parse DATABASE_URL"
+  [[ $PGPORT_ =~ ^[0-9]+$ && $PGPORT_ -ge 1024 && $PGPORT_ -le 65535 ]] || \
+    die "DATABASE_URL port must be an unprivileged TCP port from 1024 through 65535"
 }
 parse_url
 

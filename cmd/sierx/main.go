@@ -36,6 +36,7 @@ func main() {
 	logger.Info("server ready")
 	server := api.New(pool, logger)
 	server.ConfigureAuth(c)
+	server.ConfigureDocuments()
 	if err := server.Serve(ctx, listener); err != nil {
 		logger.Error("server stopped with an error")
 		os.Exit(1)

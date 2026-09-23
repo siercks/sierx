@@ -1,0 +1,14 @@
+# Native binaries and certificate bundle from the matching hosted runner.
+# scratch has no mutable distribution base or package installation.
+FROM scratch
+ARG TARGETARCH
+# GitHub artifact transport does not preserve executable mode reliably. Set it
+# in the image definition so both release entry points are runnable regardless
+# of the downloaded artifacts' host permissions.
+COPY --chmod=0555 dist/sierx-${TARGETARCH} /usr/local/bin/sierx
+COPY --chmod=0555 dist/sierxctl-${TARGETARCH} /usr/local/bin/sierxctl
+COPY dist/ca-certificates-${TARGETARCH}.crt /etc/ssl/certs/ca-certificates.crt
+COPY dist/runtime-${TARGETARCH}/assets /srv/sierx/assets
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/sierx"]

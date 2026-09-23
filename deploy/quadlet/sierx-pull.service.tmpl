@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull the accepted Sierx release manifest
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/sierx/deploy.env
+WorkingDirectory="@SIERX_CHECKOUT@"
+ExecStart=/usr/bin/python3 "@SIERX_CHECKOUT@/scripts/deploy.py" apply

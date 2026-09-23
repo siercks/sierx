@@ -1,0 +1,20 @@
+[Unit]
+Description=Sierx HTTPS gateway
+After=network-online.target sierx.service
+
+[Container]
+Image=@SIERX_CADDY_IMAGE@
+ContainerName=sierx-caddy
+Network=host
+Volume=%h/.config/sierx/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+Volume=%h/.local/share/sierx/assets:/srv/sierx/assets:ro,Z
+Volume=sierx-caddy-data:/data:Z
+Volume=sierx-caddy-config:/config:Z
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

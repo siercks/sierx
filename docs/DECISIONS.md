@@ -1036,3 +1036,44 @@ Counters reset on restart; the current scrape counts as in flight and completes
 after its response. No Prometheus server or Grafana is installed. Responses use
 Prometheus text 0.0.4 and no-store; no user, workspace, item or raw URL labels are
 exported. Metrics are observational snapshots, not transactionally consistent.
+
+
+## ADR-024 - Phase 2 accessibility checks without MPL dependencies
+**Date:** 2026-09-18  **Status:** accepted by owner
+**Spec refs:** §13, §15.1; BUILD tasks 2.6 and 2.14
+**Deviation:** replaces the named axe implementation, preserves the MPL block.
+**Context:** axe-core and its Playwright adapter require MPL-2.0. The owner
+explicitly chose “Keep MPL blocked; choose another audit approach.”
+**Decision:** use MIT-licensed HTML Validate WCAG rules plus browser assertions
+for accessible names, target sizes, keyboard reachability, focus restoration,
+text resizing and reduced motion. Token tests measure all declared contrast
+pairs across four palettes; browser tests cover all five theme preferences.
+Vite 7 and Tailwind 3 avoid the MPL Lightning CSS graph in newer toolchains.
+**Consequence:** this is not axe-equivalent coverage or an accessibility
+certification. Manual keyboard, visual and assistive-technology review remains
+part of acceptance. No copyleft policy exception is taken.
+**Enforcement:** gate-accessibility/gate-browser, gate-contrast, gate-lint-focus;
+intentional unnamed controls and invalid HTML must fail the browser audit.
+
+
+## ADR-025 - Narrow permissive dependency licenses and npm supply-chain checks
+**Date:** 2026-09-18  **Status:** accepted by owner
+**Spec refs:** §15.1, §15.2; BUILD task 0.13
+**Context:** the Phase 2 npm graph contains MIT-0 and PSF-2.0 dependencies plus
+Python-2.0 `argparse@2.0.1` and CC-BY-4.0 `caniuse-lite@1.0.30001810`. These are
+non-copyleft licenses, but the default-deny allowlist correctly required an
+explicit decision. The latter two are legacy-code and data licenses that should
+not become general software-license policy.
+**Decision:** permit MIT-0 and PSF-2.0 generally. Permit Python-2.0 and
+CC-BY-4.0 only for the named exact package versions and retain their reasons in
+the policy. Keep Sierx and its original code Apache-2.0; keep every existing
+copyleft and source-available block.
+**Consequence:** upgrading either narrowly approved package requires a fresh
+license decision. Third-party notices remain governed by each dependency's
+terms. Automated checks reduce dependency risk but do not prove that signed or
+advisory-free package code is benign.
+**Enforcement:** the offline license gate rejects unknown or changed licenses,
+stale exact approvals and attempts to reuse another package's approval. The
+online frontend supply-chain job performs a clean install without lifecycle
+scripts, verifies lockfile integrity and registry signatures/provenance, and
+fails on known moderate-or-higher advisories.

@@ -45,4 +45,21 @@ func TestLinks(t *testing.T) {
 	if err := s.Pool.QueryRow(context.Background(), `SELECT version,(SELECT count(*) FROM change_event WHERE item_id=i.id AND kind IN ('linked','unlinked')) FROM item i WHERE key='SRX-1'`).Scan(&version, &events); err != nil || version != 3 || events != 2 {
 		t.Fatalf("version/events %d %d %v", version, events, err)
 	}
+	w = versionCall(s, "POST", "/api/v1/items/SRX-1/links", `{"to":"OTH-1","kind":"relates"}`, cookie, 3)
+	if w.Code != 201 {
+		t.Fatalf("relink: %d %s", w.Code, w.Body)
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &doc)
+	id = doc["id"].(string)
+	w = versionCall(s, "DELETE", "/api/v1/links/"+id+"?item=SRX-2", "", cookie, 1)
+	if w.Code != 422 {
+		t.Fatalf("unrelated item accepted: %d %s", w.Code, w.Body)
+	}
+	w = versionCall(s, "DELETE", "/api/v1/links/"+id+"?item=OTH-1", "", cookie, 1)
+	if w.Code != 200 {
+		t.Fatalf("destination unlink: %d %s", w.Code, w.Body)
+	}
+	if err := s.Pool.QueryRow(context.Background(), `SELECT version,(SELECT count(*) FROM change_event WHERE item_id=i.id AND kind='unlinked') FROM item i WHERE key='OTH-1'`).Scan(&version, &events); err != nil || version != 2 || events != 1 {
+		t.Fatalf("destination version/events %d %d %v", version, events, err)
+	}
 }

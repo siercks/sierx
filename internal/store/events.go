@@ -141,6 +141,9 @@ type LinkChange struct {
 	ID         uuid.UUID
 	FromItemID uuid.UUID
 	ToItemID   uuid.UUID
+	// ActingItemID is set when a link is removed from its destination page.
+	// Zero preserves the existing source-item event and version behavior.
+	ActingItemID uuid.UUID
 	Kind       string
 }
 
@@ -335,7 +338,18 @@ func (m *Mutation) Link(l LinkChange) *Mutation {
 }
 
 func (m *Mutation) Unlink(l LinkChange) *Mutation {
-	payload, err := json.Marshal(map[string]any{"to": l.ToItemID.String(), "kind": l.Kind})
+	itemID, otherID := l.FromItemID, l.ToItemID
+	if l.ActingItemID != (uuid.UUID{}) {
+		itemID = l.ActingItemID
+		if itemID == l.ToItemID {
+			otherID = l.FromItemID
+		}
+	}
+	if itemID != l.FromItemID && itemID != l.ToItemID {
+		m.fail(fmt.Errorf("store: unlink actor is not a link endpoint"))
+		return m
+	}
+	payload, err := json.Marshal(map[string]any{"to": otherID.String(), "kind": l.Kind})
 	if err != nil {
 		m.fail(err)
 		return m
@@ -343,9 +357,9 @@ func (m *Mutation) Unlink(l LinkChange) *Mutation {
 	lc := l
 	m.changes = append(m.changes, change{
 		kind:   changeUnlink,
-		itemID: l.FromItemID,
+		itemID: itemID,
 		link:   &lc,
-		events: []event{m.newEvent(l.FromItemID, EventUnlinked, nil, nil, payload)},
+		events: []event{m.newEvent(itemID, EventUnlinked, nil, nil, payload)},
 	})
 	return m
 }

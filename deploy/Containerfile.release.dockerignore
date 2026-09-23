@@ -1,0 +1,8 @@
+*
+!dist/
+dist/*
+!dist/sierx-*
+!dist/sierxctl-*
+!dist/ca-certificates-*.crt
+!dist/runtime-*/
+!dist/runtime-*/**

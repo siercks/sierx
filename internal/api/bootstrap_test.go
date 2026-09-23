@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"uuid"
@@ -51,6 +52,9 @@ func TestBootstrap(t *testing.T) {
 		t.Fatalf("migrate: %v %s", err, out)
 	}
 	binary := filepath.Join(t.TempDir(), "sierxctl")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
 	if out, err := exec.Command("go", "build", "-o", binary, "../../cmd/sierxctl").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v %s", err, out)
 	}

@@ -35,7 +35,9 @@ load_dotenv .env
 die() { echo "conformance: $*" >&2; exit 1; }
 [[ -n ${DATABASE_URL:-} ]] || die "DATABASE_URL is unset"
 
-SCRATCH=${SIERX_RESTORE_SCRATCH_DB:-sierx_restore_check}
+SCRATCH=${SIERX_RESTORE_SCRATCH_DB:-sierx_restore_check_$(date +%s)_$$}
+[[ $SCRATCH =~ ^sierx_restore_check_[a-z0-9_]+$ && ${#SCRATCH} -le 63 ]] || die 'scratch database must use the sierx_restore_check_ prefix and safe lowercase characters'
+[[ ${DATABASE_URL%%\?*} != */"$SCRATCH" ]] || die 'scratch database cannot be the source'
 
 url_for_db() {
   local base=${DATABASE_URL%%\?*} query=
@@ -62,16 +64,10 @@ row_counts() {   # row_counts DSN -> "table<TAB>count" per line
 # whatever order the planner chose today.
 content_checksum() {
   local dsn=$1
-  psql "$dsn" -X -q -At -v ON_ERROR_STOP=1 <<'SQL'
-SELECT md5(string_agg(sig, '|' ORDER BY sig)) FROM (
-  SELECT i.key || ':' || i.title || ':' || i.path::text || ':' ||
-         coalesce(i.points::text,'-') || ':' || i.status_id::text || ':' ||
-         i.version::text || ':' || i.change_seq::text || ':' ||
-         coalesce(r.descendant_count::text,'-') || ':' ||
-         coalesce(r.done_count::text,'-') AS sig
-    FROM item i LEFT JOIN item_rollup r ON r.item_id = i.id
-) x;
-SQL
+  local t
+  for t in "${TABLES[@]}" seq_counter; do
+    psql "$dsn" -X -q -At -v ON_ERROR_STOP=1 -c "SELECT '$t:' || coalesce(md5(string_agg(md5(row_to_json(r)::text), '' ORDER BY md5(row_to_json(r)::text))), 'empty') FROM $t r"
+  done | sha256sum | cut -d' ' -f1
 }
 
 event_max() {
@@ -119,7 +115,6 @@ run_one() {
 
   echo "--- restore-to scratch"
   psql "$admin_url" -X -q -v ON_ERROR_STOP=1 \
-    -c "DROP DATABASE IF EXISTS $SCRATCH" \
     -c "CREATE DATABASE $SCRATCH TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'" >/dev/null
   bash scripts/backup/driver.sh "$d" restore-to "$scratch_dsn" || die "$d restore-to failed"
 
@@ -150,10 +145,24 @@ run_one() {
   esrc=$(event_max "$DATABASE_URL"); edst=$(event_max "$scratch_dsn")
   [[ $esrc == "$edst" ]] || die "$d restored max(change_event.seq) is $edst, source is $esrc"
   echo "  max(seq) = $esrc"
+  local counters_source counters_restored
+  counters_source=$(psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -c 'SELECT workspace_id,value FROM seq_counter ORDER BY workspace_id')
+  counters_restored=$(psql "$scratch_dsn" -X -q -At -v ON_ERROR_STOP=1 -c 'SELECT workspace_id,value FROM seq_counter ORDER BY workspace_id')
+  [[ $counters_source == "$counters_restored" ]] || die 'restored sequence counters differ'
+  echo '  per-workspace sequence counters match'
+
 
   echo "--- rollup --verify on the restored copy (ADR-005 control 2)"
   DATABASE_URL=$scratch_dsn bash scripts/sierxctl.sh rollup --verify \
     || die "$d restored copy has wrong rollups"
+
+  if [[ -n ${SIERX_RESTORE_APP_CHECK:-} ]]; then
+    [[ -f $SIERX_RESTORE_APP_CHECK ]] || die 'restore application check script is missing'
+    DATABASE_URL=$scratch_dsn bash "$SIERX_RESTORE_APP_CHECK" || die 'application access to restored data failed'
+    echo '  restored application check passed'
+  else
+    echo '  restored application access: NOT CHECKED (required separately before cutover)'
+  fi
 
   psql "$admin_url" -X -q -c "DROP DATABASE IF EXISTS $SCRATCH" >/dev/null 2>&1 || true
   echo "=== conformance: $d PASSED"
