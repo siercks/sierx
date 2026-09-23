@@ -50,6 +50,10 @@ make that input reproducibly pinned.
 
 ## Unit and operator acceptance
 
+Connected staging can use the optional loopback-only tunnel gateway profile.
+See [CLOUDFLARE-STAGING.md](CLOUDFLARE-STAGING.md). CI now runs the same full
+source gate on native amd64 and arm64; this does not replace native image tests.
+
 `make gate-units` validates every rendered unit using Quadlet and systemd.
 `make prove-units` requires a passing baseline before rejecting a deliberately
 invalid WorkingDirectory. Missing tools fail the gate. The initial host profile

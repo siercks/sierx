@@ -1,0 +1,19 @@
+{
+  auto_https off
+  admin off
+}
+# cloudflared runs on this host and forwards the public hostname here.
+# HTTP is confined to loopback; browser HTTPS terminates at the tunnel edge.
+http://@SIERX_HOST@:@SIERX_GATEWAY_PORT@ {
+  bind 127.0.0.1
+  handle /assets/* {
+    root * /srv/sierx
+    file_server {
+      precompressed br gzip
+    }
+    header Cache-Control "public, max-age=31536000, immutable"
+  }
+  handle {
+    reverse_proxy 127.0.0.1:@SIERX_APP_PORT@
+  }
+}

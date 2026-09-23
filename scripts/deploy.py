@@ -90,6 +90,47 @@ def render(template, values):
     return text
 
 
+def read_release():
+    # A reviewed Actions artifact can be staged locally without publishing a URL.
+    source = os.environ.get("SIERX_DEPLOY_MANIFEST_URL", "")
+    local = os.environ.get("SIERX_DEPLOY_MANIFEST_FILE", "")
+    if bool(source) == bool(local):
+        raise ValueError("Set exactly one of SIERX_DEPLOY_MANIFEST_URL or SIERX_DEPLOY_MANIFEST_FILE")
+    if local:
+        path = pathlib.Path(required("SIERX_DEPLOY_MANIFEST_FILE"))
+        if not path.is_absolute() or not path.is_file():
+            raise ValueError("The reviewed release manifest must be an absolute file path")
+        with path.open("rb") as stream:
+            raw = stream.read(8193)
+    else:
+        source = required("SIERX_DEPLOY_MANIFEST_URL")
+        if urllib.parse.urlsplit(source).scheme != "https":
+            raise ValueError("The release manifest requires HTTPS")
+        with urllib.request.urlopen(source, timeout=30) as response:
+            raw = response.read(8193)
+    if len(raw) > 8192:
+        raise ValueError("Release manifest is too large")
+    return validate_manifest(json.loads(raw), required("SIERX_IMAGE_REPOSITORY"))
+
+
+def gateway_config(host, app_port, app_env):
+    mode = os.environ.get("SIERX_GATEWAY_MODE", "direct")
+    values = {"SIERX_HOST": host, "SIERX_APP_PORT": app_port}
+    if mode == "direct":
+        return render("deploy/Caddyfile.tmpl", values)
+    if mode != "tunnel":
+        raise ValueError("SIERX_GATEWAY_MODE must be direct or tunnel")
+    port = required("SIERX_GATEWAY_PORT")
+    if not re.fullmatch(r"[0-9]{4,5}", port) or not 1024 <= int(port) <= 65535 or int(port) == int(app_port):
+        raise ValueError("Tunnel gateway port must be an unprivileged port distinct from the application")
+    if ":" in host:
+        raise ValueError("Tunnel mode requires a standard HTTPS hostname without a port")
+    if app_env.get("SIERX_AUTH_MODE") != "local":
+        raise ValueError("Tunnel mode currently requires Sierx local authentication")
+    values["SIERX_GATEWAY_PORT"] = port
+    return render("deploy/Caddyfile.tunnel.tmpl", values)
+
+
 def main(mode):
     if mode not in {"plan", "apply", *TIMERS}:
         raise ValueError("Usage: deploy.py plan|apply|" + "|".join(TIMERS))
@@ -123,18 +164,8 @@ def main(mode):
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", unit+".timer")
         return
-    source = required("SIERX_DEPLOY_MANIFEST_URL")
-    if urllib.parse.urlsplit(source).scheme != "https":
-        raise ValueError("The release manifest requires HTTPS")
-    with urllib.request.urlopen(source, timeout=30) as response:
-        raw = response.read(8193)
-    if len(raw) > 8192:
-        raise ValueError("Release manifest is too large")
-    release = validate_manifest(json.loads(raw), required("SIERX_IMAGE_REPOSITORY"))
+    release = read_release()
     current = state / "current.json"
-    if mode == "apply" and current.exists() and json.loads(current.read_text()) == release:
-        print("deploy: accepted revision is already running")
-        return
     origin = urllib.parse.urlsplit(required("SIERX_BASE_URL"))
     if origin.scheme != "https" or origin.username or origin.path not in {"", "/"} or origin.query or origin.fragment or not origin.hostname:
         raise ValueError("SIERX_BASE_URL must be a plain HTTPS origin")
@@ -158,9 +189,14 @@ def main(mode):
     values = {"SIERX_IMAGE": release["image"], "SIERX_CADDY_IMAGE": gateway, "SIERX_HOST": host, "SIERX_APP_PORT": port}
     planned = {units / "sierx.container": render("deploy/quadlet/sierx.container.tmpl", values),
                units / "sierx-caddy.container": render("deploy/quadlet/sierx-caddy.container.tmpl", values),
-               config / "Caddyfile": render("deploy/Caddyfile.tmpl", values)}
+               config / "Caddyfile": gateway_config(host, port, env)}
     print("deploy: candidate " + release["revision"] + "; digest-pinned app and HTTPS gateway; no database reset")
     if mode == "plan":
+        return
+    # The same image can require a gateway-mode/configuration change.
+    if (current.exists() and json.loads(current.read_text()) == release
+            and all(path.is_file() and path.read_text() == text for path, text in planned.items())):
+        print("deploy: accepted revision and rendered configuration are already installed")
         return
     run("podman", "pull", release["image"])
     run("podman", "pull", gateway)

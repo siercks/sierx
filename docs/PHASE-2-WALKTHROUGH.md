@@ -1,5 +1,9 @@
 # Phase 2 operator walkthrough
 
+For connected staging behind an outbound tunnel, use
+[CLOUDFLARE-STAGING.md](CLOUDFLARE-STAGING.md) for gateway, hostname and service
+configuration, alongside this guide for database/bootstrap and recovery.
+
 This is the candidate-code walkthrough, not a declaration of Phase 2 acceptance.
 The owner runs Spark commands and chooses all real host values privately. Brave
 is the primary manual browser; Firefox is the second browser. Automated Chromium

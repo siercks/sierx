@@ -1861,3 +1861,21 @@ The local offline source gate and native amd64 candidate acceptance passed;
 a broken-entrypoint candidate failed without leaving acceptance evidence.
 The precise scope and remaining native arm64/hosted/operator checks are recorded
 in docs/RELEASE-ASSURANCE.md. No release was published by this local work.
+
+### Connected staging preparation
+
+The owner selected Cloudflare Tunnel and manual host commands. The published
+7b037386ec7b8e5a213463fd15b0a934fb5b42a5 passed hosted CI (35925156699) and security
+(35925156772). No release workflow run was found for that branch at inspection.
+These results do not certify the subsequent tunnel-profile and CI matrix changes.
+
+Preparation adds native arm64 source CI, a loopback-only tunnel gateway, reviewed
+local-manifest input, and configuration-aware reapplication/rollback. Twenty
+Python tests pass locally. A real disposable Caddy 2.11.4 check passed for API
+proxying, static assets, loopback binding and wrong-host isolation. The owner
+reported native arm64, Podman 4.9.3, systemd 255, active user services and lingering
+on the existing host account. A dedicated staging account still needs its own
+setup. No host or Cloudflare changes were executed by this preparation.
+
+Follow docs/CLOUDFLARE-STAGING.md. The new revision still needs hosted CI/security,
+both native image tests, and real host/tunnel/reboot/recovery acceptance.

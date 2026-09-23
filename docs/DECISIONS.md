@@ -1106,3 +1106,15 @@ This adds release checks and deliberately closes the untested legacy multiarch
 release shortcut. It does not remove connected deployment, authorize production
 operation, weaken the dependency policy, or sign Phase 2 exit. See
 [RELEASE-ASSURANCE.md](RELEASE-ASSURANCE.md) for the supported sequence and limits.
+
+### ADR-026 staging clarification
+
+The owner selected a named Cloudflare Tunnel for connected pre-production testing
+and will run host commands manually. A loopback-only HTTP gateway is an optional
+profile behind the same-host connector; the public origin remains HTTPS and the
+application retains local authentication. Direct Caddy HTTPS remains the default.
+Cloudflare is an operator-selected connector, not an application dependency.
+Reviewed release manifests may be supplied as absolute local artifact files or
+HTTPS URLs, with the same repository/digest/revision validation and no ambiguous
+source selection. This is not offline-delivery completion or publisher-signature
+verification. CI runs the existing source suite on both supported native CPUs.
