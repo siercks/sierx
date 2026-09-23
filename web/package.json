@@ -30,20 +30,20 @@
     "@playwright/test": "1.63.0",
     "@types/culori": "4.0.1",
     "@types/markdown-it": "14.2.0",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "4.7.0",
+    "@vitejs/plugin-react": "6.1.1",
     "autoprefixer": "10.6.1",
     "culori": "4.0.2",
     "html-validate": "11.16.0",
     "linkedom": "0.18.13",
     "postcss": "8.5.28",
     "rollup-plugin-visualizer": "7.1.1",
-    "stylelint": "16.26.1",
-    "tailwindcss": "3.4.19",
+    "stylelint": "17.15.0",
+    "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
-    "vite": "7.3.6",
-    "vitest": "4.1.11"
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
   }
 }
