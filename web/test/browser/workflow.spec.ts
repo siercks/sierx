@@ -250,7 +250,7 @@ test('parent displays sibling order and destination can remove a link', async ({
     .getByRole('dialog')
     .getByRole('button', { name: 'Remove link' })
     .click();
-  await expect(page.getByRole('status')).toContainText('completed');
+  await expect(page.getByRole('button', { name: 'Remove link' })).toHaveCount(0);
   const remaining = await (
     await context.request.get('/api/v1/items/' + second.key + '/links')
   ).json();
