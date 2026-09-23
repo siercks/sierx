@@ -1834,3 +1834,22 @@ Final React bundle (decimal bytes, Brotli quality 11): initial JS 100,976 /
 lazy chunk 612 / 60,000. Composition and sanitized initial-network evidence are
 captured as review artifacts. SVG-tag license evidence and the rendered token
 checks are independent of package metadata omissions and CSS formatting.
+
+## Phase 2 uplift authorized - 2026-09-23
+
+The owner approved the release-assurance direction and clarified that Sierx must
+support both connected and air-gapped deployments. Air-gap support is optional,
+not the only deployment mode. Branches use uplift/, beginning with
+uplift/phase-2-release-assurance. ADR-026 records the contract.
+
+The later owner-provided Phase 2 post-mortem reports PR #6 CI/security, native
+release publication, and exact-PR-head offline gate-2 success at
+1c14c0246b0bb3ee1b2819f61caa841f90ac4527, merged as
+71976c771d9fea1567ad34063e82037f56f93376. It also reports Brave/Firefox trial
+review. These are historical reported results, not new-branch acceptance.
+Deployment, physical recovery, enrolled-account manual security review, real
+cutover, seven-day use and design sign-off still require owner evidence.
+
+Release-assurance changes and validation are recorded in
+ docs/RELEASE-ASSURANCE.md and the PR/change review. Do not infer a green gate for
+this branch from the earlier revision's results.

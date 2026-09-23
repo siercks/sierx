@@ -3,9 +3,9 @@
 # DATABASE_URL; the container name is bound when the app unit lands (task 2.16).
 [Unit]
 Description=sierx partition maintenance run
-After=sierx-postgres.service
-Requires=sierx-postgres.service
+After=sierx.service
+Requires=sierx.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/podman exec sierx sierxctl partitions ensure --months-ahead 1
+ExecStart=/usr/bin/podman exec sierx /usr/local/bin/sierxctl partitions ensure --months-ahead 1

@@ -13,6 +13,42 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# Every shipped unit has a concrete installer. Keep this inventory exhaustive.
+UNIT_INSTALLERS = {
+    "sierx-postgres.container": "db.sh up",
+    "sierx.container.tmpl": "apply",
+    "sierx-caddy.container.tmpl": "apply",
+    "sierx-pull.service.tmpl": "install-timer",
+    "sierx-pull.timer": "install-timer",
+    "sierx-backup.service.tmpl": "install-backup-timer",
+    "sierx-backup.timer": "install-backup-timer",
+    "sierx-maintenance.service": "install-maintenance-timer",
+    "sierx-maintenance.timer": "install-maintenance-timer",
+    "sierx-restoretest.service.tmpl": "install-restore-timer",
+    "sierx-restoretest.timer": "install-restore-timer",
+}
+TIMERS = {
+    "install-timer": "sierx-pull",
+    "install-backup-timer": "sierx-backup",
+    "install-maintenance-timer": "sierx-maintenance",
+    "install-restore-timer": "sierx-restoretest",
+}
+
+
+def unit_inventory():
+    actual = {p.name for p in (ROOT / "deploy/quadlet").iterdir() if p.is_file()}
+    if actual != set(UNIT_INSTALLERS):
+        raise ValueError("Unit installer inventory differs from shipped units")
+    return UNIT_INSTALLERS
+
+
+def timer_files(mode, values):
+    unit = TIMERS[mode]
+    service = unit + ".service"
+    source = service + ".tmpl" if (ROOT / "deploy/quadlet" / (service + ".tmpl")).exists() else service
+    return {service: render("deploy/quadlet/" + source, values),
+            unit + ".timer": render("deploy/quadlet/" + unit + ".timer", values)}
+
 
 def run(*args):
     return subprocess.check_output(args, text=True, stderr=subprocess.PIPE).strip()
@@ -55,21 +91,35 @@ def render(template, values):
 
 
 def main(mode):
-    if mode not in {"plan", "apply", "install-timer", "install-backup-timer"}:
-        raise ValueError("Usage: deploy.py plan|apply|install-timer|install-backup-timer")
+    if mode not in {"plan", "apply", *TIMERS}:
+        raise ValueError("Usage: deploy.py plan|apply|" + "|".join(TIMERS))
+    unit_inventory()
     config = pathlib.Path.home() / ".config/sierx"
     units = pathlib.Path.home() / ".config/containers/systemd"
     state = pathlib.Path.home() / ".local/share/sierx"
     config.mkdir(parents=True, exist_ok=True)
     state.mkdir(parents=True, exist_ok=True)
-    if mode in {"install-timer", "install-backup-timer"}:
-        unit = "sierx-backup" if mode == "install-backup-timer" else "sierx-pull"
+    if mode in TIMERS:
+        unit = TIMERS[mode]
         user_units = pathlib.Path.home() / ".config/systemd/user"
         checkout = str(ROOT)
-        if any(c in checkout for c in '"\n%'):
+        if any(c in checkout for c in '"\n\r%\\'):
             raise ValueError("Unsupported character in operator checkout path")
-        atomic(user_units / (unit+".service"), render("deploy/quadlet/"+unit+".service.tmpl", {"SIERX_CHECKOUT": checkout}))
-        atomic(user_units / (unit+".timer"), (ROOT / ("deploy/quadlet/"+unit+".timer")).read_text())
+        values = {"SIERX_CHECKOUT": checkout}
+        if mode == "install-restore-timer":
+            binary = pathlib.Path(required("SIERX_OPERATOR_BIN"))
+            if (not binary.is_absolute() or not binary.is_file() or not os.access(binary, os.X_OK)
+                    or any(c in str(binary) for c in '"\n\r%\\')):
+                raise ValueError("SIERX_OPERATOR_BIN must be an executable absolute path to the accepted native release CLI")
+            for tool in ("bash", "psql", "flock"):
+                if shutil.which(tool) is None:
+                    raise ValueError("Restore host prerequisite missing: " + tool)
+            restore_env = config / "restore.env"
+            if not restore_env.is_file() or restore_env.stat().st_mode & 0o077:
+                raise ValueError("Create the private 0600 restore.env before installing its timer")
+            values["SIERX_OPERATOR_BIN"] = str(binary)
+        for filename, content in timer_files(mode, values).items():
+            atomic(user_units / filename, content)
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", unit+".timer")
         return

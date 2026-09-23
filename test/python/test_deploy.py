@@ -15,6 +15,17 @@ deploy=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
 
 class DeploymentTests(unittest.TestCase):
+    def test_every_unit_has_an_installer_and_restore_runs_on_host(self):
+        deploy.unit_inventory()
+        for mode in deploy.TIMERS:
+            files = deploy.timer_files(mode, {"SIERX_CHECKOUT": "/opt/sierx", "SIERX_OPERATOR_BIN": "/opt/accepted/sierxctl"})
+            self.assertEqual(len(files), 2)
+        restore = deploy.timer_files("install-restore-timer", {"SIERX_CHECKOUT": "/opt/sierx", "SIERX_OPERATOR_BIN": "/opt/accepted/sierxctl"})["sierx-restoretest.service"]
+        self.assertIn('"/opt/accepted/sierxctl" restore-test', restore)
+        self.assertNotIn("podman exec", restore)
+        self.assertIn("WorkingDirectory=/opt/sierx", restore)
+        with mock.patch.dict(deploy.UNIT_INSTALLERS, {"unshipped.timer": "manual"}):
+            with self.assertRaises(ValueError): deploy.unit_inventory()
     def test_pinned_release(self):
         release={'image':'example.test/team/sierx@sha256:'+'a'*64,'revision':'b'*40}
         self.assertEqual(deploy.validate_manifest(release,'example.test/team/sierx'),release)

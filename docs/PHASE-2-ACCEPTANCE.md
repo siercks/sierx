@@ -1,16 +1,23 @@
 # Phase 2 acceptance record
 
-Status: code candidate; host, recovery and owner acceptance are pending.
+Status: Phase 2 code merged; host, recovery and full owner acceptance remain pending.
+
+September 23 reconciliation: the owner-supplied September 22 post-mortem reports
+successful offline gate-2 at PR head `1c14c0246b0bb3ee1b2819f61caa841f90ac4527`,
+hosted CI/security and native release, plus Brave/Firefox trial review. The merge
+is `71976c771d9fea1567ad34063e82037f56f93376`. This historical evidence does not
+accept later uplift changes. Browser versions and private log locations still
+need owner entry. No full phase-exit approval is recorded.
 
 | Evidence | Current state |
 |---|---|
 | React frontend, budgets, themes and routes | Implemented; local automated checks pass |
 | API and browser item workflows | Implemented; local real PostgreSQL/HTTPS checks pass |
 | License inventory | MIT-0 and PSF-2.0 approved; exact-package Python-2.0 and CC-BY-4.0 approvals; copyleft drift remains blocked |
-| Offline gate-2 on exact candidate | Run on Spark; not yet claimed |
-| Hosted workflow/vulnerability checks | Candidate must pass before release |
-| Brave walkthrough | Owner pending; Chromium is not identical to Brave |
-| Native amd64/arm64 release | Workflow implemented; published artifact acceptance pending |
+| Offline gate-2 on exact candidate | Owner reports GREEN on the historical PR head above; preserve the private log |
+| Hosted workflow/vulnerability checks | Post-mortem reports passes: runs 35815051016 and 35815051149; new revisions require new checks |
+| Brave walkthrough | Trial review reported in Brave and Firefox; versions, enrolled-account checks and full sign-off remain pending |
+| Native amd64/arm64 release | Post-mortem reports workflow 35814461993 succeeded; native runtime artifact gates are new uplift work |
 | HTTPS/HTTP3, restart and rollback | Operator scripts implemented; Spark acceptance pending |
 | Encrypted off-machine physical recovery and cipher | Driver implemented; Linux conformance not yet claimed |
 | Restored application and authentication access | Hook implemented; operator acceptance pending |
