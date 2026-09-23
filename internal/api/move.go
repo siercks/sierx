@@ -9,6 +9,7 @@ import (
 	"uuid"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/siercks/sierx/internal/store"
 )
 
@@ -51,6 +52,10 @@ func (s *Server) moveItem(w http.ResponseWriter, r *http.Request) {
 		var parentID, parentProject, parentPath string
 		err = s.Pool.QueryRow(r.Context(), `SELECT i.id::text,p.key_prefix,i.path::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL`, who.WorkspaceID, *parentKey).Scan(&parentID, &parentProject, &parentPath)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				invalidChange(w, fmt.Sprintf("Parent item %s was not found. Enter a live item key in project %s.", *parentKey, project))
+				return
+			}
 			databaseProblem(w, err)
 			return
 		}

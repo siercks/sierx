@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/siercks/sierx/internal/api/auth"
 	webassets "github.com/siercks/sierx/web"
@@ -133,6 +134,8 @@ func (s *Server) bootstrapItem(w http.ResponseWriter, r *http.Request) {
 		state["config"] = captureAPI(r, "/api/v1/projects/"+item.Project.Key+"/config", s.projectConfig, item.Project.Key)
 		state["history"] = captureAPI(r, "/api/v1/items/"+key+"/history", s.itemHistory, key)
 		if item.DeletedAt == nil {
+			children := url.Values{"q": {fmt.Sprintf("parent = %q order by rank", key)}, "fields": {"key,title,status,rank"}, "limit": {"100"}}
+			state["children"] = captureAPI(r, "/api/v1/items?"+children.Encode(), s.listItems, "")
 			state["comments"] = captureAPI(r, "/api/v1/comments?item="+key, s.listComments, key)
 			state["links"] = captureAPI(r, "/api/v1/items/"+key+"/links", s.listLinks, key)
 		}

@@ -209,6 +209,53 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
   // disallowed by this test's use of keyboard/focus rather than pointer APIs.
   await audit(page);
 });
+test('parent displays sibling order and destination can remove a link', async ({
+  page,
+  context,
+}) => {
+  const parent = await create(context, 'Ordered parent', 'epic');
+  const first = await create(context, 'First child', 'story', {
+    parent: parent.key,
+  });
+  const second = await create(context, 'Second child', 'story', {
+    parent: parent.key,
+  });
+  await page.goto('/' + second.key);
+  await page.getByRole('button', { name: 'Move or reorder' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Move item' })
+    .click();
+  await expect(page.getByRole('status')).toContainText('completed');
+  await page.goto('/' + parent.key);
+  const children = page.getByRole('list', { name: 'Direct children, in order' });
+  await expect(children.getByRole('listitem')).toHaveCount(2);
+  await expect(children.getByRole('listitem').nth(0)).toContainText(second.key);
+  await expect(children.getByRole('listitem').nth(1)).toContainText(first.key);
+
+  const current = await (
+    await context.request.get('/api/v1/items/' + first.key)
+  ).json();
+  const linked = await context.request.post(
+    '/api/v1/items/' + first.key + '/links',
+    {
+      headers: { 'If-Match': `"${current.version}"` },
+      data: { to: second.key, kind: 'relates' },
+    },
+  );
+  expect(linked.status()).toBe(201);
+  await page.goto('/' + second.key);
+  await page.getByRole('button', { name: 'Remove link' }).first().click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Remove link' })
+    .click();
+  await expect(page.getByRole('status')).toContainText('completed');
+  const remaining = await (
+    await context.request.get('/api/v1/items/' + second.key + '/links')
+  ).json();
+  expect(remaining.data).toHaveLength(0);
+});
 test('two real sessions retain conflicts and deliberately retry', async ({
   page,
   context,

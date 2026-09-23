@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"uuid"
 
@@ -32,6 +33,10 @@ func TestMove(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &doc)
 	if doc["version"] != float64(2) || doc["parent"].(map[string]any)["key"] != "SRX-2" {
 		t.Fatal(doc)
+	}
+	w = versionCall(s, "POST", "/api/v1/items/SRX-1/move", `{"parent":"SRX-999"}`, cookie, 2)
+	if w.Code != 422 || !strings.Contains(w.Body.String(), "Parent item SRX-999 was not found") {
+		t.Fatalf("unknown parent: %d %s", w.Code, w.Body)
 	}
 	assertGolden(t, "move-success", w.Body.Bytes(), itemReplacements(doc))
 	var correct bool

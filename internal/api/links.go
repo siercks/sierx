@@ -99,20 +99,31 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	who := Identity(r)
-	var fromID, toID, key, kind string
-	err = s.Pool.QueryRow(r.Context(), `SELECT l.from_item_id::text,l.to_item_id::text,f.key,l.kind FROM item_link l JOIN item f ON f.id=l.from_item_id WHERE l.id=$1 AND f.workspace_id=$2`, id.String(), who.WorkspaceID).Scan(&fromID, &toID, &key, &kind)
+	var fromID, toID, fromKey, toKey, kind string
+	err = s.Pool.QueryRow(r.Context(), `SELECT l.from_item_id::text,l.to_item_id::text,f.key,t.key,l.kind FROM item_link l JOIN item f ON f.id=l.from_item_id JOIN item t ON t.id=l.to_item_id WHERE l.id=$1 AND f.workspace_id=$2 AND t.workspace_id=$2`, id.String(), who.WorkspaceID).Scan(&fromID, &toID, &fromKey, &toKey, &kind)
 	if err != nil {
 		databaseProblem(w, err)
 		return
 	}
 	from, _ := uuid.Parse(fromID)
 	to, _ := uuid.Parse(toID)
+	acting, key := from, fromKey
+	if requested := r.URL.Query().Get("item"); requested != "" {
+		switch requested {
+		case fromKey:
+		case toKey:
+			acting, key = to, toKey
+		default:
+			invalidChange(w, "item must identify one of the linked items.")
+			return
+		}
+	}
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
 	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error {
-		m.Unlink(store.LinkChange{ID: id, FromItemID: from, ToItemID: to, Kind: kind})
+		m.Unlink(store.LinkChange{ID: id, FromItemID: from, ToItemID: to, ActingItemID: acting, Kind: kind})
 		return nil
-	}, store.WithActor(actor), store.WithExpectedVersion(from, version))
+	}, store.WithActor(actor), store.WithExpectedVersion(acting, version))
 	if err != nil {
 		chi.RouteContext(r.Context()).URLParams.Add("key", key)
 		s.mutationError(w, r, err, map[string]any{"deleted": true, "id": id.String()})

@@ -31,6 +31,7 @@ type Link = {
   from: { key: string; title: string };
   to: { key: string; title: string };
 };
+type Child = Pick<ItemData, 'key' | 'title' | 'status' | 'rank'>;
 type History = {
   seq: number | bigint;
   kind: string;
@@ -46,6 +47,7 @@ type State = {
   item: ItemData | Problem;
   config: Config;
   comments: Page<Comment>;
+  children?: Page<Child>;
   links: Page<Link>;
   history: Page<History>;
 };
@@ -160,6 +162,19 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
     `/items/${item.key}/history`,
     state.history,
   );
+  const childQuery = new URLSearchParams({
+    q: `parent = "${item.key}" order by rank`,
+    fields: 'key,title,status,rank',
+    limit: '100',
+  });
+  const children = usePages<Child>(
+    workspace,
+    'children',
+    item.key,
+    `/items?${childQuery}`,
+    state.children,
+    !item.deleted_at,
+  );
   const statuses = config.data?.statuses ?? state.config.statuses;
   return (
     <>
@@ -192,6 +207,40 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
             <Markdown text={item.body} />
           ) : (
             <p className="muted">No description yet.</p>
+          )}
+          {!item.deleted_at && (
+            <section aria-labelledby="children-heading">
+              <h2 id="children-heading">Direct children, in order</h2>
+              {children.error && <p role="alert">{children.error.message}</p>}
+              {children.data?.pages.every((page) => page.data.length === 0) && (
+                <p className="muted">No direct children.</p>
+              )}
+              <ol
+                className="children-list"
+                aria-label="Direct children, in order"
+              >
+                {children.data?.pages
+                  .flatMap((page) => page.data)
+                  .map((child) => (
+                    <li key={child.key}>
+                      <a href={'/' + child.key}>
+                        {child.key}: {child.title}
+                      </a>{' '}
+                      <span className={'status status-' + child.status.category}>
+                        {child.status.name}
+                      </span>
+                    </li>
+                  ))}
+              </ol>
+              {children.hasNextPage && (
+                <button
+                  disabled={children.isFetchingNextPage}
+                  onClick={() => void children.fetchNextPage()}
+                >
+                  Load more children
+                </button>
+              )}
+            </section>
           )}
           <h2>Comments</h2>
           {comments.error && <p role="alert">{comments.error.message}</p>}
@@ -390,17 +439,22 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                       {l.from.key === item.key ? l.to.key : l.from.key}
                     </a>
                   </p>
-                  {!item.deleted_at && l.from.key === item.key && (
+                  {!item.deleted_at && (
                     <Dialog trigger="Remove link" title="Remove link?">
                       <ActionForm
                         item={item}
                         workspace={workspace}
-                        path={'/links/' + l.id}
+                        path={
+                          '/links/' + l.id + '?item=' + encodeURIComponent(item.key)
+                        }
                         method="DELETE"
                         label="Remove link"
                         body={() => undefined}
                       >
-                        <p>Remove the relationship to {l.to.key}.</p>
+                        <p>
+                          Remove the relationship to{' '}
+                          {l.from.key === item.key ? l.to.key : l.from.key}.
+                        </p>
                       </ActionForm>
                     </Dialog>
                   )}
