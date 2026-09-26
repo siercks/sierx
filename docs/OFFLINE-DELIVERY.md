@@ -44,6 +44,11 @@ native architecture. Download the release manifest and matching application SBOM
 from its successful release workflow. The release workflow runs this assembly and
 its isolated acceptance test separately on amd64 and arm64, publishing an
 `offline-delivery-<arch>` artifact only after the test succeeds.
+The same CI steps are available locally as `make release-offline-bundle`,
+`make release-offline-test` and `make release-offline-archive`, using the reviewed
+manifest and native SBOM under `dist/`. Archive creation requires matching passing
+acceptance evidence. The lower-level assembly command also supports another output
+directory:
 
 ```bash
 python3 -B scripts/offline.py prepare \

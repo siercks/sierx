@@ -154,7 +154,7 @@ def main():
             report.write_text(json.dumps({"arch": data["arch"], "release": data["release"],
                                          "bundle_sha256": os.environ["SIERX_OFFLINE_SHA256"],
                                          "external_interfaces": [], "result": "passed",
-                                         "checks": ["empty-store-import", "migrations", "bootstrap", "provided-tls", "https-smoke", "database-app-gateway-restart-persistence"]}, indent=2) + "\n")
+                                         "checks": offline.ACCEPTANCE_CHECKS}, indent=2) + "\n")
             print("offline acceptance: verified import, HTTPS workflow and full service restart passed without external networking")
             Path(os.environ["SIERX_OFFLINE_REPORT"] + ".private.log").unlink(missing_ok=True)
         finally:

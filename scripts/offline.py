@@ -19,6 +19,8 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
 HEX = r"[a-f0-9]{64}"
 ROLES = {"app", "postgres", "caddy"}
+ACCEPTANCE_CHECKS = ["empty-store-import", "migrations", "bootstrap", "provided-tls", "https-smoke",
+                     "database-app-gateway-restart-persistence"]
 GOOSE = {
     "amd64": ("x86_64", "ab073515b78ef345f64f018c0d79aa7db50106806efc686dda7181253765ae13"),
     "arm64": ("arm64", "3968855c11b4093af271c5226909789ea294468f6e50203d738b7504995b6247"),
@@ -46,6 +48,14 @@ def image_id(value):
     if not re.fullmatch(HEX, value):
         raise ValueError("Invalid image configuration digest")
     return "sha256:" + value
+
+
+def verify_evidence(data, expected, report):
+    if (not isinstance(report, dict) or report.get("result") != "passed"
+            or report.get("arch") != data["arch"] or report.get("release") != data["release"]
+            or report.get("bundle_sha256") != expected or report.get("external_interfaces") != []
+            or report.get("checks") != ACCEPTANCE_CHECKS):
+        raise ValueError("Matching complete native offline acceptance evidence is required before archive publication")
 
 
 def pinned(value):

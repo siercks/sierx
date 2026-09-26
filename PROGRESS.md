@@ -1891,7 +1891,7 @@ can run from a delivered tree without Git, and restore rotation state can live
 outside the immutable release. PostgreSQL health variable expansion is deferred
 to the container instead of the host service manager.
 
-Local evidence: 29 Python tests passed on Linux (28 passed plus one Linux-only
+Local evidence: 30 Python tests passed on Linux (29 passed plus one Linux-only
 symlink skip on Windows); affected `cmd/sierxctl` Go tests passed using the cached
 toolchain without network. Workflow lint passed. Shell lint passed with the three
 pre-existing warning classes excluded (SC2034, SC2012, SC2064). Source topology

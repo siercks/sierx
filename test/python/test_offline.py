@@ -55,6 +55,16 @@ def write_lock(root, data):
 
 
 class VerificationTests(unittest.TestCase):
+    def test_archive_evidence_must_cover_exact_bundle_platform_and_all_checks(self):
+        data = {"arch": "amd64", "release": {"revision": "b" * 40}}
+        report = {**data, "result": "passed", "bundle_sha256": "a" * 64,
+                  "external_interfaces": [], "checks": offline.ACCEPTANCE_CHECKS}
+        offline.verify_evidence(data, "a" * 64, report)
+        for change in ({"result": "failed"}, {"arch": "arm64"}, {"release": {}}, {"bundle_sha256": "c" * 64},
+                       {"external_interfaces": ["eth0"]}, {"checks": offline.ACCEPTANCE_CHECKS[:-1]}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                offline.verify_evidence(data, "a" * 64, {**report, **change})
+
     def test_baseline_then_corruption_missing_file_and_added_secret_fail(self):
         for defect in ("corrupt", "missing", "extra", "lock", "wrong-arch"):
             with self.subTest(defect=defect), tempfile.TemporaryDirectory() as temporary:
