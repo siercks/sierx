@@ -1834,3 +1834,48 @@ Final React bundle (decimal bytes, Brotli quality 11): initial JS 100,976 /
 lazy chunk 612 / 60,000. Composition and sanitized initial-network evidence are
 captured as review artifacts. SVG-tag license evidence and the rendered token
 checks are independent of package metadata omissions and CSS formatting.
+
+## Phase 2 uplift authorized - 2026-09-23
+
+The owner approved the release-assurance direction and clarified that Sierx must
+support both connected and air-gapped deployments. Air-gap support is optional,
+not the only deployment mode. Branches use uplift/, beginning with
+uplift/phase-2-release-assurance. ADR-026 records the contract.
+
+The later owner-provided Phase 2 post-mortem reports PR #6 CI/security, native
+release publication, and exact-PR-head offline gate-2 success at
+1c14c0246b0bb3ee1b2819f61caa841f90ac4527, merged as
+71976c771d9fea1567ad34063e82037f56f93376. It also reports Brave/Firefox trial
+review. These are historical reported results, not new-branch acceptance.
+Deployment, physical recovery, enrolled-account manual security review, real
+cutover, seven-day use and design sign-off still require owner evidence.
+
+Release-assurance changes and validation are recorded in
+docs/RELEASE-ASSURANCE.md and the PR/change review. Do not infer a green gate for
+this branch from the earlier revision's results.
+
+The uplift implementation now includes native candidate tests before promotion,
+exact-digest evidence checks, real Markdown/unit negative controls, selected-test
+execution checks, unit installer coverage and host-based restore orchestration.
+The local offline source gate and native amd64 candidate acceptance passed;
+a broken-entrypoint candidate failed without leaving acceptance evidence.
+The precise scope and remaining native arm64/hosted/operator checks are recorded
+in docs/RELEASE-ASSURANCE.md. No release was published by this local work.
+
+### Connected staging preparation
+
+The owner selected Cloudflare Tunnel and manual host commands. The published
+7b037386ec7b8e5a213463fd15b0a934fb5b42a5 passed hosted CI (35925156699) and security
+(35925156772). No release workflow run was found for that branch at inspection.
+These results do not certify the subsequent tunnel-profile and CI matrix changes.
+
+Preparation adds native arm64 source CI, a loopback-only tunnel gateway, reviewed
+local-manifest input, and configuration-aware reapplication/rollback. Twenty
+Python tests pass locally. A real disposable Caddy 2.11.4 check passed for API
+proxying, static assets, loopback binding and wrong-host isolation. The owner
+reported native arm64, Podman 4.9.3, systemd 255, active user services and lingering
+on the existing host account. A dedicated staging account still needs its own
+setup. No host or Cloudflare changes were executed by this preparation.
+
+Follow docs/CLOUDFLARE-STAGING.md. The new revision still needs hosted CI/security,
+both native image tests, and real host/tunnel/reboot/recovery acceptance.

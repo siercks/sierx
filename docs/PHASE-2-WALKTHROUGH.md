@@ -1,5 +1,9 @@
 # Phase 2 operator walkthrough
 
+For connected staging behind an outbound tunnel, use
+[CLOUDFLARE-STAGING.md](CLOUDFLARE-STAGING.md) for gateway, hostname and service
+configuration, alongside this guide for database/bootstrap and recovery.
+
 This is the candidate-code walkthrough, not a declaration of Phase 2 acceptance.
 The owner runs Spark commands and chooses all real host values privately. Brave
 is the primary manual browser; Firefox is the second browser. Automated Chromium
@@ -10,7 +14,7 @@ coverage does not prove Brave-specific behavior.
 Use a new checkout, not an existing working tree or your persistent database:
 
 ```bash
-git clone --branch build/phase-2-frontend https://github.com/siercks/sierx.git sierx-phase2
+git clone --branch main https://github.com/siercks/sierx.git sierx-phase2
 cd sierx-phase2
 git status --short
 git rev-parse HEAD
@@ -46,8 +50,8 @@ packages a scratch runtime, publishes the architecture images and a digest-pinne
 manifest. Dispatch it for the **same accepted revision**, or release a reviewed tag.
 The resulting `deployment-manifest` artifact contains `release.json`. Do not move
 that manifest to the deployment channel until the revision's required checks pass.
-The existing manual multistage `scripts/release-image.sh` path is for a builder
-with both platform capabilities; native hosted builds are preferred.
+Use the canonical native candidate/test/promotion path in
+`docs/RELEASE-ASSURANCE.md`; the former multistage image recipe is retired.
 
 With an authenticated GitHub CLI, dispatch and inspect the branch build as
 follows. Set `RUN_ID` to the numeric ID printed by `gh run list`, and confirm
@@ -55,8 +59,8 @@ that `headSha` is the revision accepted in step 1:
 
 ```bash
 gh auth status
-gh workflow run release.yml --ref build/phase-2-frontend
-gh run list --workflow release.yml --branch build/phase-2-frontend --limit 5
+gh workflow run release.yml --ref main
+gh run list --workflow release.yml --branch main --limit 5
 RUN_ID=replace-with-run-id
 gh run view "$RUN_ID" --json headSha,status,conclusion,url
 gh run watch "$RUN_ID" --exit-status

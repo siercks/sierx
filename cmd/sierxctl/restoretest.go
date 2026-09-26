@@ -17,9 +17,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -48,6 +50,9 @@ func runRestoreTest(ctx context.Context, args []string) error {
 	scratch := os.Getenv("SIERX_RESTORE_SCRATCH_DB")
 	if scratch == "" {
 		scratch = "sierx_restore_test"
+	}
+	if err := validateRestoreTarget(dsn, scratch); err != nil {
+		return err
 	}
 	target, err := replaceDatabase(dsn, scratch)
 	if err != nil {
@@ -92,6 +97,21 @@ func psqlExec(ctx context.Context, dsn, sql string) error {
 }
 
 func quoteIdent(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+
+// The timer may recreate only an explicitly reserved scratch name, never its
+// source database or an administrative database. Check before invoking psql.
+func validateRestoreTarget(dsn, scratch string) error {
+	source, err := url.Parse(dsn)
+	if err != nil || (source.Scheme != "postgres" && source.Scheme != "postgresql") ||
+		strings.TrimPrefix(source.Path, "/") == "" || source.Query().Has("dbname") {
+		return errors.New("restore-test requires a PostgreSQL URL with an explicit database and no dbname override")
+	}
+	if !regexp.MustCompile(`^sierx_restore_[a-z0-9_]+$`).MatchString(scratch) || len(scratch) > 63 ||
+		strings.TrimPrefix(source.Path, "/") == scratch {
+		return errors.New("restore-test scratch must be a distinct database named sierx_restore_<suffix>")
+	}
+	return nil
+}
 
 // replaceDatabase swaps the database name in a postgres:// dsn.
 func replaceDatabase(dsn, db string) (string, error) {

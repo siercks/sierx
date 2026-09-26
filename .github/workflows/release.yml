@@ -1,10 +1,4 @@
-# Release: two NATIVE build jobs and a manifest merge. No QEMU (§1.1) — a
-# cross-built arm64 binary under emulation takes minutes and tells you nothing
-# about the target, and the free arm64 runner makes emulation pointless.
-#
-# Every step is a make target or an action. SBOM per release (task 0.13), base
-# images pinned by digest, -trimpath and CGO_ENABLED=0 for a reproducible
-# artifact (§15.4).
+# Build once, stage candidates, test exact digests natively, then promote.
 name: release
 
 on:
@@ -13,20 +7,29 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
-  id-token: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/siercks/sierx
+  SIERX_RELEASE_REPOSITORY: ghcr.io/siercks/sierx
 
 jobs:
+  source:
+    uses: ./.github/workflows/ci.yml
+
+  security:
+    uses: ./.github/workflows/security.yml
+
   build:
+    needs: [source, security]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             arch: amd64
           - runner: ubuntu-24.04-arm
             arch: arm64
@@ -36,68 +39,149 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
-
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
-
-      - run: make release-binaries
+      - name: Install packaging prerequisite
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman
+      - run: make release-binaries release-image
         env:
-          GOARCH: ${{ matrix.arch }}
-
-      # SBOM via make, not an action: BUILD §3.4 — nothing may live only in
-      # CI YAML, and an SBOM nobody can regenerate locally is an SBOM nobody
-      # checks. scripts/sbom.sh reads the same inputs as gate-license, so the
-      # two cannot disagree about what is in the build.
+          ARCH: ${{ matrix.arch }}
+          TAG: ${{ github.sha }}
       - run: make sbom SBOM_OUT=dist/sbom-${{ matrix.arch }}.cdx.json
       - run: make sbom-check SBOM_OUT=dist/sbom-${{ matrix.arch }}.cdx.json
-
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sierx-${{ matrix.arch }}
           path: dist/
           if-no-files-found: error
 
-  image:
+  stage:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
+          pattern: sierx-*
           path: dist
           merge-multiple: true
-
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - name: Install publishing prerequisite
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman
+      - run: make release-login
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: make release-stage ARCH=amd64
+        env:
+          TAG: ${{ github.sha }}
+      - run: make release-stage ARCH=arm64
+        env:
+          TAG: ${{ github.sha }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: candidate-references
+          path: dist/image-*.txt
+          if-no-files-found: error
 
-      # One image per architecture from the native binaries, then a manifest
-      # that ties them together. The base image is pinned by digest in
-      # deploy/Containerfile (§15.4).
-      - run: make release-image ARCH=amd64 TAG=${{ github.sha }}
-      - run: make release-image ARCH=arm64 TAG=${{ github.sha }}
-      - run: make release-manifest TAG=${{ github.sha }}
+  artifact-test:
+    needs: stage
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: candidate-references
+          path: dist
+      - name: Install native acceptance prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman python3 curl
+      - run: make release-login
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: make release-test
+        env:
+          ARCH: ${{ matrix.arch }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: acceptance-${{ matrix.arch }}
+          path: dist/acceptance-${{ matrix.arch }}.json
+          if-no-files-found: error
 
+  promote:
+    needs: artifact-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: sierx-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: candidate-references
+          path: dist
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: acceptance-*
+          path: dist
+          merge-multiple: true
+      - name: Install promotion prerequisite
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman
+      - run: make release-login
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: make release-manifest
+        env:
+          TAG: ${{ github.sha }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deployment-manifest
-          path: dist/release.json
-
+          path: |
+            dist/release.json
+            dist/acceptance-*.json
+            dist/manifest.json
+          if-no-files-found: error
       - if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
-            dist/*
+            dist/release.json
+            dist/acceptance-*.json
+            dist/sbom-*.cdx.json
+            dist/sierx-*
+            dist/sierxctl-*
+            dist/ca-certificates-*.sha256
           fail_on_unmatched_files: true

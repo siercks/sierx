@@ -10,7 +10,12 @@ Requires=sierx-postgres.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/podman exec sierx sierxctl restore-test
+EnvironmentFile=%h/.config/sierx/restore.env
+WorkingDirectory=@SIERX_CHECKOUT@
+# Restore orchestration requires host backup drivers and PostgreSQL tools.
+# Use the accepted release's native CLI, never a source build at timer runtime.
+ExecStart=/usr/bin/flock -n %h/.local/share/sierx/restore-test.lock "@SIERX_OPERATOR_BIN@" restore-test
+TimeoutStartSec=2h
 # A failed restore test is the one alert worth waking someone for; journald
 # plus a systemd OnFailure= hook is wired at task 2.16 with the rest of the
 # host configuration.

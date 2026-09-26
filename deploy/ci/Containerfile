@@ -6,7 +6,7 @@ FROM ${GO_IMAGE} AS go
 FROM ${NODE_IMAGE} AS node
 FROM ${PG_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git make python3 curl ca-certificates podman gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+    git make python3 curl ca-certificates podman systemd gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 COPY --from=go /usr/local/go /usr/local/go
 COPY --from=node /usr/local/bin/ /usr/local/bin/
 COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/

@@ -9,7 +9,13 @@ true. Read it once; `PROGRESS.md` is the running state thereafter.
 
 ---
 
-## 0. Current state (Phase 2 code candidate, 2026-09-18)
+## 0. Current state (Phase 2 uplift, 2026-09-23)
+
+Phase 2 code merged in PR #6 at 71976c771d9fea1567ad34063e82037f56f93376.
+The owner approved release-assurance work on uplift/phase-2-release-assurance,
+with both connected and optional air-gapped deployment retained (ADR-026).
+See docs/RELEASE-ASSURANCE.md and the reconciled acceptance record. The older
+candidate summary below is historical; do not resume its superseded build branch.
 
 Phase 1 is merged as PR #5 at 561df396f73058a77d9a34370d9e407528490dbc.
 The owner authorized implementation through the end of Phase 2 code. The

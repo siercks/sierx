@@ -26,5 +26,9 @@ if [[ -z ${DATABASE_URL:-} ]]; then
   exit 1
 fi
 
+# Selected integration gates must prove the intended test actually ran.
+if [[ -n ${SIERX_EXPECT_GO_TEST:-} ]]; then
+  exec python3 scripts/run-selected-go.py "$@"
+fi
 # Verbose output makes individual skipped tests visible in acceptance logs.
 exec go test -v "$@"

@@ -13,6 +13,42 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# Every shipped unit has a concrete installer. Keep this inventory exhaustive.
+UNIT_INSTALLERS = {
+    "sierx-postgres.container": "db.sh up",
+    "sierx.container.tmpl": "apply",
+    "sierx-caddy.container.tmpl": "apply",
+    "sierx-pull.service.tmpl": "install-timer",
+    "sierx-pull.timer": "install-timer",
+    "sierx-backup.service.tmpl": "install-backup-timer",
+    "sierx-backup.timer": "install-backup-timer",
+    "sierx-maintenance.service": "install-maintenance-timer",
+    "sierx-maintenance.timer": "install-maintenance-timer",
+    "sierx-restoretest.service.tmpl": "install-restore-timer",
+    "sierx-restoretest.timer": "install-restore-timer",
+}
+TIMERS = {
+    "install-timer": "sierx-pull",
+    "install-backup-timer": "sierx-backup",
+    "install-maintenance-timer": "sierx-maintenance",
+    "install-restore-timer": "sierx-restoretest",
+}
+
+
+def unit_inventory():
+    actual = {p.name for p in (ROOT / "deploy/quadlet").iterdir() if p.is_file()}
+    if actual != set(UNIT_INSTALLERS):
+        raise ValueError("Unit installer inventory differs from shipped units")
+    return UNIT_INSTALLERS
+
+
+def timer_files(mode, values):
+    unit = TIMERS[mode]
+    service = unit + ".service"
+    source = service + ".tmpl" if (ROOT / "deploy/quadlet" / (service + ".tmpl")).exists() else service
+    return {service: render("deploy/quadlet/" + source, values),
+            unit + ".timer": render("deploy/quadlet/" + unit + ".timer", values)}
+
 
 def run(*args):
     return subprocess.check_output(args, text=True, stderr=subprocess.PIPE).strip()
@@ -54,37 +90,82 @@ def render(template, values):
     return text
 
 
+def read_release():
+    # A reviewed Actions artifact can be staged locally without publishing a URL.
+    source = os.environ.get("SIERX_DEPLOY_MANIFEST_URL", "")
+    local = os.environ.get("SIERX_DEPLOY_MANIFEST_FILE", "")
+    if bool(source) == bool(local):
+        raise ValueError("Set exactly one of SIERX_DEPLOY_MANIFEST_URL or SIERX_DEPLOY_MANIFEST_FILE")
+    if local:
+        path = pathlib.Path(required("SIERX_DEPLOY_MANIFEST_FILE"))
+        if not path.is_absolute() or not path.is_file():
+            raise ValueError("The reviewed release manifest must be an absolute file path")
+        with path.open("rb") as stream:
+            raw = stream.read(8193)
+    else:
+        source = required("SIERX_DEPLOY_MANIFEST_URL")
+        if urllib.parse.urlsplit(source).scheme != "https":
+            raise ValueError("The release manifest requires HTTPS")
+        with urllib.request.urlopen(source, timeout=30) as response:
+            raw = response.read(8193)
+    if len(raw) > 8192:
+        raise ValueError("Release manifest is too large")
+    return validate_manifest(json.loads(raw), required("SIERX_IMAGE_REPOSITORY"))
+
+
+def gateway_config(host, app_port, app_env):
+    mode = os.environ.get("SIERX_GATEWAY_MODE", "direct")
+    values = {"SIERX_HOST": host, "SIERX_APP_PORT": app_port}
+    if mode == "direct":
+        return render("deploy/Caddyfile.tmpl", values)
+    if mode != "tunnel":
+        raise ValueError("SIERX_GATEWAY_MODE must be direct or tunnel")
+    port = required("SIERX_GATEWAY_PORT")
+    if not re.fullmatch(r"[0-9]{4,5}", port) or not 1024 <= int(port) <= 65535 or int(port) == int(app_port):
+        raise ValueError("Tunnel gateway port must be an unprivileged port distinct from the application")
+    if ":" in host:
+        raise ValueError("Tunnel mode requires a standard HTTPS hostname without a port")
+    if app_env.get("SIERX_AUTH_MODE") != "local":
+        raise ValueError("Tunnel mode currently requires Sierx local authentication")
+    values["SIERX_GATEWAY_PORT"] = port
+    return render("deploy/Caddyfile.tunnel.tmpl", values)
+
+
 def main(mode):
-    if mode not in {"plan", "apply", "install-timer", "install-backup-timer"}:
-        raise ValueError("Usage: deploy.py plan|apply|install-timer|install-backup-timer")
+    if mode not in {"plan", "apply", *TIMERS}:
+        raise ValueError("Usage: deploy.py plan|apply|" + "|".join(TIMERS))
+    unit_inventory()
     config = pathlib.Path.home() / ".config/sierx"
     units = pathlib.Path.home() / ".config/containers/systemd"
     state = pathlib.Path.home() / ".local/share/sierx"
     config.mkdir(parents=True, exist_ok=True)
     state.mkdir(parents=True, exist_ok=True)
-    if mode in {"install-timer", "install-backup-timer"}:
-        unit = "sierx-backup" if mode == "install-backup-timer" else "sierx-pull"
+    if mode in TIMERS:
+        unit = TIMERS[mode]
         user_units = pathlib.Path.home() / ".config/systemd/user"
         checkout = str(ROOT)
-        if any(c in checkout for c in '"\n%'):
+        if any(c in checkout for c in '"\n\r%\\'):
             raise ValueError("Unsupported character in operator checkout path")
-        atomic(user_units / (unit+".service"), render("deploy/quadlet/"+unit+".service.tmpl", {"SIERX_CHECKOUT": checkout}))
-        atomic(user_units / (unit+".timer"), (ROOT / ("deploy/quadlet/"+unit+".timer")).read_text())
+        values = {"SIERX_CHECKOUT": checkout}
+        if mode == "install-restore-timer":
+            binary = pathlib.Path(required("SIERX_OPERATOR_BIN"))
+            if (not binary.is_absolute() or not binary.is_file() or not os.access(binary, os.X_OK)
+                    or any(c in str(binary) for c in '"\n\r%\\')):
+                raise ValueError("SIERX_OPERATOR_BIN must be an executable absolute path to the accepted native release CLI")
+            for tool in ("bash", "psql", "flock"):
+                if shutil.which(tool) is None:
+                    raise ValueError("Restore host prerequisite missing: " + tool)
+            restore_env = config / "restore.env"
+            if not restore_env.is_file() or restore_env.stat().st_mode & 0o077:
+                raise ValueError("Create the private 0600 restore.env before installing its timer")
+            values["SIERX_OPERATOR_BIN"] = str(binary)
+        for filename, content in timer_files(mode, values).items():
+            atomic(user_units / filename, content)
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", unit+".timer")
         return
-    source = required("SIERX_DEPLOY_MANIFEST_URL")
-    if urllib.parse.urlsplit(source).scheme != "https":
-        raise ValueError("The release manifest requires HTTPS")
-    with urllib.request.urlopen(source, timeout=30) as response:
-        raw = response.read(8193)
-    if len(raw) > 8192:
-        raise ValueError("Release manifest is too large")
-    release = validate_manifest(json.loads(raw), required("SIERX_IMAGE_REPOSITORY"))
+    release = read_release()
     current = state / "current.json"
-    if mode == "apply" and current.exists() and json.loads(current.read_text()) == release:
-        print("deploy: accepted revision is already running")
-        return
     origin = urllib.parse.urlsplit(required("SIERX_BASE_URL"))
     if origin.scheme != "https" or origin.username or origin.path not in {"", "/"} or origin.query or origin.fragment or not origin.hostname:
         raise ValueError("SIERX_BASE_URL must be a plain HTTPS origin")
@@ -108,9 +189,14 @@ def main(mode):
     values = {"SIERX_IMAGE": release["image"], "SIERX_CADDY_IMAGE": gateway, "SIERX_HOST": host, "SIERX_APP_PORT": port}
     planned = {units / "sierx.container": render("deploy/quadlet/sierx.container.tmpl", values),
                units / "sierx-caddy.container": render("deploy/quadlet/sierx-caddy.container.tmpl", values),
-               config / "Caddyfile": render("deploy/Caddyfile.tmpl", values)}
+               config / "Caddyfile": gateway_config(host, port, env)}
     print("deploy: candidate " + release["revision"] + "; digest-pinned app and HTTPS gateway; no database reset")
     if mode == "plan":
+        return
+    # The same image can require a gateway-mode/configuration change.
+    if (current.exists() and json.loads(current.read_text()) == release
+            and all(path.is_file() and path.read_text() == text for path, text in planned.items())):
+        print("deploy: accepted revision and rendered configuration are already installed")
         return
     run("podman", "pull", release["image"])
     run("podman", "pull", gateway)

@@ -1077,3 +1077,44 @@ stale exact approvals and attempts to reuse another package's approval. The
 online frontend supply-chain job performs a clean install without lifecycle
 scripts, verifies lockfile integrity and registry signatures/provenance, and
 fails on known moderate-or-higher advisories.
+
+## ADR-026 - Connected deployment, optional air gaps, and tested release promotion
+
+**Date:** 2026-09-23. **Status:** owner approved the design direction in the Phase 2 uplift discussion.
+
+Sierx supports connected deployment and optional air-gapped deployment. Public
+registries, online update channels and public certificate services remain useful
+connected options; they must not become unavoidable dependencies for isolated
+installations. Acquire external software in connected preparation/build/release
+assembly. Keep site credentials, private keys and live data outside images.
+
+Separate offline runtime, offline installation/update/recovery, and prepared
+offline source testing. Existing offline CI establishes only the latter. The
+future distribution bundle must include runtime images, operator tools, exact
+migrations, inventory/licenses, verification material and documented host
+prerequisites. Internal networks and services remain allowed. No browser offline
+editing or synchronization feature is implied.
+
+Use one application image definition. Native source builds produce candidates;
+exact-digest native artifact tests must pass on amd64 and arm64 before those
+children can enter the promoted release index. Missing/skipped required tests
+and invalid unit generation fail closed. Unit inventories account for installers.
+Negative controls must first pass a clean baseline and then detect a specific
+planted defect. Host recovery and human gates remain separate from CI.
+
+This adds release checks and deliberately closes the untested legacy multiarch
+release shortcut. It does not remove connected deployment, authorize production
+operation, weaken the dependency policy, or sign Phase 2 exit. See
+[RELEASE-ASSURANCE.md](RELEASE-ASSURANCE.md) for the supported sequence and limits.
+
+### ADR-026 staging clarification
+
+The owner selected a named Cloudflare Tunnel for connected pre-production testing
+and will run host commands manually. A loopback-only HTTP gateway is an optional
+profile behind the same-host connector; the public origin remains HTTPS and the
+application retains local authentication. Direct Caddy HTTPS remains the default.
+Cloudflare is an operator-selected connector, not an application dependency.
+Reviewed release manifests may be supplied as absolute local artifact files or
+HTTPS URLs, with the same repository/digest/revision validation and no ambiguous
+source selection. This is not offline-delivery completion or publisher-signature
+verification. CI runs the existing source suite on both supported native CPUs.

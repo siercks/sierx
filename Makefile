@@ -205,6 +205,7 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: web-build ## The phase-0 gate: every check that must pass before phase 1
+	@$(MAKE) --no-print-directory gate-units
 	@bash test/shell/postgres-tools_test.sh
 	@bash scripts/check-postgres-tools.sh
 	@bash test/shell/schema_test.sh
@@ -298,9 +299,9 @@ prove-lint-focus:
 gate-markdown:
 	@cd web && npx --no-install vitest run src/markdown/render.test.ts
 prove-markdown:
-	@cd web && npx --no-install vitest run src/markdown/render.test.ts
+	@node web/scripts/prove-markdown.mjs
 gate-browser: web-build web-test ## Real database + embedded build over HTTPS, Chromium and Firefox
-	@SIERX_BROWSER_TEST=1 bash scripts/test-go.sh ./internal/api -run '^TestBrowserAcceptance$$' -count=1 -timeout=20m
+	@SIERX_BROWSER_TEST=1 SIERX_EXPECT_GO_TEST=github.com/siercks/sierx/internal/api:TestBrowserAcceptance bash scripts/test-go.sh ./internal/api -run '^TestBrowserAcceptance$$' -count=1 -timeout=20m
 gate-accessibility: gate-browser ## MIT HTML Validate and browser accessibility assertions (owner-approved replacement for axe)
 gate-keyboard: gate-browser ## Keyboard workflow is part of the real-browser gate
 check-web-vulnerabilities: ## Online npm vulnerability assessment, separate from offline gate
@@ -313,15 +314,23 @@ check-web-supply-chain: ## Verify npm integrity, license policy, drift controls 
 	@npm --prefix web audit --audit-level=moderate
 
 gate-virtualization: web-build
-	@SIERX_BROWSER_TEST=1 SIERX_BROWSER_SCALE=1 bash scripts/test-go.sh ./internal/api -run '^TestBrowserAcceptance$$' -count=1 -timeout=20m
+	@SIERX_BROWSER_TEST=1 SIERX_BROWSER_SCALE=1 SIERX_EXPECT_GO_TEST=github.com/siercks/sierx/internal/api:TestBrowserAcceptance bash scripts/test-go.sh ./internal/api -run '^TestBrowserAcceptance$$' -count=1 -timeout=20m
 
 .PHONY: release-binaries release-image release-manifest deploy-plan deploy-apply deploy-timer backup-cipher-check
 release-binaries: ## Build the browser and binaries on the matching native runner
 	@bash scripts/release.sh binaries
-release-image: ## Publish one architecture's tested release artifact
+release-image: ## Package one native candidate using the canonical image definition
 	@ARCH="$(ARCH)" TAG="$(TAG)" bash scripts/release.sh image
 release-manifest: ## Combine the two published image digests and write the pull manifest
 	@TAG="$(TAG)" bash scripts/release.sh manifest
+
+.PHONY: release-login release-stage release-test
+release-login: ## Authenticate the publishing job; credentials arrive through its environment
+	@bash scripts/release.sh login
+release-stage: ## Publish a candidate digest without approving a release
+	@ARCH="$(ARCH)" TAG="$(TAG)" bash scripts/release.sh stage
+release-test: ## Run native acceptance against an exact staged image digest
+	@ARCH="$(ARCH)" bash scripts/release.sh test
 deploy-plan: ## Validate private host inputs and inspect the selected release
 	@python3 scripts/deploy.py plan
 deploy-apply: ## Apply the selected digest with HTTPS health verification and rollback
@@ -330,3 +339,13 @@ deploy-timer: ## Install the pull timer after manual deployment acceptance
 	@python3 scripts/deploy.py install-timer
 backup-cipher-check: ## Verify the selected physical repository's cipher cannot be changed
 	@bash scripts/backup/driver.sh "$(BACKUP_DRIVER)" cipher-check
+
+.PHONY: gate-units prove-units deploy-maintenance-timer deploy-restore-timer
+gate-units: ## Validate all rendered units with Quadlet and systemd (Linux)
+	@python3 scripts/gate-units.py
+prove-units:
+	@python3 scripts/gate-units.py --prove
+deploy-maintenance-timer: ## Install partition maintenance after application acceptance
+	@python3 scripts/deploy.py install-maintenance-timer
+deploy-restore-timer: ## Install host-side restore checks using an accepted native CLI
+	@python3 scripts/deploy.py install-restore-timer
