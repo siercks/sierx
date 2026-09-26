@@ -1879,3 +1879,35 @@ setup. No host or Cloudflare changes were executed by this preparation.
 
 Follow docs/CLOUDFLARE-STAGING.md. The new revision still needs hosted CI/security,
 both native image tests, and real host/tunnel/reboot/recovery acceptance.
+# Offline delivery uplift - 2026-09-26
+
+Started `uplift/phase-2-offline-delivery` from merged main `f66e167` (PR #11).
+Added native archive-bundle assembly, independently approved inventory verification,
+empty-store import with image/platform/revision checks, explicit no-download
+deployment, site-provided TLS, and matching native release-workflow acceptance jobs.
+The connected path remains supported. Runtime units never pull implicitly;
+connected acquisition occurs before service installation. Backup/migration scripts
+can run from a delivered tree without Git, and restore rotation state can live
+outside the immutable release. PostgreSQL health variable expansion is deferred
+to the container instead of the host service manager.
+
+Local evidence: 29 Python tests passed on Linux (28 passed plus one Linux-only
+symlink skip on Windows); affected `cmd/sierxctl` Go tests passed using the cached
+toolchain without network. Workflow lint passed. Shell lint passed with the three
+pre-existing warning classes excluded (SC2034, SC2012, SC2064). Source topology
+and backup abstraction gates passed, including planted negative controls. Real
+Quadlet/systemd generation and its planted invalid-unit proof passed on Podman
+4.9.3/systemd 255.
+
+A native amd64 development fixture, using previously cached runtime images,
+passed empty-store OCI import, migrations, bootstrap, supplied-certificate HTTPS,
+authenticated item/deep-link smoke and database/app/gateway restart persistence
+in a network namespace with only loopback. The final supplied-TLS renderer was
+exercised there. This is a development fixture, not acceptance of a newly published
+release at this branch's final revision. The new exact-release amd64/arm64 bundle
+workflow jobs, rootless host installation/reboot, two-release update/rollback and
+encrypted physical recovery remain pending. See `docs/OFFLINE-DELIVERY.md`.
+
+The earlier ARM64 connected staging tests are recorded separately in
+`docs/RELEASE-ASSURANCE.md`. The owner disabled the stale required `gate` check to
+merge PR #11; required-check enforcement remains a follow-up, not a passing test.

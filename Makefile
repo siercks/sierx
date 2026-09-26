@@ -349,3 +349,9 @@ deploy-maintenance-timer: ## Install partition maintenance after application acc
 	@python3 scripts/deploy.py install-maintenance-timer
 deploy-restore-timer: ## Install host-side restore checks using an accepted native CLI
 	@python3 scripts/deploy.py install-restore-timer
+
+.PHONY: offline-verify offline-import
+offline-verify: ## Verify a bundle using independently approved SIERX_OFFLINE_SHA256
+	@python3 -B scripts/offline.py verify --bundle "$(SIERX_OFFLINE_BUNDLE)" --expected-sha256 "$(SIERX_OFFLINE_SHA256)"
+offline-import: ## Verify and import native offline images; does not start services
+	@python3 -B scripts/offline.py import

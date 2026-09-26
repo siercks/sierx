@@ -185,3 +185,63 @@ jobs:
             dist/sierxctl-*
             dist/ca-certificates-*.sha256
           fail_on_unmatched_files: true
+
+  offline-bundle:
+    needs: promote
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: deployment-manifest
+          path: dist
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: sierx-${{ matrix.arch }}
+          path: dist
+      - name: Install connected assembly and isolated test prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman python3 openssl iproute2
+      - run: make release-login
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble exact release with runtime images and native operator tools
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          python3 -B scripts/offline.py prepare --release dist/release.json \
+            --caddy-image docker.io/library/caddy@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52 \
+            --sbom "dist/sbom-$ARCH.cdx.json" --output "$RUNNER_TEMP/sierx-offline-$ARCH"
+      - name: Import into empty storage and test with external networking removed
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          bundle="$RUNNER_TEMP/sierx-offline-$ARCH"
+          expected=$(sha256sum "$bundle/bundle.lock.json" | cut -d ' ' -f1)
+          sudo env SIERX_OFFLINE_BUNDLE="$bundle" SIERX_OFFLINE_SHA256="$expected" \
+            SIERX_OFFLINE_REPORT="$GITHUB_WORKSPACE/dist/offline-acceptance-$ARCH.json" \
+            unshare --net -- python3 -B scripts/test-offline-bundle.py
+          tar -C "$RUNNER_TEMP" -czf "dist/sierx-offline-$ARCH.tar.gz" "sierx-offline-$ARCH"
+          printf '%s\n' "$expected" > "dist/sierx-offline-$ARCH.lock.sha256"
+          sha256sum "dist/sierx-offline-$ARCH.tar.gz" > "dist/sierx-offline-$ARCH.tar.gz.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: offline-delivery-${{ matrix.arch }}
+          path: |
+            dist/sierx-offline-*
+            dist/offline-acceptance-*.json
+          if-no-files-found: error

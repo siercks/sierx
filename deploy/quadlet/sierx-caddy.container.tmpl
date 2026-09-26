@@ -4,6 +4,7 @@ After=network-online.target sierx.service
 
 [Container]
 Image=@SIERX_CADDY_IMAGE@
+Pull=never
 ContainerName=sierx-caddy
 Network=host
 Volume=%h/.config/sierx/Caddyfile:/etc/caddy/Caddyfile:ro,Z

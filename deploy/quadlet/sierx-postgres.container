@@ -17,6 +17,7 @@ After=network-online.target
 [Container]
 ContainerName=sierx-postgres
 Image=docker.io/library/postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+Pull=never
 # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB are rendered by
 # scripts/db.sh from DATABASE_URL into this file (mode 0600, outside git).
 EnvironmentFile=%h/.config/containers/systemd/sierx-postgres.env
@@ -44,7 +45,8 @@ Volume=sierx-pgdata:/var/lib/postgresql:Z
 PublishPort=127.0.0.1:55432:5432
 # §14.3: pg_stat_statements on, slow-statement logging at 200 ms.
 Exec=postgres -c shared_preload_libraries=pg_stat_statements -c log_min_duration_statement=200ms
-HealthCmd=pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+# Expand inside the container shell, not the host systemd manager.
+HealthCmd=pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
 HealthInterval=5s
 HealthRetries=12
 
