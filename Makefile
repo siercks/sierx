@@ -349,3 +349,17 @@ deploy-maintenance-timer: ## Install partition maintenance after application acc
 	@python3 scripts/deploy.py install-maintenance-timer
 deploy-restore-timer: ## Install host-side restore checks using an accepted native CLI
 	@python3 scripts/deploy.py install-restore-timer
+
+.PHONY: offline-verify offline-import
+offline-verify: ## Verify a bundle using independently approved SIERX_OFFLINE_SHA256
+	@python3 -B scripts/offline.py verify --bundle "$(SIERX_OFFLINE_BUNDLE)" --expected-sha256 "$(SIERX_OFFLINE_SHA256)"
+offline-import: ## Verify and import native offline images; does not start services
+	@python3 -B scripts/offline.py import
+
+.PHONY: release-offline-bundle release-offline-test release-offline-archive
+release-offline-bundle: ## Connected assembly using dist/release.json and its native SBOM
+	@bash scripts/offline-release.sh build
+release-offline-test: ## Native isolated acceptance; requires sudo for a disposable network namespace
+	@bash scripts/offline-release.sh test
+release-offline-archive: ## Archive only a bundle with matching native acceptance evidence
+	@bash scripts/offline-release.sh archive

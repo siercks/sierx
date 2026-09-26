@@ -185,3 +185,54 @@ jobs:
             dist/sierxctl-*
             dist/ca-certificates-*.sha256
           fail_on_unmatched_files: true
+
+  offline-bundle:
+    needs: promote
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: deployment-manifest
+          path: dist
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: sierx-${{ matrix.arch }}
+          path: dist
+      - name: Install connected assembly and isolated test prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman python3 openssl iproute2
+      - run: make release-login
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble exact release with runtime images and native operator tools
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: make release-offline-bundle
+      - name: Import into empty storage and test with external networking removed
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: make release-offline-test release-offline-archive
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: offline-delivery-${{ matrix.arch }}
+          path: |
+            dist/sierx-offline-*.tar.gz
+            dist/sierx-offline-*.tar.gz.sha256
+            dist/sierx-offline-*.lock.sha256
+            dist/offline-acceptance-*.json
+          if-no-files-found: error

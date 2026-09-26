@@ -52,6 +52,9 @@ tool_path() {
   if [[ -x $dest ]] && "$dest" "$version_arg" 2>/dev/null | grep -q "${VERSION#v}"; then
     echo "$dest"; return 0
   fi
+  [[ ${SIERX_NETWORK_MODE:-connected} == connected ]] || {
+    echo "tool.sh: $name is missing; downloads are disabled outside connected preparation" >&2; return 1;
+  }
   mkdir -p "$TOOL_BIN"
   local tmp; tmp=$(mktemp -d)
   echo "fetching $name $VERSION ($arch) ..." >&2

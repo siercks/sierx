@@ -26,7 +26,13 @@ import (
 	"strings"
 )
 
-const rotationFile = ".backups/restore-test-rotation"
+func rotationPath() string {
+	dir := os.Getenv("SIERX_RESTORE_STATE_DIR")
+	if dir == "" {
+		dir = ".backups"
+	}
+	return filepath.Join(dir, "restore-test-rotation")
+}
 
 func runRestoreTest(ctx context.Context, args []string) error {
 	if len(args) > 0 {
@@ -127,7 +133,7 @@ func replaceDatabase(dsn, db string) (string, error) {
 }
 
 func readRotation() int {
-	f, err := os.Open(rotationFile)
+	f, err := os.Open(rotationPath())
 	if err != nil {
 		return 0
 	}
@@ -142,6 +148,7 @@ func readRotation() int {
 }
 
 func writeRotation(n int) {
+	rotationFile := rotationPath()
 	if err := os.MkdirAll(filepath.Dir(rotationFile), 0o755); err != nil {
 		return
 	}

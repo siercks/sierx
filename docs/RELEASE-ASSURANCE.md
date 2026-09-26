@@ -91,11 +91,12 @@ PR gates verify source behavior; artifact gates verify shipped images; host test
 verify deployment/reboot/rollback/recovery; scheduled tests monitor drift; human
 acceptance covers real use, accessibility and design. These are distinct claims.
 
-The next branch packages offline runtime/operator dependencies, exact migrations,
-archive/internal-registry input, internal/supplied TLS and trusted offline
-verification. Its exit test installs on a fresh host with external egress blocked,
-then proves operation, update, rollback and recovery. UI work follows the existing
-browser contracts and must introduce no mandatory public asset dependencies.
+The [offline delivery profile](OFFLINE-DELIVERY.md) packages runtime images,
+native operator tools and exact migrations with approved inventory verification
+and site-provided TLS. Archive delivery is implemented; an internal-registry
+adapter and full host update/rollback/recovery acceptance remain separate work.
+UI work follows the existing browser contracts and must introduce no mandatory
+public asset dependencies.
 
 ## Local validation - 2026-09-23
 
@@ -115,6 +116,27 @@ application startup and removed the prior acceptance file. Promotion-validator
 tests also reject missing/failed/stale architecture evidence and changed index
 children. No candidate was published during these local tests.
 
-Native arm64 execution, hosted registry staging/promotion and operator-host
-deployment/recovery remain unverified for this branch. These results do not
-establish Phase 2 completion or air-gap deployment support.
+At that local checkpoint, native arm64 execution, hosted registry promotion and
+operator-host acceptance were still pending. The subsequent evidence below
+supersedes that status; neither establishes full Phase 2 or airgap completion.
+
+## Owner-reported staging acceptance - 2026-09-26
+
+Release revision `6a2d65989d4c5bdeb50854a9b4d70d1b83787dd8` passed the hosted
+native source/artifact release workflow and was deployed by the owner on an
+ARM64 Ubuntu 24.04 host, rootless Podman 4.9.3 and systemd 255. The owner reported
+successful public HTTPS login, item creation/deep links, a matching smoke-test
+item fingerprint before/after application restart, access after disconnecting
+SSH, phone access, and automatic recovery after a full host reboot. All four
+user services were active under the dedicated service account. These are
+owner-reported results, not a new automated host inspection.
+
+Temporary tunnel unavailability while the single host was powered down was
+expected. Actual TOTP enrollment, two-release update/rollback and encrypted
+off-machine physical recovery were not established by those checks.
+
+PR #11 was merged. The owner temporarily disabled an obsolete required `gate`
+status because the new matrix reported different check names. Re-enable branch
+protection using names verified from actual check-run API records, or introduce
+a stable aggregate job in a separately reviewed change. Green runs do not prove
+that merge protection is enforcing the intended checks. This remains open.
