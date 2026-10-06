@@ -6,7 +6,7 @@
 # verified by scripts/tool.sh. Override with GOOSE=/path/to/goose. See tool.sh
 # for why these two tools are pinned binaries rather than `go tool` entries.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Environment wins; .env fills the gaps. The assignment is an `if` and not
 # `[[ ... ]] && export` on purpose: under `set -e` the && form returns 1 the
@@ -32,6 +32,11 @@ die() { echo "migrate.sh: $*" >&2; exit 1; }
 
 # shellcheck source=scripts/tool.sh
 source scripts/tool.sh
+if [[ ${SIERX_NETWORK_MODE:-connected} == offline ]]; then
+  # Refuse a missing or modified binary instead of fetching a replacement.
+  python3 -B scripts/offline.py verify --bundle "${SIERX_OFFLINE_BUNDLE:?}" --expected-sha256 "${SIERX_OFFLINE_SHA256:?}" >/dev/null
+  GOOSE="$SIERX_OFFLINE_BUNDLE/bin/goose"
+fi
 GOOSE=${GOOSE:-$(tool_path goose)}
 
 goose() { "$GOOSE" -dir migrations -table goose_db_version postgres "$DATABASE_URL" "$@"; }

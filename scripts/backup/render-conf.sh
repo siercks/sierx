@@ -11,7 +11,7 @@
 # Every placeholder must be set: an unset one would render an empty value that
 # pgBackRest accepts and then behaves surprisingly around.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 TMPL=deploy/pgbackrest/pgbackrest.conf.tmpl
 VARS=(PGBACKREST_REPO_TYPE PGBACKREST_REPO_PATH PGBACKREST_CIPHER_PASS

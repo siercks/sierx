@@ -4,6 +4,7 @@ After=network-online.target sierx-postgres.service
 
 [Container]
 Image=@SIERX_IMAGE@
+Pull=never
 ContainerName=sierx
 Network=host
 EnvironmentFile=%h/.config/sierx/app.env

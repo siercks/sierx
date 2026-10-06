@@ -12,7 +12,7 @@
 # printing nothing and `describe` printing nothing are both "exited 0 without
 # doing anything" — both are caught.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 VERBS=(init backup verify restore-to retention describe)
 

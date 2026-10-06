@@ -1118,3 +1118,23 @@ Reviewed release manifests may be supplied as absolute local artifact files or
 HTTPS URLs, with the same repository/digest/revision validation and no ambiguous
 source selection. This is not offline-delivery completion or publisher-signature
 verification. CI runs the existing source suite on both supported native CPUs.
+
+### ADR-026 offline delivery implementation
+
+The first delivery format is one verified directory per native architecture,
+containing OCI archives, native release CLI, checksum-pinned migration tool,
+exact tracked release source and an inventory. Trust comes from an independently
+approved lock digest and trusted verifier, not a checksum shipped on the same
+untrusted media. Connected assembly and isolated installation remain explicit
+operations. Imported images are addressed by verified configuration IDs because
+OCI transport need not retain the original registry's index reference. The
+original release reference/revision remains in the approved manifest.
+
+Offline service starts use `Pull=never`; HTTPS uses a provided certificate with
+site-managed trust. The initial host profile is Ubuntu 24.04, Podman 4.9.3 and
+systemd 255, amd64/arm64. Host OS packages and selected backup/restore transport
+tools are separately provisioned prerequisites. See [OFFLINE-DELIVERY.md](OFFLINE-DELIVERY.md)
+for the implemented boundary and acceptance gaps. Internal-registry acquisition,
+publisher signatures and complete physical recovery automation are not claimed
+by this first archive profile. No private host credentials or TLS keys enter a
+release bundle, and connected deployments remain supported.

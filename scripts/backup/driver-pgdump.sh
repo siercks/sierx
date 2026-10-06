@@ -13,7 +13,7 @@
 #   SIERX_DUMP_DIR         where dumps land (default: ./.backups/pgdump)
 #   SIERX_DUMP_KEEP        weekly dumps to keep (default 8, per §14.2)
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 # Environment wins; .env fills the gaps. The assignment is an `if` and not
 # `[[ ... ]] && export` on purpose: under `set -e` the && form returns 1 the

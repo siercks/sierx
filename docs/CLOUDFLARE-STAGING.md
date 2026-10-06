@@ -166,6 +166,28 @@ reapplies changed configuration and retains the usual rollback behavior.
 
 ## 5. Record acceptance
 
+After reconnecting, select the dedicated staging account before checking services.
+Its rootless containers and user services are separate from another login's:
+
+```bash
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+set -a
+. "$HOME/.config/sierx/app.env"
+. "$HOME/.config/sierx/deploy.env"
+set +a
+```
+
+Cloudflare Browser Integrity Check can reject default Python urllib requests even
+when browser/curl access works. Correlate the exact response Ray ID with Security
+Events before changing a rule. If needed, skip **only Browser Integrity Check**,
+scoped to the staging hostname, operator egress IP, automation user agent and
+the necessary methods/paths. Health uses GET `/api/v1/healthz`; smoke also uses
+POST login/logout, GET account/item and document routes. Enable and log the rule.
+Keep other WAF protections enabled. Revisit the exception when the egress IP,
+Python version or test item changes. A 502 indicates an origin/connectivity issue;
+it is not evidence of the earlier BIC block.
+
 - Verify HTTPS login, cookies, writes, assets and permanent item links from a
   second device. Use the existing scripts/release-smoke.py with private fixtures.
 - Disconnect SSH and the laptop. Confirm the site still works.

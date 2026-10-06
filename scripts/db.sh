@@ -7,7 +7,7 @@
 # ~/.config/containers/systemd/ with the host port substituted from the URL and
 # renders the credentials into a 0600 env file beside it.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 UNIT_SRC=deploy/quadlet/sierx-postgres.container
 UNIT_NAME=sierx-postgres
@@ -58,6 +58,7 @@ parse_url
 need_podman() { command -v podman >/dev/null || die "podman not found (BUILD §1: rootless Podman)"; }
 
 cmd_pin() {
+  [[ ${SIERX_NETWORK_MODE:-connected} == connected ]] || die "db-pin is a connected preparation operation"
   need_podman
   echo "Resolving digest for docker.io/library/postgres:18 ..."
   podman pull -q docker.io/library/postgres:18 >/dev/null
@@ -82,8 +83,17 @@ cmd_up() {
   need_podman
   grep -q "$PLACEHOLDER" "$UNIT_SRC" && die "image digest not pinned yet — run: make db-pin"
   mkdir -p "$QUADLET_DIR"
+  local image
+  case ${SIERX_NETWORK_MODE:-connected} in
+    connected) image=$(sed -n 's/^Image=//p' "$UNIT_SRC") ;;
+    offline) image=$(python3 -B scripts/offline.py image-postgres) ;;
+    *) die "SIERX_NETWORK_MODE must be connected or offline" ;;
+  esac
+  if [[ ${SIERX_NETWORK_MODE:-connected} == connected ]]; then
+    podman pull "$image" >/dev/null
+  fi
   sed -E "s|^PublishPort=127\.0\.0\.1:[0-9]+:5432|PublishPort=127.0.0.1:${PGPORT_}:5432|" \
-    "$UNIT_SRC" > "$QUADLET_DIR/$UNIT_NAME.container"
+    "$UNIT_SRC" | sed "s|^Image=.*|Image=$image|" > "$QUADLET_DIR/$UNIT_NAME.container"
   umask 077
   printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\n' "$PGUSER_" "$PGPASS_" "$PGDB_" \
     > "$QUADLET_DIR/$UNIT_NAME.env"

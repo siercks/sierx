@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scheduled driver-neutral backup. Failure remains visible in the systemd unit.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 export SIERX_BACKUP_KIND=incr
 [[ $(date -u +%u) != 7 ]] || export SIERX_BACKUP_KIND=full
 for driver in $(bash scripts/backup/driver.sh --list); do

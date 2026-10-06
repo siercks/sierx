@@ -8,7 +8,7 @@
 #
 # bin/ is gitignored. Callers pass arguments through unchanged.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Environment wins; .env fills the gaps. Every other script in scripts/ does
 # this, and this one did not: the CLI then saw no DATABASE_URL whenever the
@@ -32,6 +32,10 @@ load_dotenv() {
 load_dotenv .env
 
 BIN=bin/sierxctl
+if [[ ${SIERX_NETWORK_MODE:-connected} == offline ]]; then
+  python3 -B scripts/offline.py verify --bundle "${SIERX_OFFLINE_BUNDLE:?}" --expected-sha256 "${SIERX_OFFLINE_SHA256:?}" >/dev/null
+  exec "$SIERX_OFFLINE_BUNDLE/bin/sierxctl" "$@"
+fi
 
 needs_build() {
   [[ -x $BIN ]] || return 0

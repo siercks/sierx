@@ -94,6 +94,8 @@ def read_release():
     # A reviewed Actions artifact can be staged locally without publishing a URL.
     source = os.environ.get("SIERX_DEPLOY_MANIFEST_URL", "")
     local = os.environ.get("SIERX_DEPLOY_MANIFEST_FILE", "")
+    if os.environ.get("SIERX_NETWORK_MODE") == "offline" and source:
+        raise ValueError("Offline deployment requires a local release manifest")
     if bool(source) == bool(local):
         raise ValueError("Set exactly one of SIERX_DEPLOY_MANIFEST_URL or SIERX_DEPLOY_MANIFEST_FILE")
     if local:
@@ -116,8 +118,28 @@ def read_release():
 def gateway_config(host, app_port, app_env):
     mode = os.environ.get("SIERX_GATEWAY_MODE", "direct")
     values = {"SIERX_HOST": host, "SIERX_APP_PORT": app_port}
+    tls = os.environ.get("SIERX_TLS_MODE", "public")
+    if tls not in {"public", "provided"}:
+        raise ValueError("SIERX_TLS_MODE must be public or provided")
+    if os.environ.get("SIERX_NETWORK_MODE") == "offline" and (mode != "direct" or tls != "provided"):
+        raise ValueError("Offline deployment requires direct HTTPS with a provided certificate")
     if mode == "direct":
-        return render("deploy/Caddyfile.tmpl", values)
+        text = render("deploy/Caddyfile.tmpl", values)
+        if tls == "provided":
+            directory = pathlib.Path.home() / ".config/sierx/tls"
+            certificate, key = directory / "server.crt", directory / "server.key"
+            if not certificate.is_file() or not key.is_file() or key.stat().st_mode & 0o077:
+                raise ValueError("Install tls/server.crt and private 0600 tls/server.key before deployment")
+            # Explicit TLS remains HTTPS. Disable automatic port-80 redirects
+            # so an unprivileged :8443 site does not unexpectedly need port 80.
+            options = "  auto_https off\n  admin off\n"
+            if os.environ.get("SIERX_NETWORK_MODE") == "offline":
+                options += "  ocsp_stapling off\n"
+            text = text.replace("{\n  servers", "{\n" + options + "  servers", 1)
+            text = text.replace(host + " {", host + " {\n  tls /etc/sierx/tls/server.crt /etc/sierx/tls/server.key", 1)
+        return text
+    if tls != "public":
+        raise ValueError("Provided TLS belongs to the direct gateway profile")
     if mode != "tunnel":
         raise ValueError("SIERX_GATEWAY_MODE must be direct or tunnel")
     port = required("SIERX_GATEWAY_PORT")
@@ -134,6 +156,11 @@ def gateway_config(host, app_port, app_env):
 def main(mode):
     if mode not in {"plan", "apply", *TIMERS}:
         raise ValueError("Usage: deploy.py plan|apply|" + "|".join(TIMERS))
+    network = os.environ.get("SIERX_NETWORK_MODE", "connected")
+    if network not in {"connected", "offline"}:
+        raise ValueError("SIERX_NETWORK_MODE must be connected or offline")
+    if network == "offline" and mode in TIMERS:
+        raise ValueError("Offline timers require a separately reviewed host schedule; use verified manual operations")
     unit_inventory()
     config = pathlib.Path.home() / ".config/sierx"
     units = pathlib.Path.home() / ".config/containers/systemd"
@@ -164,7 +191,21 @@ def main(mode):
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", unit+".timer")
         return
+    offline_images = None
+    if network == "offline":
+        # Loaded by path for callers which import deploy.py in tests or tools.
+        import importlib.util
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location("sierx_offline", ROOT / "scripts/offline.py")
+        offline = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(offline)
+        bundle, locked = offline.from_environment()
+        if bundle.resolve() != ROOT:
+            raise ValueError("Run the deployment scripts from the verified bundle")
+        offline_images = locked["images"]
     release = read_release()
+    if offline_images and release != locked["release"]:
+        raise ValueError("Deployment release differs from verified bundle")
     current = state / "current.json"
     origin = urllib.parse.urlsplit(required("SIERX_BASE_URL"))
     if origin.scheme != "https" or origin.username or origin.path not in {"", "/"} or origin.query or origin.fragment or not origin.hostname:
@@ -178,6 +219,13 @@ def main(mode):
     gateway = required("SIERX_CADDY_IMAGE")
     if not re.fullmatch(r"[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}", gateway):
         raise ValueError("Caddy must use a pinned image digest")
+    app_image, gateway_image = release["image"], gateway
+    if offline_images:
+        if gateway != offline_images["caddy"]["source"]:
+            raise ValueError("Caddy differs from verified bundle")
+        for role in ("app", "caddy"):
+            offline.inspect_image(offline_images[role], locked["arch"], release["revision"] if role == "app" else None)
+        app_image, gateway_image = offline_images["app"]["id"], offline_images["caddy"]["id"]
     app_env = config / "app.env"
     if not app_env.is_file() or app_env.stat().st_mode & 0o077:
         raise ValueError("Create the private 0600 app.env before deployment")
@@ -186,10 +234,13 @@ def main(mode):
         raise ValueError("app.env must bind the application to the selected loopback port")
     if env.get("SIERX_BASE_URL", "").rstrip("/") != required("SIERX_BASE_URL").rstrip("/"):
         raise ValueError("Application and gateway origins differ")
-    values = {"SIERX_IMAGE": release["image"], "SIERX_CADDY_IMAGE": gateway, "SIERX_HOST": host, "SIERX_APP_PORT": port}
+    values = {"SIERX_IMAGE": app_image, "SIERX_CADDY_IMAGE": gateway_image, "SIERX_HOST": host, "SIERX_APP_PORT": port}
     planned = {units / "sierx.container": render("deploy/quadlet/sierx.container.tmpl", values),
                units / "sierx-caddy.container": render("deploy/quadlet/sierx-caddy.container.tmpl", values),
                config / "Caddyfile": gateway_config(host, port, env)}
+    if os.environ.get("SIERX_TLS_MODE") == "provided":
+        path = units / "sierx-caddy.container"
+        planned[path] = planned[path].replace("NoNewPrivileges=true", "Volume=%h/.config/sierx/tls:/etc/sierx/tls:ro,Z\nNoNewPrivileges=true")
     print("deploy: candidate " + release["revision"] + "; digest-pinned app and HTTPS gateway; no database reset")
     if mode == "plan":
         return
@@ -198,12 +249,13 @@ def main(mode):
             and all(path.is_file() and path.read_text() == text for path, text in planned.items())):
         print("deploy: accepted revision and rendered configuration are already installed")
         return
-    run("podman", "pull", release["image"])
-    run("podman", "pull", gateway)
-    metadata = json.loads(run("podman", "image", "inspect", release["image"]))[0]
+    if network == "connected":
+        run("podman", "pull", app_image)
+        run("podman", "pull", gateway_image)
+    metadata = json.loads(run("podman", "image", "inspect", app_image))[0]
     if metadata.get("Labels", {}).get("org.opencontainers.image.revision") != release["revision"]:
         raise ValueError("Image revision does not match the release manifest")
-    container = run("podman", "create", release["image"])
+    container = run("podman", "create", "--pull=never", app_image)
     try:
         with tempfile.TemporaryDirectory(prefix="sierx-release-") as temporary:
             run("podman", "cp", container + ":/srv/sierx/assets/.", temporary)
