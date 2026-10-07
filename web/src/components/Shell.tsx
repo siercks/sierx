@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { cache, request, bootstrap, type Me } from '../api/client';
 
 import { startFeed } from '../api/feed';
+import { Button } from './ui/button';
 
 export function Shell({
   me,
@@ -81,15 +82,26 @@ export function Shell({
     }
   }
   return (
-    <>
+    <div className="app-shell">
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <header>
-        <a href="/">Sierx</a>
-        <div className="toolbar">
-          <label>
-            Theme
+      <header className="app-header">
+        <div className="brand-group">
+          <a className="brand" href="/" aria-label="Sierx home">
+            <span className="brand-mark" aria-hidden="true">
+              S
+            </span>
+            <span>Sierx</span>
+          </a>
+          <span className="header-divider" aria-hidden="true" />
+          <a className="workspace-link" href="/">
+            Workspace
+          </a>
+        </div>
+        <div className="header-tools">
+          <label className="preference-field">
+            <span>Theme</span>
             <select
               value={theme}
               disabled={saving}
@@ -110,8 +122,8 @@ export function Shell({
               ))}
             </select>
           </label>
-          <label>
-            Motion
+          <label className="preference-field">
+            <span>Motion</span>
             <select
               value={motion}
               disabled={saving}
@@ -122,42 +134,56 @@ export function Shell({
               <option value="full">Full motion</option>
             </select>
           </label>
-          {authMode === 'local' && (
-            <button
-              onClick={async () => {
-                try {
-                  await request('/auth/logout', { method: 'POST' });
-                  cache.clear();
-                  location.assign('/login');
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              Sign out
-            </button>
-          )}
+          <div className="user-menu">
+            <span className="user-avatar" aria-hidden="true">
+              {me.display_name.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="user-name">{me.display_name}</span>
+            {authMode === 'local' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await request('/auth/logout', { method: 'POST' });
+                    cache.clear();
+                    location.assign('/login');
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                Sign out
+              </Button>
+            )}
+          </div>
         </div>
       </header>
-      <main id="main" tabIndex={-1}>
+      <main id="main" className="app-main" tabIndex={-1}>
         {error && (
-          <p className="error" role="alert">
+          <p className="alert alert-error" role="alert">
             {error}
           </p>
         )}
         {expired && (
-          <div className="notice" role="alert">
+          <div className="alert alert-notice" role="alert">
             Your session expired. Keep this page open to preserve your draft.{' '}
             <a href="/login" target="_blank" rel="noopener noreferrer">
               Sign in in a new tab
             </a>
             , then{' '}
-            <button onClick={() => void resume()}>Continue this session</button>{' '}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void resume()}
+            >
+                Continue this session
+            </Button>{' '}
             and retry your action.
           </div>
         )}
         {children}
       </main>
-    </>
+    </div>
   );
 }

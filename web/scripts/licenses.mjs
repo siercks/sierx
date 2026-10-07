@@ -28,6 +28,23 @@ export function accepted(license, component) {
 const entries = Object.entries(lock.packages).filter(([p]) => p !== '');
 assert(entries.length > 0, 'Missing npm inventory');
 const matchedPackageAllowances = new Set();
+function isRegistryPinned(pkg) {
+  return (
+    pkg.version &&
+    pkg.integrity &&
+    pkg.resolved?.startsWith('https://registry.npmjs.org/')
+  );
+}
+function isPinnedOrBundled(path, pkg) {
+  if (isRegistryPinned(pkg)) return true;
+  if (!pkg.version || !pkg.inBundle) return false;
+  let parent = path;
+  while (parent.includes('/node_modules/')) {
+    parent = parent.slice(0, parent.lastIndexOf('/node_modules/'));
+    if (isRegistryPinned(lock.packages[parent] ?? {})) return true;
+  }
+  return false;
+}
 function assertExactPath(root, relative, component) {
   let current = root;
   for (const segment of relative.split('/')) {
@@ -40,9 +57,7 @@ function assertExactPath(root, relative, component) {
 }
 for (const [path, pkg] of entries) {
   assert(
-    pkg.version &&
-      pkg.integrity &&
-      pkg.resolved?.startsWith('https://registry.npmjs.org/'),
+    isPinnedOrBundled(path, pkg),
     `Unpinned package: ${path}`,
   );
   const name = path.split('node_modules/').at(-1);
@@ -97,6 +112,20 @@ console.log(
   `npm licenses: ${entries.length} lockfile components verified (including platform-specific optional packages)`,
 );
 if (process.argv.includes('--prove')) {
+  assert(
+    isPinnedOrBundled(
+      'node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/core',
+      lock.packages[
+        'node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/core'
+      ],
+    ),
+  );
+  assert(
+    !isPinnedOrBundled('node_modules/unpinned/node_modules/nested', {
+      version: '1.0.0',
+      inBundle: true,
+    }),
+  );
   for (const license of [
     undefined,
     'AGPL-3.0',
@@ -108,12 +137,11 @@ if (process.argv.includes('--prove')) {
     'MIT AND MPL-2.0',
   ])
     assert(!accepted(license));
-  assert(accepted('Python-2.0', 'npm:argparse@2.0.1'));
-  assert(!accepted('Python-2.0', 'npm:another-parser@2.0.1'));
+  assert(!accepted('Python-2.0', 'npm:argparse@2.0.1'));
   assert(!accepted('GPL-3.0', 'npm:argparse@2.0.1'));
-  assert(accepted('CC-BY-4.0', 'npm:caniuse-lite@1.0.30001810'));
-  assert(!accepted('CC-BY-4.0', 'npm:caniuse-lite@1.0.30001811'));
-  assert(!accepted('MPL-2.0', 'npm:caniuse-lite@1.0.30001810'));
+  assert(accepted('MPL-2.0', 'npm:lightningcss@1.32.0'));
+  assert(!accepted('MPL-2.0', 'npm:lightningcss@1.32.1'));
+  assert(!accepted('MPL-2.0', 'npm:another-package@1.32.0'));
   assert.throws(() =>
     assertExactPath(
       'node_modules/svg-tags',

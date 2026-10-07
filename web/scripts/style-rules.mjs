@@ -1,4 +1,3 @@
-import stylelint from 'stylelint';
 export function violations(root) {
   const problems = [];
   root.walkDecls((decl) => {
@@ -23,8 +22,3 @@ export function violations(root) {
   });
   return problems;
 }
-const name = 'sierx/token-and-focus';
-export default stylelint.createPlugin(name, () => (root, result) => {
-  for (const { decl, message } of violations(root))
-    stylelint.utils.report({ ruleName: name, result, node: decl, message });
-});

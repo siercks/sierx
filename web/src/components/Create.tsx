@@ -10,7 +10,11 @@ export function Create({
   workspace: string;
 }) {
   return (
-    <Dialog trigger="Create item" title="Create item">
+    <Dialog
+      trigger="Create item"
+      title="Create item"
+      triggerVariant="default"
+    >
       <CreateForm projects={projects} workspace={workspace} />
     </Dialog>
   );

@@ -7,21 +7,32 @@ export function Dialog({
   trigger,
   title,
   children,
+  triggerVariant = 'outline',
 }: {
   trigger: string;
   title: string;
   children: ReactNode;
+  triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive';
 }) {
   return (
     <Primitive.Root>
-      <Primitive.Trigger>{trigger}</Primitive.Trigger>
+      <Primitive.Trigger className={`button button-${triggerVariant}`}>
+        {trigger}
+      </Primitive.Trigger>
       <Primitive.Portal>
         <Primitive.Backdrop className="dialog-backdrop" />
         <Primitive.Viewport className="dialog-viewport">
           <Primitive.Popup className="dialog">
-            <Primitive.Title>{title}</Primitive.Title>
-            {children}
-            <Primitive.Close>Close</Primitive.Close>
+            <div className="dialog-head">
+              <Primitive.Title className="dialog-title">{title}</Primitive.Title>
+              <Primitive.Close
+                className="button button-ghost button-sm dialog-close"
+                aria-label="Close dialog"
+              >
+                Close
+              </Primitive.Close>
+            </div>
+            <div className="dialog-content">{children}</div>
           </Primitive.Popup>
         </Primitive.Viewport>
       </Primitive.Portal>

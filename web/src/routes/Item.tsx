@@ -15,6 +15,8 @@ import {
 import { Shell } from '../components/Shell';
 import { ItemActions, ActionForm } from '../components/ItemActions';
 import { Dialog } from '../components/ui/dialog';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { renderMarkdown } from '../markdown/render';
 import { historyAction, historyValue } from '../history';
 type Comment = {
@@ -105,7 +107,11 @@ export default function Item() {
   const item = result.data;
   return (
     <Shell me={state.me} authMode={state.auth_mode}>
-      <a href="/">Back to backlog</a>
+      <nav className="breadcrumbs" aria-label="Breadcrumb">
+        <a href="/">Workspace</a>
+        <span aria-hidden="true">/</span>
+        <span>{key}</span>
+      </nav>
       {isProblem(state.item) ? (
         <>
           <h1>Item unavailable</h1>
@@ -178,40 +184,56 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
   const statuses = config.data?.statuses ?? state.config.statuses;
   return (
     <>
-      <p className="muted" style={{ marginTop: '1rem' }}>
-        {item.key} / {item.project.name} / {item.type.name}
-      </p>
-      <h1 ref={heading} tabIndex={-1}>
-        {item.title}
-      </h1>
-      {item.deleted_at ? (
-        <div className="notice" role="status">
-          Deleted on {new Date(item.deleted_at).toLocaleString()}. This
-          permanent link preserves the item’s record.
-        </div>
-      ) : (
-        config.data &&
-        !isProblem(config.data) && (
-          <ItemActions
-            item={item}
-            config={config.data}
-            workspace={workspace}
-            userID={state.me.id}
-          />
-        )
-      )}
-      <div className="detail-grid">
-        <section>
-          <h2>Description</h2>
-          {item.body ? (
-            <Markdown text={item.body} />
-          ) : (
-            <p className="muted">No description yet.</p>
+      <header className="item-heading">
+        <div className="item-heading-copy">
+          <p className="eyebrow">
+            {item.key} <span aria-hidden="true">·</span> {item.project.name} <span aria-hidden="true">·</span> {item.type.name}
+          </p>
+          <div className="item-heading-title">
+            <h1 ref={heading} tabIndex={-1}>{item.title}</h1>
+            <Badge variant={item.status.category as 'open' | 'active' | 'done' | 'cancelled'}>
+              {item.status.name}
+            </Badge>
+          </div>
+          {item.deleted_at && (
+            <div className="alert alert-notice" role="status">
+              Deleted on {new Date(item.deleted_at).toLocaleString()}. This
+              permanent link preserves the item's record.
+            </div>
           )}
+        </div>
+        {!item.deleted_at && config.data && !isProblem(config.data) && (
+          <div className="item-actions" aria-label="Item actions">
+            <ItemActions
+              item={item}
+              config={config.data}
+              workspace={workspace}
+              userID={state.me.id}
+            />
+          </div>
+        )}
+      </header>
+      <div className="detail-grid">
+        <div className="item-main-column">
+          <section className="card description-card">
+            <div className="card-heading">
+              <h2>Description</h2>
+            </div>
+            {item.body ? (
+              <Markdown text={item.body} />
+            ) : (
+              <p className="muted">No description yet.</p>
+            )}
+          </section>
           {!item.deleted_at && (
-            <section aria-labelledby="children-heading">
-              <h2 id="children-heading">Direct children, in order</h2>
-              {children.error && <p role="alert">{children.error.message}</p>}
+            <section className="card" aria-labelledby="children-heading">
+              <div className="card-heading">
+                <h2 id="children-heading">Direct children</h2>
+                <Badge variant="outline">
+                  {children.data?.pages.flatMap((page) => page.data).length ?? 0}
+                </Badge>
+              </div>
+              {children.error && <p className="alert alert-error" role="alert">{children.error.message}</p>}
               {children.data?.pages.every((page) => page.data.length === 0) && (
                 <p className="muted">No direct children.</p>
               )}
@@ -224,31 +246,42 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                   .map((child) => (
                     <li key={child.key}>
                       <a href={'/' + child.key}>
-                        {child.key}: {child.title}
-                      </a>{' '}
-                      <span className={'status status-' + child.status.category}>
+                        <strong>{child.key}</strong>: {child.title}
+                      </a>
+                      <Badge variant={child.status.category as 'open' | 'active' | 'done' | 'cancelled'}>
                         {child.status.name}
-                      </span>
+                      </Badge>
                     </li>
                   ))}
               </ol>
               {children.hasNextPage && (
-                <button
+                <Button
+                  variant="outline"
                   disabled={children.isFetchingNextPage}
                   onClick={() => void children.fetchNextPage()}
                 >
                   Load more children
-                </button>
+                </Button>
               )}
             </section>
           )}
-          <h2>Comments</h2>
-          {comments.error && <p role="alert">{comments.error.message}</p>}
+          <section className="card" aria-labelledby="comments-heading">
+            <div className="card-heading">
+              <h2 id="comments-heading">Comments</h2>
+              <Badge variant="outline">
+                {comments.data?.pages.flatMap((page) => page.data).length ?? 0}
+              </Badge>
+            </div>
+          {comments.error && (
+            <p className="alert alert-error" role="alert">
+              {comments.error.message}
+            </p>
+          )}
           {comments.data?.pages
             .flatMap((p) => p.data)
             .map((c) => (
-              <article className="panel" key={c.id}>
-                <p>
+              <article className="comment-card" key={c.id}>
+                <p className="comment-meta">
                   <strong>{c.author.display_name}</strong>{' '}
                   <time dateTime={c.created_at}>
                     {new Date(c.created_at).toLocaleString()}
@@ -259,9 +292,11 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                   <p className="muted">Comment deleted.</p>
                 ) : (
                   <>
-                    <Markdown text={c.body ?? ''} />
+                    <div className="comment-body">
+                      <Markdown text={c.body ?? ''} />
+                    </div>
                     {!item.deleted_at && (
-                      <div className="toolbar">
+                      <div className="comment-actions">
                         {c.author.id === state.me.id && (
                           <Dialog trigger="Edit comment" title="Edit comment">
                             <ActionForm
@@ -311,12 +346,13 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               </article>
             ))}
           {comments.hasNextPage && (
-            <button
+            <Button
+              variant="outline"
               disabled={comments.isFetchingNextPage}
               onClick={() => void comments.fetchNextPage()}
             >
               Load more comments
-            </button>
+            </Button>
           )}
           {!item.deleted_at && (
             <ActionForm
@@ -337,14 +373,21 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               </label>
             </ActionForm>
           )}
-          <h2>History</h2>
-          {history.error && <p role="alert">{history.error.message}</p>}
-          <ol>
+          </section>
+          <section className="card" aria-labelledby="history-heading">
+          <div className="card-heading">
+            <h2 id="history-heading">History</h2>
+            <Badge variant="outline">
+              {history.data?.pages.flatMap((page) => page.data).length ?? 0}
+            </Badge>
+          </div>
+          {history.error && <p className="alert alert-error" role="alert">{history.error.message}</p>}
+          <ol className="history-list">
             {history.data?.pages
               .flatMap((p) => p.data)
               .map((h) => (
-                <li className="panel" key={String(h.seq)}>
-                  <p>
+                <li className="history-entry" key={String(h.seq)}>
+                  <p className="history-meta">
                     <strong>{h.actor?.display_name ?? 'System'}</strong>{' '}
                     {historyAction(h)}{' '}
                     <time dateTime={h.at}>
@@ -367,18 +410,20 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               ))}
           </ol>
           {history.hasNextPage && (
-            <button
+            <Button
+              variant="outline"
               disabled={history.isFetchingNextPage}
               onClick={() => void history.fetchNextPage()}
             >
               Load more history
-            </button>
+            </Button>
           )}
-        </section>
-        <aside>
-          <section className="panel">
-            <h2>Details</h2>
-            <dl>
+          </section>
+        </div>
+        <aside className="item-sidebar">
+          <section className="card" aria-labelledby="details-heading">
+            <div className="card-heading"><h2 id="details-heading">Details</h2></div>
+            <dl className="detail-list">
               <dt>Status</dt>
               <dd className={'status status-' + item.status.category}>
                 {item.status.name}
@@ -401,19 +446,29 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               <dd>{item.due_date ?? 'Not set'}</dd>
             </dl>
             {Object.entries(item.fields ?? {}).map(([k, v]) => (
-              <p key={k}>
+              <p className="custom-detail" key={k}>
                 {config.data?.fields.find((f) => f.key === k)?.name ?? k}:{' '}
                 {format(v)}
               </p>
             ))}
           </section>
           {item.rollup?.descendant_count > 0 && (
-            <section className="panel">
-              <h2>Progress</h2>
+            <section className="card">
+              <div className="card-heading"><h2>Progress</h2></div>
               <p>
                 {item.rollup.done_count} of {item.rollup.descendant_count}{' '}
                 descendant items done
               </p>
+              <div
+                className="progress-track"
+                role="progressbar"
+                aria-label="Descendant items complete"
+                aria-valuemin={0}
+                aria-valuemax={item.rollup.descendant_count}
+                aria-valuenow={item.rollup.done_count}
+              >
+                <span style={{ width: `${Math.min(100, (item.rollup.done_count / item.rollup.descendant_count) * 100)}%` }} />
+              </div>
               {item.rollup.points_total !== null && (
                 <p>
                   {item.rollup.points_done ?? 0} of {item.rollup.points_total}{' '}
@@ -422,13 +477,13 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               )}
             </section>
           )}
-          <section className="panel">
-            <h2>Linked items</h2>
-            {links.error && <p role="alert">{links.error.message}</p>}
+          <section className="card">
+            <div className="card-heading"><h2>Linked items</h2></div>
+            {links.error && <p className="alert alert-error" role="alert">{links.error.message}</p>}
             {links.data?.pages
               .flatMap((p) => p.data)
               .map((l) => (
-                <div key={l.id}>
+                <div className="linked-item" key={l.id}>
                   <p>
                     {l.kind.replaceAll('_', ' ')}:{' '}
                     <a
@@ -461,9 +516,9 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                 </div>
               ))}
             {links.hasNextPage && (
-              <button onClick={() => void links.fetchNextPage()}>
+              <Button variant="outline" onClick={() => void links.fetchNextPage()}>
                 Load more links
-              </button>
+              </Button>
             )}
           </section>
         </aside>
