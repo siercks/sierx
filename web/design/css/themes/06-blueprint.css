@@ -1,0 +1,40 @@
+/* Blueprint: drawing grid from four gradients; dashed leaf outlines; title block. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="blueprint"] .sx-app {
+    background-image:
+      linear-gradient(var(--bp-grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--bp-grid-major) 1px, transparent 1px),
+      linear-gradient(var(--bp-grid-minor) 1px, transparent 1px), linear-gradient(90deg, var(--bp-grid-minor) 1px, transparent 1px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+    outline: 1px solid var(--sx-rule); outline-offset: -8px;
+  }
+  [data-theme="blueprint"] :is(.sx-top, .sx-side, .sx-detail, .sx-foot) { background: transparent; }
+  [data-theme="blueprint"] .sx-top { margin: 0 10px; padding-top: 16px; }
+  [data-theme="blueprint"] .sx-brand { letter-spacing: 0.03em; }
+  [data-theme="blueprint"] .sx-tab { border-radius: 0; }
+  [data-theme="blueprint"] .sx-tab[aria-current] { background: none; color: var(--foreground); text-decoration: underline; text-underline-offset: 4px; }
+  [data-theme="blueprint"] .sx-query { background: transparent; border-style: dashed; border-radius: 0; }
+  [data-theme="blueprint"] .sx-avatar { background: none; color: var(--muted-foreground); }
+  [data-theme="blueprint"] .sx-main { padding-inline: 26px; }
+  [data-theme="blueprint"] :is(.sx-main-title, .sx-node-title, .sx-card-title, .sx-doc-title, .sx-col-name, .sx-titleblock dd) { font-family: var(--sx-font-display); letter-spacing: 0.01em; }
+  [data-theme="blueprint"] .sx-node-title, [data-theme="blueprint"] .sx-card-title { font-size: 0.875rem; }
+  [data-theme="blueprint"] .sx-tree ul { margin-left: 26px; border-left: 1px solid var(--sx-rule); }
+  [data-theme="blueprint"] .sx-tree li li { position: relative; padding-left: 20px; }
+  [data-theme="blueprint"] .sx-tree li li::before { content: ""; position: absolute; left: 0; top: 19px; width: 18px; border-top: 1px solid var(--sx-rule); }
+  [data-theme="blueprint"] .sx-node-row { max-width: 900px; margin: 4px 0; background: var(--background); border: 1px dashed var(--muted-foreground); }
+  [data-theme="blueprint"] .sx-node:is([data-type="initiative"], [data-type="epic"]) > .sx-node-row { border-style: solid; border-color: var(--sx-rule); }
+  [data-theme="blueprint"] .sx-node[data-type="initiative"] > .sx-node-row { border-width: 2px; }
+  [data-theme="blueprint"] .sx-key { color: var(--primary); }
+  [data-theme="blueprint"] .sx-roll-track { fill: none; stroke: var(--sx-rule); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+  [data-theme="blueprint"] .sx-roll-fill { fill: var(--sx-rule); fill-opacity: 0.6; }
+  [data-theme="blueprint"] :is(.sx-node[data-selected] > .sx-node-row, .sx-card[data-selected]) { outline: 2px solid var(--primary); outline-offset: 3px; }
+  [data-theme="blueprint"] .sx-card { background: var(--background); border: 1px dashed var(--muted-foreground); }
+  [data-theme="blueprint"] .sx-card[data-blocked] { border-color: var(--destructive); }
+  [data-theme="blueprint"] .sx-blocker::before { content: "⟂ "; }
+  [data-theme="blueprint"] .sx-list thead th { background: var(--background); }
+  [data-theme="blueprint"] .sx-comment p { background: none; border: 1px dashed var(--muted-foreground); border-radius: 0; }
+  [data-theme="blueprint"] .sx-btn { border-radius: 0; background: transparent; color: var(--foreground); border-color: var(--sx-rule); }
+  [data-theme="blueprint"] .sx-btn[data-variant="primary"] { background: var(--primary); color: var(--primary-foreground); }
+  [data-theme="blueprint"] .sx-foot[data-variant="titleblock"] { padding: 0 18px 14px; }
+  [data-theme="blueprint"] .sx-titleblock { border-width: 2px; background: var(--background); }
+}

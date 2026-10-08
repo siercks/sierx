@@ -7,13 +7,14 @@ export function CustomFields({
   values: Record<string, unknown>;
 }) {
   return (
-    <>
+    <div className="workflow-field-grid workflow-custom-fields">
       {definitions.map((f) => (
-        <label key={f.key}>
+        <label className="workflow-field" key={f.key}>
           {f.name}
           <input type="hidden" name={'present:' + f.key} value="1" />
           {f.data_type === 'bool' ? (
             <select
+              className="sx-control"
               name={'field:' + f.key}
               defaultValue={
                 values[f.key] === undefined || values[f.key] === null
@@ -27,6 +28,7 @@ export function CustomFields({
             </select>
           ) : f.data_type === 'select' || f.data_type === 'multiselect' ? (
             <select
+              className="sx-control"
               multiple={f.data_type === 'multiselect'}
               name={'field:' + f.key}
               defaultValue={
@@ -42,6 +44,7 @@ export function CustomFields({
             </select>
           ) : (
             <input
+              className="sx-control"
               name={'field:' + f.key}
               type={
                 f.data_type === 'number'
@@ -58,7 +61,7 @@ export function CustomFields({
           )}
         </label>
       ))}
-    </>
+    </div>
   );
 }
 export function customValues(

@@ -13,12 +13,13 @@ import (
 
 func TestDocumentEscapingAndTheme(t *testing.T) {
 	s := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	for _, theme := range []string{"system", "light", "dark", "light-hc", "dark-hc"} {
+	themes := append(append([]string{}, appearanceThemes...), legacyThemes...)
+	for _, theme := range themes {
 		w := httptest.NewRecorder()
 		state := map[string]any{"body": "</script><script>alert(1)</script>&\u2028", "nested": json.RawMessage(`{"text":"</script>"}`)}
 		s.renderDocument(w, httptest.NewRequest("GET", "/", nil), state, auth.Identity{Theme: theme})
 		body := w.Body.String()
-		if w.Code != 200 || !strings.Contains(body, `data-theme="`+theme+`"`) || strings.Contains(body, "</script><script>alert") || !strings.Contains(body, `\u003c/script\u003e`) {
+		if w.Code != 200 || !strings.Contains(body, `data-theme="`+canonicalTheme(theme)+`"`) || strings.Contains(body, "</script><script>alert") || !strings.Contains(body, `\u003c/script\u003e`) {
 			t.Fatal("unsafe or missing initial state/theme")
 		}
 		if w.Header().Get("Cache-Control") != "private, no-store" {

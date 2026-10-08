@@ -1,0 +1,17 @@
+/* Celadon: porcelain cards in glaze-green trays. Restraint does the work: a text serif
+   for titles, no outline at rest, one soft shadow for the selected card. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="celadon"] :is(.sx-brand, .sx-main-title, .sx-card-title, .sx-doc-title, .sx-col-name, .sx-node-title, .sx-row-title) { font-family: var(--sx-font-display); }
+  [data-theme="celadon"] .sx-brand { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.01em; }
+  [data-theme="celadon"] .sx-main-title { font-size: 1.375rem; font-weight: 500; }
+  [data-theme="celadon"] :is(.sx-tab, .sx-query, .sx-btn) { border-radius: 999px; }
+  [data-theme="celadon"] .sx-col-h { border-bottom: 0; padding: 0 2px 2px; }
+  [data-theme="celadon"] .sx-col-name { font-size: 1.0625rem; font-weight: 500; }
+  [data-theme="celadon"] .sx-card { border-color: transparent; }
+  [data-theme="celadon"] .sx-card-title { font-size: 0.96875rem; font-weight: 500; line-height: 1.3; }
+  [data-theme="celadon"] :is(.sx-row-title, .sx-node-title) { font-size: 0.9375rem; }
+  [data-theme="celadon"] .sx-doc-title { font-size: 1.375rem; font-weight: 500; line-height: 1.2; }
+  [data-theme="celadon"] .sx-list thead th { background: var(--background); }
+  [data-theme="celadon"] .sx-node-row { border-radius: 8px; border-bottom: 0; }
+}

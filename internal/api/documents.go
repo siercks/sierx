@@ -155,12 +155,7 @@ func (s *Server) renderDocument(w http.ResponseWriter, r *http.Request, state ma
 		WriteProblem(w, InternalError())
 		return
 	}
-	theme := who.Theme
-	switch theme {
-	case "light", "dark", "light-hc", "dark-hc", "system":
-	default:
-		theme = "system"
-	}
+	theme := canonicalTheme(who.Theme)
 	motion := "system"
 	if who.ReducedMotion != nil {
 		if *who.ReducedMotion {

@@ -1,0 +1,56 @@
+{
+  "id": "indigo",
+  "name": "Indigo",
+  "set": "curated",
+  "scheme": "dark",
+  "contrast": "normal",
+  "summary": "Indigo-dyed cloth with undyed-cotton text and a persimmon accent. Seams are sashiko running stitch, and a stitched outline is how a card shows it is selected. Titles are set in a Japanese mincho. It pairs with Celadon.",
+  "tokens": {
+    "background": "#1b2440",
+    "foreground": "#ebe5d6",
+    "card": "#253154",
+    "card-foreground": "#ebe5d6",
+    "muted": "#2a3759",
+    "muted-foreground": "#b6b9c6",
+    "accent": "#2e3c63",
+    "accent-foreground": "#ebe5d6",
+    "border": "#8792b0",
+    "input": "#8792b0",
+    "ring": "#e8a173",
+    "primary": "#e8a173",
+    "primary-foreground": "#1b2440",
+    "destructive": "#ff9f9a",
+    "destructive-foreground": "#1b2440",
+    "status-open": "#b6b9c6",
+    "status-active": "#93b8ec",
+    "status-done": "#abc99c",
+    "status-cancelled": "#8792b0",
+    "sx-chrome": "#141b31",
+    "sx-chrome-foreground": "#ebe5d6",
+    "sx-chrome-muted": "#b6b9c6",
+    "sx-panel": "#1f2947",
+    "sx-rule": "#3a4870",
+    "sx-hairline": "#2f3c63",
+    "sx-selected": "#2e3c63",
+    "sx-selected-foreground": "#f7f2e6",
+    "sx-selected-muted": "#cdd0db",
+    "sx-radius": "6px",
+    "sx-shadow-selected": "none",
+    "sx-column": "#1f2947",
+    "sx-column-pad": "8px",
+    "sx-font-mono": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-symbols": "\"Sierx Symbols\"",
+    "sx-font-ui": "system-ui, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "sx-font-display": "Georgia, \"Times New Roman\", serif"
+  },
+  "private": {
+    "sashiko": "#d9d2c0"
+  },
+  "pairs": [
+    [
+      "sashiko",
+      "card",
+      "ui"
+    ]
+  ]
+}

@@ -1,0 +1,34 @@
+/* Index card: typed 3×5 cards on a desk blotter. The red header rule sits under the
+   key row and the blue ruling is on an 18px pitch, the same as --sx-leading, so typed
+   lines sit on the rules. Card stock colour follows type; pink stock means blocked.
+   The blotter applies to the board only; list, tree and item stay on light paper. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="indexcard"] .sx-top { border-bottom: 0; }
+  [data-theme="indexcard"] .sx-query { background: var(--card); }
+  [data-theme="indexcard"] .sx-main:has(> .sx-board) { background: var(--felt); }
+  [data-theme="indexcard"] .sx-main:has(> .sx-board) :is(.sx-main-title, .sx-col-name) { color: var(--chalk); }
+  [data-theme="indexcard"] .sx-main:has(> .sx-board) :is(.sx-main-sub, .sx-col-count) { color: var(--chalk-muted); }
+  [data-theme="indexcard"] .sx-col-h { border-bottom: 1px solid var(--chalk-muted); }
+  [data-theme="indexcard"] .sx-col[data-full] .sx-col-count { color: var(--stock-pink); }
+  [data-theme="indexcard"] .sx-col-flag { padding: 0 6px; background: var(--stock-pink); color: var(--destructive); }
+  [data-theme="indexcard"] .sx-card {
+    --stock: var(--card);
+    gap: 0; padding: 0 12px 6px; border: 0;
+    background:
+      linear-gradient(var(--card-red), var(--card-red)) 0 30px / 100% 1px no-repeat,
+      repeating-linear-gradient(to bottom, transparent 0 17px, var(--card-blue) 17px 18px) 0 31px / 100% calc(100% - 31px) no-repeat,
+      var(--stock);
+  }
+  [data-theme="indexcard"] .sx-card[data-type="bug"] { --stock: var(--stock-yellow); }
+  [data-theme="indexcard"] .sx-card[data-type="idea"] { --stock: var(--stock-blue); }
+  [data-theme="indexcard"] .sx-card[data-blocked] { --stock: var(--stock-pink); }
+  [data-theme="indexcard"] .sx-card[data-selected] { rotate: -1deg; }
+  [data-theme="indexcard"] .sx-card-top { height: 31px; }
+  [data-theme="indexcard"] :is(.sx-card-title, .sx-blocker, .sx-card-meta) { line-height: 18px; min-height: 18px; }
+  [data-theme="indexcard"] .sx-card-title { font-weight: 400; }
+  [data-theme="indexcard"] .sx-who { min-height: 0; height: 18px; background: none; }
+  [data-theme="indexcard"] .sx-blocker::before { content: "! "; }
+  [data-theme="indexcard"] :is(.sx-btn, .sx-kbd, .sx-comment p) { border-radius: 2px; }
+  [data-theme="indexcard"] .sx-foot { border-top: 0; }
+}

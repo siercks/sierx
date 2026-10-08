@@ -1,0 +1,46 @@
+/* Platinum: bevels are inset box-shadows, the title bar is a gradient. No images. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="platinum"] .sx-app { border: 1px solid var(--foreground); box-shadow: inset 1px 1px var(--card), inset -1px -1px var(--border); }
+  [data-theme="platinum"] .sx-top { position: relative; padding-top: 30px; border-bottom-color: var(--border); box-shadow: 0 1px var(--card); }
+  [data-theme="platinum"] .sx-top::before {
+    content: "sierx"; position: absolute; inset: 3px 3px auto; height: 20px; display: grid; place-items: center; font-weight: 700;
+    background:
+      linear-gradient(90deg, transparent 45%, var(--sx-chrome) 45% 55%, transparent 55%),
+      repeating-linear-gradient(to bottom, var(--sx-chrome) 0 3px, var(--card) 3px 4px, var(--border) 4px 5px);
+    border-bottom: 1px solid var(--border);
+  }
+  [data-theme="platinum"] .sx-brand { font-size: inherit; }
+  [data-theme="platinum"] :is(.sx-tab, .sx-btn) {
+    min-height: 22px; color: var(--foreground); border: 1px solid var(--foreground); border-radius: 4px;
+    background: linear-gradient(var(--card), var(--muted)); box-shadow: inset -1px -1px var(--border), inset 1px 1px var(--card);
+  }
+  [data-theme="platinum"] .sx-tab[aria-current] { background: var(--accent); color: var(--accent-foreground); box-shadow: inset 1px 1px var(--foreground); }
+  [data-theme="platinum"] .sx-btn[data-variant="primary"] { background: linear-gradient(var(--card), var(--muted)); color: var(--foreground); border-color: var(--foreground); box-shadow: 0 0 0 1px var(--sx-chrome), 0 0 0 3px var(--foreground); margin: 2px; }
+  [data-theme="platinum"] :is(.sx-query, .sx-side, .sx-main, .sx-detail) {
+    background: var(--card); border: 1px solid; border-color: var(--border) var(--card) var(--card) var(--border);
+    box-shadow: inset 1px 1px var(--foreground); border-radius: 0;
+  }
+  [data-theme="platinum"] .sx-query-label { color: var(--muted-foreground); }
+  [data-theme="platinum"] :is(.sx-side, .sx-main, .sx-detail) { margin: 8px; }
+  [data-theme="platinum"] .sx-side { margin-right: 0; padding: 6px 3px; }
+  [data-theme="platinum"] .sx-detail { margin-left: 0; }
+  [data-theme="platinum"] .sx-main { padding: 0; }
+  [data-theme="platinum"] .sx-main:has(.sx-board, .sx-tree, .sx-doc) { padding: 12px; }
+  [data-theme="platinum"] .sx-main:has(.sx-board) > .sx-main-h { display: none; }
+  [data-theme="platinum"] .sx-side-link { min-height: 20px; border-radius: 0; }
+  [data-theme="platinum"] .sx-side-link[aria-current] { background: var(--sx-selected); color: var(--sx-selected-foreground); }
+  [data-theme="platinum"] .sx-list thead th {
+    background: var(--sx-chrome); color: var(--foreground); font-weight: 400; padding: 2px 6px;
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--foreground); box-shadow: inset 1px 1px var(--card);
+  }
+  [data-theme="platinum"] .sx-list :is(th, td) { padding-inline: 6px; }
+  [data-theme="platinum"] .sx-list td { border-bottom-color: var(--muted); }
+  [data-theme="platinum"] .sx-group th { background: var(--muted); padding: 2px 6px; }
+  [data-theme="platinum"] .sx-card { background: var(--sx-chrome); border: 1px solid var(--foreground); box-shadow: inset -1px -1px var(--border), inset 1px 1px var(--card); }
+  [data-theme="platinum"] .sx-card[data-selected] { background: var(--sx-selected); }
+  [data-theme="platinum"] .sx-card[data-blocked] { border-style: solid; border-color: var(--foreground); }
+  [data-theme="platinum"] .sx-blocker::before { content: "▲ "; }
+  [data-theme="platinum"] :is(.sx-who, .sx-avatar) { border-radius: 3px; background: var(--card); color: var(--foreground); border: 1px solid var(--border); }
+  [data-theme="platinum"] .sx-foot { border-top-color: var(--border); box-shadow: inset 0 1px var(--card); }
+}

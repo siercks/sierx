@@ -1,0 +1,36 @@
+/* Chart: columns are depth zones (deep, shallow, shoal, land). Contours between water
+   zones, a coastline before land, a graduated neatline across the top of the sheet.
+   Cartographic lettering: water names italic, land names upright, soundings italic. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="chart"] .sx-brand { font-style: italic; font-weight: 600; font-size: 1.25rem; }
+  [data-theme="chart"] .sx-tab { border-radius: 0; }
+  [data-theme="chart"] .sx-query { border-radius: 0; background: var(--card); }
+  [data-theme="chart"] .sx-avatar { border-radius: 0; }
+  [data-theme="chart"] .sx-main {
+    border-top: 6px solid transparent;
+    border-image: repeating-linear-gradient(90deg, var(--foreground) 0 32px, var(--card) 32px 64px) 6;
+  }
+  [data-theme="chart"] .sx-main:has(> .sx-board) { display: flex; flex-direction: column; }
+  [data-theme="chart"] .sx-main-title { font-weight: 600; }
+  [data-theme="chart"] .sx-board { flex: 1; gap: 0; align-items: stretch; border: 1px solid var(--chart-contour); }
+  [data-theme="chart"] .sx-col { align-content: start; padding: 10px; border-radius: 0; background: var(--chart-deep); }
+  [data-theme="chart"] .sx-col:nth-child(2) { background: var(--chart-shallow); }
+  [data-theme="chart"] .sx-col:nth-child(3) { background: var(--chart-shoal); }
+  [data-theme="chart"] .sx-col:nth-child(4) { background: var(--chart-land); border-left: 1.5px solid var(--foreground); }
+  [data-theme="chart"] .sx-col:nth-child(2), [data-theme="chart"] .sx-col:nth-child(3) { border-left: 1px dashed var(--chart-contour); }
+  [data-theme="chart"] .sx-col-h { border-bottom: 0; }
+  [data-theme="chart"] .sx-col:not(:last-child) .sx-col-name { font-style: italic; font-weight: 400; }
+  [data-theme="chart"] :is(.sx-col-count, .sx-c-num, .sx-roll-n) { font-style: italic; }
+  [data-theme="chart"] .sx-card { border-color: var(--chart-contour); }
+  [data-theme="chart"] .sx-card[data-selected] { border-color: var(--foreground); }
+  /* A restricted-area limit is a dashed magenta line. */
+  [data-theme="chart"] .sx-card[data-blocked] { border: 1.5px dashed var(--destructive); }
+  [data-theme="chart"] .sx-who { background: none; border: 1px solid var(--chart-contour); }
+  [data-theme="chart"] .sx-list thead th { color: var(--foreground); }
+  [data-theme="chart"] .sx-roll-track { fill: var(--chart-shallow); }
+  [data-theme="chart"] .sx-roll-fill { fill: var(--chart-land); stroke: var(--foreground); stroke-width: 0.5; }
+  [data-theme="chart"] .sx-side { border-right-color: var(--chart-contour); }
+  [data-theme="chart"] :is(.sx-btn, .sx-kbd, .sx-comment p) { border-radius: 0; }
+  [data-theme="chart"] .sx-doc-title { font-weight: 600; }
+}

@@ -1,0 +1,42 @@
+/* Plain text: the item as an RFC. Numbered sections come from a CSS counter, so the markup stays the same. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="plain"] .sx-top { font-size: var(--sx-text-sm); color: var(--muted-foreground); padding-block: 6px; }
+  [data-theme="plain"] .sx-brand { color: var(--foreground); font-size: inherit; }
+  [data-theme="plain"] .sx-tabs { gap: 2ch; }
+  [data-theme="plain"] .sx-tab { padding: 0; border-radius: 0; }
+  [data-theme="plain"] .sx-tab[aria-current] { background: none; color: var(--foreground); text-decoration: underline; }
+  [data-theme="plain"] .sx-query { border: 0; background: none; padding: 0; }
+  [data-theme="plain"] .sx-query-label { color: var(--muted-foreground); }
+  [data-theme="plain"] .sx-avatar { background: none; color: inherit; }
+  [data-theme="plain"] .sx-main > .sx-doc { margin: 0 auto; max-width: 76ch; padding: 12px 2ch 40px; }
+  [data-theme="plain"] .sx-doc { counter-reset: sec; gap: 14px; }
+  [data-theme="plain"] .sx-doc-head { justify-content: space-between; border-bottom: 1px solid var(--foreground); padding-bottom: 4px; }
+  [data-theme="plain"] .sx-crumb { margin-left: 0; }
+  [data-theme="plain"] .sx-doc-title { font-size: inherit; text-align: center; padding-top: 8px; }
+  [data-theme="plain"] .sx-actions { justify-content: center; gap: 2ch; }
+  [data-theme="plain"] .sx-btn, [data-theme="plain"] .sx-btn[data-variant="primary"] { min-height: 24px; padding: 0; font-size: inherit; background: none; border: 0; color: var(--primary); }
+  [data-theme="plain"] .sx-btn[data-variant="primary"] { font-weight: 700; }
+  [data-theme="plain"] .sx-btn::before { content: "["; }
+  [data-theme="plain"] .sx-btn::after { content: "]"; }
+  [data-theme="plain"] .sx-fields { gap: 0; padding: 8px 2ch; font-size: inherit; border: 1px dashed var(--border); }
+  [data-theme="plain"] .sx-fields > div { grid-template-columns: 18ch 1fr; gap: 0; }
+  [data-theme="plain"] .sx-fields dt::after { content: ":"; }
+  [data-theme="plain"] .sx-doc-h { font-size: inherit; color: var(--foreground); }
+  [data-theme="plain"] .sx-doc-h::before { counter-increment: sec; content: counter(sec) ".  "; white-space: pre; }
+  [data-theme="plain"] :is(.sx-md, .sx-links, .sx-activity) { padding-left: 4ch; }
+  [data-theme="plain"] :is(.sx-links li, .sx-activity li) { font-size: inherit; }
+  [data-theme="plain"] .sx-kbd { border: 0; background: none; padding: 0; font-size: inherit; }
+  [data-theme="plain"] .sx-kbd::before { content: "<"; }
+  [data-theme="plain"] .sx-kbd::after { content: ">"; }
+  [data-theme="plain"] .sx-checks li::before { content: "[ ] "; }
+  [data-theme="plain"] .sx-checks li[data-done]::before { content: "[x] "; }
+  [data-theme="plain"] .sx-links li::before { content: "- "; }
+  [data-theme="plain"] .sx-link-kind { min-width: 12ch; }
+  [data-theme="plain"] .sx-comment p { background: none; border-left: 2px solid var(--sx-hairline); border-radius: 0; padding: 0 0 0 2ch; }
+  [data-theme="plain"] .sx-card { background: none; border: 1px dashed var(--border); }
+  [data-theme="plain"] .sx-card[data-selected] { border: 1px solid var(--foreground); }
+  [data-theme="plain"] .sx-card[data-blocked] { border-style: solid; }
+  [data-theme="plain"] .sx-row[data-selected] .sx-c-key::before { content: "> "; }
+  [data-theme="plain"] .sx-who { background: none; min-width: 0; }
+}

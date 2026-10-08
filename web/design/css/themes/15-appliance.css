@@ -1,0 +1,31 @@
+/* Appliance: slide switches, slots and keys. Selection presses a key in and lights a
+   lamp; nothing lifts. Shadows are mixed from tokens, never literal colours. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="appliance"] { --ap-shade: color-mix(in srgb, var(--foreground) 16%, transparent); }
+  [data-theme="appliance"] .sx-top { gap: 24px; border-bottom-color: var(--sx-hairline); }
+  [data-theme="appliance"] .sx-brand { font-weight: 700; letter-spacing: -0.01em; }
+  [data-theme="appliance"] .sx-tabs { padding: 3px; gap: 2px; border-radius: 999px; background: var(--muted); box-shadow: inset 0 1px 2px var(--ap-shade); }
+  [data-theme="appliance"] .sx-tab { padding: 0 12px; border-radius: 999px; color: var(--muted-foreground); }
+  [data-theme="appliance"] .sx-tab[aria-current] { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px var(--ap-shade); }
+  [data-theme="appliance"] .sx-query { border-radius: 999px; background: var(--muted); box-shadow: inset 0 1px 2px var(--ap-shade); }
+  [data-theme="appliance"] .sx-col { gap: 10px; }
+  [data-theme="appliance"] .sx-col-h { font-weight: 600; box-shadow: 0 1px 0 var(--card); }
+  [data-theme="appliance"] .sx-card { position: relative; border-color: transparent; box-shadow: 0 1px 0 var(--sx-rule); }
+  [data-theme="appliance"] .sx-card[data-selected] { border-color: var(--border); }
+  [data-theme="appliance"] .sx-card[data-selected] .sx-card-top .sx-type { margin-right: 14px; }
+  [data-theme="appliance"] .sx-card[data-selected]::after {
+    content: ""; position: absolute; top: 11px; right: 10px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--status-active); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-active) 22%, transparent);
+  }
+  [data-theme="appliance"] .sx-card[data-blocked] { border: 1px solid var(--destructive); }
+  [data-theme="appliance"] .sx-blocker::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--destructive); vertical-align: 1px; }
+  [data-theme="appliance"] .sx-who { background: var(--card); box-shadow: inset 0 0 0 1px var(--sx-rule); }
+  [data-theme="appliance"] .sx-btn { border-color: transparent; border-radius: 8px; box-shadow: 0 1px 0 var(--sx-rule), inset 0 0 0 1px var(--sx-hairline); }
+  [data-theme="appliance"] .sx-btn[data-variant="primary"] { box-shadow: 0 1px 0 color-mix(in srgb, var(--primary) 55%, var(--foreground)); font-weight: 650; }
+  [data-theme="appliance"] .sx-roll-bar { height: 8px; }
+  [data-theme="appliance"] .sx-roll-fill { fill: var(--status-active); }
+  [data-theme="appliance"] .sx-node-row { border-bottom: 0; border-radius: 8px; margin-bottom: 2px; }
+  [data-theme="appliance"] .sx-foot .sx-kbd { background: var(--card); border-color: transparent; border-radius: 5px; box-shadow: 0 1px 0 var(--sx-rule); }
+  [data-theme="appliance"] .sx-list thead th { font-weight: 600; }
+}

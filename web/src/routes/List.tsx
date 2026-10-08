@@ -15,6 +15,8 @@ import {
 } from '../api/client';
 import { Shell } from '../components/Shell';
 import { Create } from '../components/Create';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 type State = {
   me: Me;
   auth_mode: string;
@@ -42,7 +44,9 @@ export function Rows({ items }: { items: Item[] }) {
     return (
       <div
         role="listitem"
-        className="item-row"
+        className="sx-row item-row"
+        data-cat={item.status.category}
+        data-type={item.type.name.toLowerCase().replaceAll(' ', '-')}
         key={item.id}
         data-index={index}
         ref={items.length > 50 ? virtual.measureElement : undefined}
@@ -53,29 +57,34 @@ export function Rows({ items }: { items: Item[] }) {
             setFocused(-1);
         }}
       >
-        <span>
-          {item.key}
-          <small>{item.type.name}</small>
+        <span className="item-identity">
+          <strong className="sx-key item-key">{item.key}</strong>
+          <small className="sx-type item-type">{item.type.name}</small>
         </span>
-        <div>
-          <a href={'/' + item.key}>{item.title}</a>
-          <small>
+        <div className="item-summary">
+          <a className="sx-row-title item-title" href={'/' + item.key}>
+            {item.title}
+          </a>
+          <small className="item-meta">
             {item.project.key_prefix !== item.key.split('-')[0]
               ? `${item.project.name} (${item.project.key_prefix})`
               : item.project.name}
             {item.assignee ? ` · ${item.assignee.display_name}` : ''}
           </small>
         </div>
-        <span className={'status status-' + item.status.category}>
+        <Badge
+          variant={item.status.category as 'open' | 'active' | 'done' | 'cancelled'}
+          className="item-status"
+        >
           {item.status.name}
-        </span>
+        </Badge>
       </div>
     );
   }
   return (
     <div
       ref={viewport}
-      className="list-viewport"
+      className="sx-list sx-virtual-list list-viewport"
       role="region"
       aria-label="Backlog items"
       tabIndex={0}
@@ -145,25 +154,29 @@ export default function List() {
   const unique = [...new Map(items.map((i) => [i.id, i])).values()];
   return (
     <Shell me={state.me} authMode={state.auth_mode}>
-      <div className="toolbar">
-        <div style={{ flex: 1 }}>
-          <h1>Your backlog</h1>
-          <p className="muted">Find your next step. Keep the details close.</p>
+      <section className="sx-main-h page-heading">
+        <div>
+          <p className="eyebrow">Workspace</p>
+          <h1 className="sx-main-title">Your backlog</h1>
+          <p className="sx-main-sub page-description">
+            Keep the work moving, one clear next step at a time.
+          </p>
         </div>
         <Create
           projects={state.projects.data ?? []}
           workspace={state.me.workspace_id}
         />
-      </div>
-      <form action="/" method="get" className="toolbar">
-        <label>
-          Search with SXQ
+      </section>
+      <form action="/" method="get" className="search-panel">
+        <label className="sx-field search-field workflow-field">
+          <span>Search backlog</span>
           <input
             id="query"
             name="q"
+            className="sx-control"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="project = SRX"
+            placeholder="Try project = SRX or status = active"
             list="suggestions"
             autoComplete="off"
           />
@@ -173,33 +186,51 @@ export default function List() {
             <option key={s} value={s} />
           ))}
         </datalist>
-        <button className="primary">Search</button>
-        {state.query && <a href="/">Clear query</a>}
+        <div className="search-actions">
+          <Button variant="default" type="submit">
+            Search
+          </Button>
+          {state.query && (
+            <a className="button button-ghost" href="/">
+              Clear
+            </a>
+          )}
+        </div>
       </form>
       {initialProblem && (
-        <p className="error" role="alert">
+        <p className="alert alert-error" role="alert">
           {initialProblem.detail || initialProblem.title}
         </p>
       )}
       {result.error && (
-        <div className="error" role="alert">
+        <div className="alert alert-error" role="alert">
           {result.error.message}{' '}
-          <button onClick={() => void result.refetch()}>Try again</button>
+          <Button variant="outline" onClick={() => void result.refetch()}>
+            Try again
+          </Button>
         </div>
       )}
       {result.isPending && !initialProblem ? (
         <p role="status">Loading items…</p>
       ) : unique.length ? (
         <>
+          <div className="list-heading">
+            <div>
+              <h2 className="sx-main-title">{state.query ? 'Search results' : 'All work'}</h2>
+              <p className="muted">Items in this workspace</p>
+            </div>
+            <Badge variant="outline">{unique.length} loaded</Badge>
+          </div>
           <Rows items={unique} />
-          <p className="muted" role="status">
+          <p className="list-footnote" role="status">
             {unique.length} items loaded
             {result.isFetching ? ' · Refreshing…' : ''}
           </p>
         </>
       ) : (
         !initialProblem && (
-          <section className="panel">
+          <section className="empty-state">
+            <div className="empty-icon" aria-hidden="true">+</div>
             <h2>
               {state.query
                 ? 'No items match this query'
@@ -210,20 +241,22 @@ export default function List() {
                 ? 'Clear the query or create an item.'
                 : 'Create an item to capture the work ahead.'}
             </p>
-            {state.query && <a href="/">Clear query</a>}
+            {state.query && <a className="button button-outline" href="/">Clear query</a>}
           </section>
         )
       )}
       {result.hasNextPage ? (
-        <button
+        <Button
+          variant="outline"
+          className="load-more"
           disabled={result.isFetchingNextPage}
           onClick={() => void result.fetchNextPage()}
         >
           {result.isFetchingNextPage ? 'Loading more…' : 'Load more items'}
-        </button>
+        </Button>
       ) : (
         unique.length > 0 && (
-          <p className="muted">All matching items are loaded.</p>
+          <p className="list-footnote">You’re all caught up. Every matching item is loaded.</p>
         )
       )}
     </Shell>

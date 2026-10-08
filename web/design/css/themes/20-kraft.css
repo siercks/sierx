@@ -1,0 +1,30 @@
+/* Kraft: dot-grid paper on kraft board. Column names are punched paper tags, view tabs
+   are index tabs on the notebook band, and a blocked card is rubber-stamped. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="kraft"] .sx-top { padding-block: 10px 0; align-items: flex-end; border-bottom: 0; }
+  [data-theme="kraft"] :is(.sx-brand, .sx-query, .sx-avatar) { margin-bottom: 9px; }
+  [data-theme="kraft"] .sx-brand { letter-spacing: 0.02em; }
+  [data-theme="kraft"] .sx-tab { min-height: 30px; padding: 0 14px; border-radius: 4px 4px 0 0; }
+  [data-theme="kraft"] .sx-tab[aria-current] { background: var(--background); color: var(--foreground); }
+  [data-theme="kraft"] .sx-query { background: var(--card); border-color: transparent; }
+  [data-theme="kraft"] .sx-avatar { background: var(--sx-chrome-foreground); color: var(--sx-chrome); }
+  [data-theme="kraft"] .sx-col-h { align-items: center; padding: 0; border-bottom: 0; }
+  [data-theme="kraft"] .sx-col-name { position: relative; padding: 3px 10px 3px 20px; border-radius: 2px; background: var(--card); box-shadow: 0 1px 0 var(--sx-hairline); }
+  [data-theme="kraft"] .sx-col-name::before { content: ""; position: absolute; left: 7px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--background); box-shadow: inset 0 0 0 1px var(--sx-hairline); }
+  [data-theme="kraft"] .sx-col-count { color: var(--foreground); }
+  [data-theme="kraft"] .sx-card { border: 0; background-image: radial-gradient(var(--kraft-dot) 0.9px, transparent 1.1px); background-size: 10px 10px; background-position: 5px 5px; }
+  [data-theme="kraft"] .sx-card:is([data-cat="done"], [data-cat="cancelled"]):not([data-selected]) { background-color: color-mix(in srgb, var(--card) 72%, var(--background)); }
+  [data-theme="kraft"] .sx-card[data-blocked] { border: 0; }
+  [data-theme="kraft"] .sx-blocker { justify-self: start; padding: 1px 7px; border: 1.5px solid var(--destructive); border-radius: 3px; rotate: -2deg; letter-spacing: 0.02em; }
+  [data-theme="kraft"] .sx-blocker::before { content: none; }
+  [data-theme="kraft"] .sx-who { background: var(--background); }
+  [data-theme="kraft"] .sx-side { border-right: 0; }
+  [data-theme="kraft"] .sx-side-link[aria-current] { background: var(--card); color: var(--foreground); }
+  [data-theme="kraft"] :is(.sx-list, .sx-main > .sx-doc) { background: var(--card); border-radius: 3px; }
+  [data-theme="kraft"] .sx-main > .sx-doc { padding: 24px 28px; }
+  [data-theme="kraft"] .sx-list :is(th, td):first-child { padding-left: 12px; }
+  [data-theme="kraft"] .sx-list thead th { background: var(--card); }
+  [data-theme="kraft"] .sx-node-row { margin-bottom: 4px; border: 0; border-radius: 3px; background: var(--card); }
+  [data-theme="kraft"] .sx-detail { border-left: 0; background: var(--card); }
+}

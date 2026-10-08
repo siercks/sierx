@@ -1,0 +1,30 @@
+/* Riso: two inks. Blue carries every legible mark; pink is the second plate, used for
+   halftones, offsets and the misregistered selection. Halftone density rises as work
+   moves right. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="riso"] .sx-brand { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; text-shadow: 2px 1px 0 var(--riso-pink); }
+  [data-theme="riso"] :is(.sx-tab, .sx-query, .sx-avatar, .sx-who, .sx-btn, .sx-kbd, .sx-comment p) { border-radius: 0; }
+  [data-theme="riso"] .sx-tab { font-weight: 600; }
+  [data-theme="riso"] .sx-avatar { background: var(--riso-tint); color: var(--foreground); }
+  [data-theme="riso"] .sx-main-title { font-weight: 800; letter-spacing: -0.02em; }
+  [data-theme="riso"] .sx-col { padding: 10px; border-radius: 0; background-color: var(--card); background-image: radial-gradient(var(--riso-tint) 1.1px, transparent 1.4px); background-size: 9px 9px; }
+  [data-theme="riso"] .sx-col:nth-child(2) { background-size: 7px 7px; }
+  [data-theme="riso"] .sx-col:nth-child(3) { background-size: 5px 5px; }
+  [data-theme="riso"] .sx-col:nth-child(4) { background-image: radial-gradient(var(--riso-blue-tint) 1.1px, transparent 1.4px); background-size: 6px 6px; }
+  [data-theme="riso"] .sx-col-name { font-weight: 800; }
+  [data-theme="riso"] .sx-col-count { color: var(--ring); font-weight: 800; }
+  [data-theme="riso"] .sx-card { border-color: var(--foreground); }
+  [data-theme="riso"] .sx-card[data-selected] { translate: -2px -2px; border-color: var(--foreground); }
+  [data-theme="riso"] .sx-card[data-blocked] { border-style: solid; border-color: var(--foreground); background-image: radial-gradient(var(--riso-tint) 1.3px, transparent 1.5px); background-size: 4px 4px; }
+  [data-theme="riso"] .sx-blocker { font-weight: 800; }
+  [data-theme="riso"] .sx-who { background: var(--riso-tint); }
+  [data-theme="riso"] .sx-btn { font-weight: 700; }
+  [data-theme="riso"] .sx-btn[data-variant="primary"] { box-shadow: 3px 3px 0 var(--riso-pink); }
+  [data-theme="riso"] .sx-list thead th { color: var(--foreground); }
+  [data-theme="riso"] .sx-row[data-selected] td { background: var(--riso-tint); }
+  [data-theme="riso"] .sx-node[data-selected] > .sx-node-row { background: var(--card); outline: 2px solid var(--foreground); box-shadow: 4px 4px 0 var(--riso-pink); }
+  [data-theme="riso"] .sx-roll-track { fill: var(--sx-hairline); }
+  [data-theme="riso"] :is(.sx-roll-fill, .sx-spark rect) { fill: var(--riso-pink); }
+  [data-theme="riso"] .sx-comment p { background: var(--riso-tint); }
+}

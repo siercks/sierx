@@ -1,0 +1,7 @@
+{
+  "$comment": "Maps SPEC §10.2 user_account.theme values to study themes. 'system' follows prefers-color-scheme and upgrades to the HC palette under prefers-contrast: more.",
+  "light": "quiet",
+  "dark": "dusk",
+  "light-hc": "eink",
+  "dark-hc": "eink-dark"
+}

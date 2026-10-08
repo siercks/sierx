@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { cache, request, bootstrap, type Me } from '../api/client';
 
 import { startFeed } from '../api/feed';
+import { Button } from './ui/button';
+import { appearanceThemes, normalizeTheme } from '../themes/catalog';
 
 export function Shell({
   me,
@@ -12,7 +14,7 @@ export function Shell({
   authMode: string;
   children: ReactNode;
 }) {
-  const [theme, setTheme] = useState(me.theme);
+  const [theme, setTheme] = useState(() => normalizeTheme(me.theme));
   const [motion, setMotion] = useState(
     me.reduced_motion === null
       ? 'system'
@@ -81,37 +83,43 @@ export function Shell({
     }
   }
   return (
-    <>
+    <div className="sx-app app-shell">
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <header>
-        <a href="/">Sierx</a>
-        <div className="toolbar">
-          <label>
-            Theme
+      <header className="sx-top app-header">
+        <div className="brand-group">
+            <a className="sx-brand brand" href="/" aria-label="Sierx home">
+            <span className="brand-mark" aria-hidden="true">
+              S
+            </span>
+            <span>Sierx</span>
+          </a>
+          <span className="header-divider" aria-hidden="true" />
+          <a className="sx-tab workspace-link" href="/" aria-current="page">
+            Workspace
+          </a>
+        </div>
+        <div className="header-tools">
+          <label className="preference-field">
+            <span>Theme</span>
             <select
               value={theme}
               disabled={saving}
               onChange={(e) => void preference(e.target.value, motion)}
             >
-              {['system', 'light', 'dark', 'light-hc', 'dark-hc'].map((v) => (
-                <option key={v} value={v}>
-                  {
-                    {
-                      system: 'System',
-                      light: 'Light',
-                      dark: 'Dark',
-                      'light-hc': 'Light high contrast',
-                      'dark-hc': 'Dark high contrast',
-                    }[v]
-                  }
-                </option>
-              ))}
+              <option value="system">System</option>
+              <optgroup label="Appearance">
+                {appearanceThemes.map(({ id, name }) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
-          <label>
-            Motion
+          <label className="preference-field">
+            <span>Motion</span>
             <select
               value={motion}
               disabled={saving}
@@ -122,42 +130,56 @@ export function Shell({
               <option value="full">Full motion</option>
             </select>
           </label>
-          {authMode === 'local' && (
-            <button
-              onClick={async () => {
-                try {
-                  await request('/auth/logout', { method: 'POST' });
-                  cache.clear();
-                  location.assign('/login');
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              Sign out
-            </button>
-          )}
+          <div className="user-menu">
+            <span className="sx-avatar user-avatar" aria-hidden="true">
+              {me.display_name.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="user-name">{me.display_name}</span>
+            {authMode === 'local' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await request('/auth/logout', { method: 'POST' });
+                    cache.clear();
+                    location.assign('/login');
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                Sign out
+              </Button>
+            )}
+          </div>
         </div>
       </header>
-      <main id="main" tabIndex={-1}>
+      <main id="main" className="sx-main app-main" tabIndex={-1}>
         {error && (
-          <p className="error" role="alert">
+          <p className="alert alert-error" role="alert">
             {error}
           </p>
         )}
         {expired && (
-          <div className="notice" role="alert">
+          <div className="alert alert-notice" role="alert">
             Your session expired. Keep this page open to preserve your draft.{' '}
             <a href="/login" target="_blank" rel="noopener noreferrer">
               Sign in in a new tab
             </a>
             , then{' '}
-            <button onClick={() => void resume()}>Continue this session</button>{' '}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void resume()}
+            >
+                Continue this session
+            </Button>{' '}
             and retry your action.
           </div>
         )}
         {children}
       </main>
-    </>
+    </div>
   );
 }

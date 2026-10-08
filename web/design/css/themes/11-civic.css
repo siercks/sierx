@@ -1,0 +1,40 @@
+/* Civic: public-service patterns. Underlined links, worded tags, yellow-and-black focus. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  /* The focus treatment is the reason to borrow from this theme: yellow fill, black underbar. */
+  [data-theme="civic"] .sx-app :focus-visible { outline: 3px solid transparent; background: var(--civic-yellow); color: var(--foreground); box-shadow: 0 -2px var(--civic-yellow), 0 4px var(--foreground); text-decoration: none; }
+  [data-theme="civic"] .sx-top { padding-block: 12px; gap: 30px; border-bottom: 8px solid var(--civic-blue); }
+  [data-theme="civic"] .sx-tabs { gap: 20px; }
+  [data-theme="civic"] .sx-tab { padding: 0; border-radius: 0; color: var(--sx-chrome-foreground); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+  [data-theme="civic"] .sx-tab[aria-current] { background: none; color: var(--sx-chrome-foreground); text-decoration-thickness: 3px; }
+  [data-theme="civic"] .sx-query { border-color: var(--background); padding: 4px 8px; }
+  [data-theme="civic"] .sx-query-label { color: var(--foreground); }
+  [data-theme="civic"] .sx-avatar { background: none; color: var(--sx-chrome-foreground); font-size: inherit; }
+  [data-theme="civic"] .sx-main { padding-top: 22px; }
+  [data-theme="civic"] .sx-main-h { flex-direction: column-reverse; align-items: flex-start; gap: 2px; margin-bottom: 16px; }
+  [data-theme="civic"] .sx-main-sub { font-size: 1.125rem; }
+  [data-theme="civic"] .sx-list :is(th, td) { vertical-align: top; padding-right: 20px; border-bottom-width: 1px; }
+  [data-theme="civic"] .sx-list thead th { color: var(--foreground); font-size: inherit; border-bottom-width: 1px; }
+  [data-theme="civic"] :is(.sx-row-title, .sx-card-title, .sx-node-title) { color: var(--civic-blue); text-decoration: underline; text-underline-offset: 3px; }
+  [data-theme="civic"] :is(.sx-row, .sx-card, .sx-node)[data-selected] :is(.sx-row-title, .sx-card-title, .sx-node-title) {
+    background: var(--civic-yellow); color: var(--foreground); box-shadow: 0 -2px var(--civic-yellow), 0 4px var(--foreground); text-decoration: none;
+  }
+  [data-theme="civic"] .sx-row[data-selected] td { background: none; }
+  [data-theme="civic"] .sx-node[data-selected] > .sx-node-row { background: none; }
+  [data-theme="civic"] .sx-card[data-selected] { border-color: var(--sx-hairline); }
+  [data-theme="civic"] .sx-status { padding: 3px 8px 2px; font-size: var(--sx-text-sm); font-weight: 700; background: var(--tag-open-bg); color: var(--tag-open-fg); }
+  [data-theme="civic"] .sx-status[data-cat="active"] { background: var(--tag-active-bg); color: var(--tag-active-fg); }
+  [data-theme="civic"] .sx-status[data-status="review"] { background: var(--tag-review-bg); color: var(--tag-review-fg); }
+  [data-theme="civic"] .sx-status[data-cat="done"] { background: var(--tag-done-bg); color: var(--tag-done-fg); }
+  [data-theme="civic"] .sx-status[data-cat="cancelled"] { background: var(--tag-cancelled-bg); color: var(--tag-cancelled-fg); }
+  [data-theme="civic"] .sx-status .sx-glyph { display: none; }
+  [data-theme="civic"] .sx-blocker { display: flex; gap: 10px; align-items: center; margin-top: 8px; color: var(--foreground); font-size: 0.9375rem; }
+  [data-theme="civic"] .sx-list .sx-blocker { margin-left: 0; }
+  [data-theme="civic"] .sx-blocker::before { content: "!"; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--foreground); color: var(--background); font-weight: 900; }
+  [data-theme="civic"] .sx-card[data-blocked] { border-style: solid; border-color: var(--sx-hairline); border-left: 5px solid var(--destructive); }
+  [data-theme="civic"] .sx-btn { min-height: 38px; padding: 0 14px; font-size: 1rem; border: 0; border-radius: 0; box-shadow: 0 2px 0 var(--civic-button-shadow); }
+  [data-theme="civic"] .sx-btn:not([data-variant]) { background: var(--muted); color: var(--foreground); box-shadow: 0 2px 0 var(--civic-grey-shadow); }
+  [data-theme="civic"] .sx-who { background: none; font-size: inherit; }
+  [data-theme="civic"] .sx-doc-h { color: var(--foreground); font-size: 1.1875rem; }
+  [data-theme="civic"] .sx-comment p { border-radius: 0; border-left: 5px solid var(--sx-hairline); background: none; }
+}

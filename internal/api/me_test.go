@@ -39,3 +39,13 @@ func TestMePreferences(t *testing.T) {
 		t.Fatal("item lost version requirement")
 	}
 }
+
+func TestMeAcceptsEveryNamedAppearance(t *testing.T) {
+	s, cookie, _ := itemFixture(t)
+	for _, theme := range appearanceThemes {
+		w := apiCall(s, "PATCH", "/api/v1/me", `{"theme":"`+theme+`"}`, cookie)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"theme":"`+theme+`"`) {
+			t.Errorf("theme %q was not saved: %d %s", theme, w.Code, w.Body.String())
+		}
+	}
+}

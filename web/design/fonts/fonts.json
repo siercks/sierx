@@ -1,0 +1,41 @@
+{
+  "$comment": "Two kinds of face. \"built\": drawn in fonts/source and compiled by tools/build-font.mjs; no download, ever, and Apache-2.0 like sierx. \"families\": vendored third-party subsets, committed to the repo. integrity and upstreamSha256 are pinned here, so tools/fetch-fonts.mjs can verify an update arriving on approved media (--from) as well as one from a registry.",
+  "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  "families": [],
+  "built": [
+    {
+      "id": "sierx-mono",
+      "family": "Sierx Mono",
+      "license": "Apache-2.0",
+      "source": "fonts/source/sierx-mono.mjs",
+      "unicodeRange": "U+0020-007E, U+00B7, U+00D7, U+2013-2014, U+2018-2019, U+201C-201D, U+2026, U+203A, U+2192, U+22EF, U+25A0, U+25AD, U+25B2, U+25B8, U+25BE, U+25C6-25C7, U+25CB, U+25CF-25D1, U+2298, U+2610-2611, U+2715",
+      "files": [
+        {
+          "file": "sierx-mono-400.woff",
+          "weight": "400"
+        },
+        {
+          "file": "sierx-mono-700.woff",
+          "weight": "700"
+        }
+      ]
+    },
+    {
+      "id": "sierx-symbols",
+      "family": "Sierx Symbols",
+      "license": "Apache-2.0",
+      "source": "fonts/source/sierx-mono.mjs",
+      "unicodeRange": "U+2192, U+203A, U+22EF, U+25A0, U+25AD, U+25B2, U+25B8, U+25BE, U+25C6-25C7, U+25CB, U+25CF-25D1, U+2298, U+2610-2611, U+2715",
+      "files": [
+        {
+          "file": "sierx-symbols-400.woff",
+          "weight": "400"
+        },
+        {
+          "file": "sierx-symbols-700.woff",
+          "weight": "700"
+        }
+      ]
+    }
+  ]
+}

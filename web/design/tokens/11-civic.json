@@ -1,0 +1,107 @@
+{
+  "id": "civic",
+  "name": "Civic",
+  "scheme": "light",
+  "contrast": "normal",
+  "summary": "Modelled on public-service design systems like GOV.UK: a black header, underlined blue links, large type, worded tags and the yellow-and-black selection.",
+  "tokens": {
+    "background": "#ffffff",
+    "foreground": "#0b0c0c",
+    "card": "#ffffff",
+    "card-foreground": "#0b0c0c",
+    "muted": "#f3f2f1",
+    "muted-foreground": "#505a5f",
+    "accent": "#0b0c0c",
+    "accent-foreground": "#ffffff",
+    "border": "#505a5f",
+    "input": "#0b0c0c",
+    "ring": "#0b0c0c",
+    "primary": "#00703c",
+    "primary-foreground": "#ffffff",
+    "destructive": "#d4351c",
+    "destructive-foreground": "#ffffff",
+    "status-open": "#505a5f",
+    "status-active": "#1d70b8",
+    "status-done": "#00703c",
+    "status-cancelled": "#6f777b",
+    "sx-chrome": "#0b0c0c",
+    "sx-chrome-foreground": "#ffffff",
+    "sx-chrome-muted": "#ffffff",
+    "sx-panel": "#ffffff",
+    "sx-rule": "#b1b4b6",
+    "sx-hairline": "#b1b4b6",
+    "sx-selected": "#ffffff",
+    "sx-selected-foreground": "#0b0c0c",
+    "sx-selected-muted": "#505a5f",
+    "sx-text": "1rem",
+    "sx-text-sm": "0.875rem",
+    "sx-text-lg": "1.5rem",
+    "sx-text-xl": "2rem",
+    "sx-leading": "1.35",
+    "sx-weight-strong": "700",
+    "sx-radius": "0px",
+    "sx-border-width": "2px",
+    "sx-focus-width": "3px",
+    "sx-shadow-selected": "none",
+    "sx-gutter": "30px",
+    "sx-cell-y": "10px",
+    "sx-detail-w": "400px",
+    "sx-font-mono": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-symbols": "\"Sierx Symbols\"",
+    "sx-font-ui": "system-ui, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "sx-font-display": "var(--sx-font-ui)"
+  },
+  "private": {
+    "civic-blue": "#1d70b8",
+    "civic-yellow": "#ffdd00",
+    "civic-button-shadow": "#002d18",
+    "civic-grey-shadow": "#858686",
+    "tag-open-bg": "#eeefef",
+    "tag-open-fg": "#383f43",
+    "tag-active-bg": "#bbd4ea",
+    "tag-active-fg": "#0c2d4a",
+    "tag-review-bg": "#dbd5e9",
+    "tag-review-fg": "#3d2375",
+    "tag-done-bg": "#cce2d8",
+    "tag-done-fg": "#005a30",
+    "tag-cancelled-bg": "#f3f2f1",
+    "tag-cancelled-fg": "#505a5f"
+  },
+  "pairs": [
+    [
+      "civic-blue",
+      "background",
+      "text"
+    ],
+    [
+      "foreground",
+      "civic-yellow",
+      "text"
+    ],
+    [
+      "tag-open-fg",
+      "tag-open-bg",
+      "text"
+    ],
+    [
+      "tag-active-fg",
+      "tag-active-bg",
+      "text"
+    ],
+    [
+      "tag-review-fg",
+      "tag-review-bg",
+      "text"
+    ],
+    [
+      "tag-done-fg",
+      "tag-done-bg",
+      "text"
+    ],
+    [
+      "tag-cancelled-fg",
+      "tag-cancelled-bg",
+      "text"
+    ]
+  ]
+}

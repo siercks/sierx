@@ -1,0 +1,30 @@
+/* Swiss grid: structure from rules and type size. Selection inverts. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="swiss"] .sx-top { align-items: flex-end; padding-block: 18px 12px; border-bottom-width: 4px; }
+  [data-theme="swiss"] .sx-brand { font-size: 1.875rem; letter-spacing: -0.035em; line-height: 0.85; }
+  [data-theme="swiss"] .sx-tabs { gap: 18px; }
+  [data-theme="swiss"] .sx-tab { padding: 0 0 2px; min-height: 0; border-radius: 0; color: var(--foreground); border-bottom: 2px solid transparent; }
+  [data-theme="swiss"] .sx-tab[aria-current] { background: none; color: var(--foreground); border-bottom-color: var(--foreground); }
+  [data-theme="swiss"] .sx-query { border-width: 0 0 1px; border-radius: 0; padding: 0 0 3px; background: none; }
+  [data-theme="swiss"] .sx-query-label { color: var(--foreground); }
+  [data-theme="swiss"] .sx-avatar { border-radius: 0; }
+  [data-theme="swiss"] .sx-main-h { margin-bottom: 20px; gap: 16px; }
+  [data-theme="swiss"] .sx-main-title { letter-spacing: -0.04em; line-height: 1; }
+  [data-theme="swiss"] .sx-board { gap: 0; }
+  [data-theme="swiss"] .sx-col { padding: 0 16px; border-left: 1px solid var(--sx-rule); border-radius: 0; }
+  [data-theme="swiss"] .sx-col:first-child { padding-left: 0; border-left: 0; }
+  [data-theme="swiss"] .sx-col:last-child { padding-right: 0; }
+  [data-theme="swiss"] .sx-col-h { font-size: 1.1875rem; letter-spacing: -0.015em; }
+  [data-theme="swiss"] .sx-col-count { font-weight: 300; }
+  [data-theme="swiss"] .sx-card { border-width: 0 0 1px; }
+  [data-theme="swiss"] .sx-card-title { font-size: 0.9375rem; line-height: 1.25; }
+  [data-theme="swiss"] .sx-card[data-selected] { margin-inline: -8px; padding-inline: 8px; border-color: var(--sx-selected); }
+  [data-theme="swiss"] .sx-card[data-blocked] { border-style: solid; border-color: var(--sx-hairline); }
+  [data-theme="swiss"] .sx-blocker::before { content: "■ "; }
+  [data-theme="swiss"] .sx-who { background: none; color: inherit; min-width: 0; font-size: 11px; }
+  [data-theme="swiss"] .sx-kbd { font-family: inherit; font-weight: 700; border-radius: 0; }
+  [data-theme="swiss"] .sx-doc-title { font-size: 1.875rem; letter-spacing: -0.03em; line-height: 1.05; }
+  [data-theme="swiss"] .sx-btn { border-radius: 0; }
+  [data-theme="swiss"] .sx-foot { border-top-width: 1px; }
+}

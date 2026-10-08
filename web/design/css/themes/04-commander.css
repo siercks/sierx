@@ -1,0 +1,38 @@
+/* Commander: double-ruled panels with titles set into the border; function-key bar. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="commander"] .sx-top { padding: 0 8px; min-height: 20px; gap: 18px; border: 0; }
+  [data-theme="commander"] .sx-brand { font-size: inherit; }
+  [data-theme="commander"] .sx-tab { min-height: 0; padding: 0 4px; border-radius: 0; color: var(--sx-chrome-foreground); }
+  [data-theme="commander"] .sx-tab[aria-current] { background: var(--sx-chrome-foreground); color: var(--foreground); }
+  [data-theme="commander"] .sx-query { background: none; border: 0; padding: 0; color: var(--sx-chrome-foreground); }
+  [data-theme="commander"] .sx-query-label { color: inherit; }
+  [data-theme="commander"] .sx-avatar { background: none; color: inherit; border-radius: 0; height: auto; }
+  [data-theme="commander"] .sx-main { padding: 14px 2px 2px; }
+  [data-theme="commander"] .sx-main:has(.sx-board) > .sx-main-h { display: none; }
+  [data-theme="commander"] .sx-board { gap: 2px; align-items: stretch; min-height: 100%; }
+  [data-theme="commander"] .sx-col { position: relative; align-content: start; padding: 12px 6px 6px; border: 3px double var(--sx-rule); border-radius: 0; }
+  [data-theme="commander"] .sx-col-h { position: absolute; top: -11px; left: 0; right: 0; justify-content: center; gap: 0; border: 0; padding: 0; }
+  [data-theme="commander"] .sx-col-h > * { background: var(--background); padding: 0 4px; margin: 0; }
+  [data-theme="commander"] .sx-col-count { color: var(--sx-rule); }
+  [data-theme="commander"] .sx-col[data-full] .sx-col-name { color: var(--destructive); }
+  [data-theme="commander"] .sx-card { border: 0; padding: 1px 4px; gap: 0; background: none; }
+  [data-theme="commander"] .sx-card .sx-key, [data-theme="commander"] .sx-c-key { color: var(--sx-rule); }
+  [data-theme="commander"] .sx-who { background: none; color: var(--sx-rule); min-width: 0; height: auto; }
+  [data-theme="commander"] .sx-blocker::before { content: "!! "; }
+  [data-theme="commander"] .sx-card[data-selected] *, [data-theme="commander"] .sx-row[data-selected] td * { color: inherit; }
+  [data-theme="commander"] .sx-list { border: 3px double var(--sx-rule); }
+  [data-theme="commander"] .sx-list :is(th, td) { padding-inline: 6px; border-bottom: 0; }
+  [data-theme="commander"] .sx-list thead th { color: var(--destructive); border-bottom: 1px solid var(--sx-rule); }
+  [data-theme="commander"] .sx-node-row { border: 0; min-height: 20px; padding-block: 0; }
+  [data-theme="commander"] .sx-roll-track { fill: var(--sx-hairline); }
+  [data-theme="commander"] .sx-btn { border: 0; border-radius: 0; background: var(--primary); color: var(--primary-foreground); }
+  [data-theme="commander"] .sx-btn::before { content: "[ "; }
+  [data-theme="commander"] .sx-btn::after { content: " ]"; }
+  [data-theme="commander"] .sx-detail { border-left: 3px double var(--sx-rule); }
+  [data-theme="commander"] .sx-comment p { border-radius: 0; }
+  [data-theme="commander"] .sx-foot { border: 0; background: var(--sx-chrome-foreground); }
+  [data-theme="commander"] .sx-fkey { padding: 0; margin-right: 1ch; background: var(--sx-chrome); color: var(--sx-chrome-foreground); }
+  [data-theme="commander"] .sx-fkey:last-child { margin-right: 0; }
+  [data-theme="commander"] .sx-fkey b { background: var(--sx-chrome-foreground); color: var(--foreground); font-weight: 400; padding: 0 2px 0 1ch; }
+}

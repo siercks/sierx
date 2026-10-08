@@ -1,0 +1,77 @@
+{
+  "id": "chart",
+  "name": "Chart",
+  "set": "curated",
+  "scheme": "light",
+  "contrast": "normal",
+  "summary": "A nautical chart. Columns are depth zones from open water to land, so finished work comes ashore. Water names are italic and land names upright, as on a chart. Magenta marks hazards, and a blocked card has the dashed boundary of a restricted area.",
+  "tokens": {
+    "background": "#fbfbf6",
+    "foreground": "#1a1e23",
+    "card": "#ffffff",
+    "card-foreground": "#1a1e23",
+    "muted": "#e6f2f7",
+    "muted-foreground": "#4a5662",
+    "accent": "#d3e9f2",
+    "accent-foreground": "#0d3a52",
+    "border": "#6c8593",
+    "input": "#6c8593",
+    "ring": "#1d4f9a",
+    "primary": "#1d4f9a",
+    "primary-foreground": "#ffffff",
+    "destructive": "#a8106f",
+    "destructive-foreground": "#ffffff",
+    "status-open": "#4a5662",
+    "status-active": "#1b6aa3",
+    "status-done": "#6b5a1e",
+    "status-cancelled": "#7c8790",
+    "sx-chrome": "#fbfbf6",
+    "sx-chrome-foreground": "#1a1e23",
+    "sx-chrome-muted": "#4a5662",
+    "sx-panel": "#fbfbf6",
+    "sx-rule": "#1a1e23",
+    "sx-hairline": "#c6dbe4",
+    "sx-selected": "#ffffff",
+    "sx-selected-foreground": "#1a1e23",
+    "sx-selected-muted": "#4a5662",
+    "sx-text": "0.875rem",
+    "sx-text-sm": "0.78125rem",
+    "sx-text-lg": "1.125rem",
+    "sx-text-xl": "1.5rem",
+    "sx-radius": "0px",
+    "sx-shadow-selected": "0 0 0 1px #1a1e23",
+    "sx-font-mono": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-symbols": "\"Sierx Symbols\"",
+    "sx-font-ui": "system-ui, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "sx-font-display": "var(--sx-font-ui)"
+  },
+  "private": {
+    "chart-deep": "#ffffff",
+    "chart-shallow": "#d9eef6",
+    "chart-shoal": "#bfe2ef",
+    "chart-land": "#f2e4b3",
+    "chart-contour": "#6fa9c4"
+  },
+  "pairs": [
+    [
+      "foreground",
+      "chart-shoal",
+      "text"
+    ],
+    [
+      "foreground",
+      "chart-land",
+      "text"
+    ],
+    [
+      "muted-foreground",
+      "chart-shoal",
+      "text"
+    ],
+    [
+      "muted-foreground",
+      "chart-land",
+      "text"
+    ]
+  ]
+}
