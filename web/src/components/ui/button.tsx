@@ -16,6 +16,8 @@ export function Button({
 }) {
   return (
     <button
+      // Keep decorative theme pseudo-elements out of text button names.
+      aria-label={typeof children === 'string' ? children : undefined}
       className={`sx-btn button button-${variant} button-${size} ${className}`.trim()}
       data-variant={variant === 'default' ? 'primary' : variant}
       {...props}

@@ -165,6 +165,9 @@ for (const [index, theme] of themeIDs.entries()) {
     await expect(
       page.getByRole('combobox', { name: 'Type', exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('combobox', { name: 'Type', exact: true }),
+    ).toHaveAccessibleDescription(/^Initial status: .+/);
     await audit(page);
     await page.keyboard.press('Escape');
     await expect(
@@ -186,10 +189,15 @@ test('initial list, query and deep link need no client data waterfall', async ({
 }, info) => {
   const trace: { document: string; apiRequests: string[] }[] = [];
   const item = await create(context, 'Initial content <script>safe</script>');
-  for (const path of [
-    '/',
-    '/?q=' + encodeURIComponent('project = SRX'),
-    '/' + item.key,
+  // Each engine shares the backlog; newly created rows can be virtualized away.
+  const initial = await context.request.get('/api/v1/items?limit=1&fields=key,title');
+  expect(initial.ok()).toBe(true);
+  const first = (await initial.json()).data[0];
+  expect(first).toBeDefined();
+  for (const { path, title } of [
+    { path: '/', title: first.title },
+    { path: '/?q=' + encodeURIComponent(`key = "${item.key}"`), title: item.title },
+    { path: '/' + item.key, title: item.title },
   ]) {
     const requests: string[] = [];
     const handler = (r: { url: () => string }) => {
@@ -199,7 +207,7 @@ test('initial list, query and deep link need no client data waterfall', async ({
     await page.route('**/api/v1/**', (route) => route.abort());
     await page.goto(path);
     await expect(
-      page.getByText(item.title, { exact: true }).first(),
+      page.getByText(title, { exact: true }).first(),
     ).toBeVisible();
     expect(requests).toEqual([]);
     trace.push({
@@ -394,18 +402,19 @@ test('query errors, copied URLs, reload and history navigation', async ({
   context,
 }) => {
   const item = await create(context, 'Query target');
-  await page.goto('/?q=' + encodeURIComponent('project = SRX'));
+  const query = `project = SRX AND key = "${item.key}"`;
+  await page.goto('/?q=' + encodeURIComponent(query));
   await expect(
     page.getByRole('link', { name: item.title, exact: true }),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Search with SXQ')).toHaveValue('project = SRX');
-  await page.getByLabel('Search with SXQ').fill('nonsense = foo');
+  await expect(page.getByLabel('Search backlog', { exact: true })).toHaveValue(query);
+  await page.getByLabel('Search backlog', { exact: true }).fill('nonsense = foo');
   await keyboardActivate(page, 'Search');
   await expect(page.getByRole('alert')).toBeVisible();
   await audit(page);
   await page.goBack();
-  await expect(page.getByLabel('Search with SXQ')).toHaveValue('project = SRX');
+  await expect(page.getByLabel('Search backlog', { exact: true })).toHaveValue(query);
 });
 test('search controls stay within narrow viewports without an enclosing shell', async ({
   page,

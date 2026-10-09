@@ -19,16 +19,26 @@ const pairs: [string, string, 'text' | 'ui'][] = [
   ['ring', 'card', 'ui'], ['status-open', 'card', 'ui'], ['status-active', 'card', 'ui'],
   ['status-done', 'card', 'ui'], ['status-cancelled', 'card', 'ui'],
 ];
+function assertThemeContrast(theme: typeof themes[number]) {
+  const minText = theme.contrast === 'high' ? 7 : 4.5;
+  const values = { ...theme.tokens, ...(theme.private ?? {}) };
+  for (const [fg, bg, kind] of [...pairs, ...(theme.pairs ?? [])])
+    expect(wcagContrast(values[fg], values[bg]), `${theme.id}: ${fg}/${bg}`)
+      .toBeGreaterThanOrEqual(kind === 'text' ? minText : 3);
+}
 describe('declared theme pairs', () => {
   for (const theme of themes) {
     it(theme.id, () => {
-      const minText = theme.contrast === 'high' ? 7 : 4.5;
-      const values = { ...theme.tokens, ...(theme.private ?? {}) };
-      for (const [fg, bg, kind] of [...pairs, ...(theme.pairs ?? [])])
-        expect(wcagContrast(values[fg], values[bg]), `${theme.id}: ${fg}/${bg}`)
-          .toBeGreaterThanOrEqual(kind === 'text' ? minText : 3);
+      assertThemeContrast(theme);
     });
   }
+  it('rejects unreadable declared theme pairs', () => {
+    const theme = themes[0];
+    expect(() => assertThemeContrast({
+      ...theme,
+      tokens: { ...theme.tokens, foreground: theme.tokens.background },
+    })).toThrow();
+  });
   it('delivered CSS contains every named theme and its declared colors', () => {
     const css = postcss.parse(readFileSync('design/css/tokens.css', 'utf8'));
     for (const theme of themes) {

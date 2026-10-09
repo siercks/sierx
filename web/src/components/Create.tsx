@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { request, type Config, type Project, type Item } from '../api/client';
 import { Dialog } from './ui/dialog';
@@ -27,6 +27,8 @@ function CreateForm({
   projects: Project[];
   workspace: string;
 }) {
+  const typeID = useId();
+  const statusHintID = useId();
   const [project, setProject] = useState(
     projects.find((p) => !p.archived_at)?.key_prefix ?? '',
   );
@@ -99,9 +101,11 @@ function CreateForm({
         <p role="alert">{config.error.message}</p>
       ) : (
         <>
-          <label className="workflow-field">
-            Type
+          <div className="workflow-field">
+            <label htmlFor={typeID}>Type</label>
             <select
+              id={typeID}
+              aria-describedby={statusHintID}
               className="sx-control"
               value={selected?.key ?? ''}
               onChange={(e) => setType(e.target.value)}
@@ -112,13 +116,13 @@ function CreateForm({
                 </option>
               ))}
             </select>
-            <span className="field-hint">
+            <span id={statusHintID} className="field-hint">
               Initial status:{' '}
               {config.data?.statuses.find(
                 (s) => s.key === selected?.initial_status,
               )?.name ?? selected?.initial_status}
             </span>
-          </label>
+          </div>
         </>
       )}
       </div>

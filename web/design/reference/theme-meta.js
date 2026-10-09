@@ -147,7 +147,7 @@ window.SierxThemes = {
   "contrast": "normal",
   "summary": "Thick outlines, flat saturated column fills and pill tabs. The hard offset shadow appears only on the selected card, so elevation still means state.",
   "overrides": true,
-  "overrideBytes": 801,
+  "overrideBytes": 809,
   "fonts": [],
   "fontBytes": 0,
   "pairs": 28,

@@ -16,6 +16,7 @@ export function Dialog({
   return (
     <Primitive.Root>
       <Primitive.Trigger
+        aria-label={trigger}
         className={`sx-btn button button-${triggerVariant}`}
         data-variant={triggerVariant === 'default' ? 'primary' : triggerVariant}
       >

@@ -9,7 +9,7 @@
   [data-theme="brutal"] .sx-query { border-width: 2px; background: var(--card); padding-block: 5px; }
   [data-theme="brutal"] .sx-query-label { color: var(--foreground); }
   [data-theme="brutal"] .sx-avatar { width: 32px; height: 32px; background: var(--brutal-pink); color: var(--foreground); border: 2px solid var(--foreground); }
-  [data-theme="brutal"] .sx-main-h { display: none; }
+  [data-theme="brutal"] .sx-main:has(.sx-board) > .sx-main-h { display: none; }
   [data-theme="brutal"] .sx-board { gap: 14px; }
   [data-theme="brutal"] .sx-col { padding: 10px; background: var(--card); border: 2px solid var(--foreground); border-radius: 10px; }
   [data-theme="brutal"] .sx-col:nth-child(2) { background: var(--brutal-yellow); }
