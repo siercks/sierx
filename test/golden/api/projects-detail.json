@@ -3,5 +3,8 @@
   "id": "project-1",
   "key_prefix": "SRX",
   "kind": "delivery",
-  "name": "Backlog"
+  "name": "Backlog",
+  "owner": null,
+  "updated_at": "timestamp",
+  "version": 1
 }

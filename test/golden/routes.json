@@ -10,6 +10,8 @@
  "GET /api/v1/projects":"api/projects-list.json",
  "POST /api/v1/projects":"api/projects-create.json",
  "GET /api/v1/projects/{key}":"api/projects-detail.json",
+ "PATCH /api/v1/projects/{key}":"api/projects-update.json",
+ "GET /api/v1/members":"api/members-list.json",
  "GET /api/v1/projects/{key}/config":"api/project-config.json",
  "GET /api/v1/items":"api/items-list.json",
  "POST /api/v1/items":"api/items-create.json",
