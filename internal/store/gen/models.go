@@ -168,6 +168,9 @@ type Project struct {
 	Kind        string
 	NextKeyNum  int32
 	ArchivedAt  pgtype.Timestamptz
+	OwnerID     pgtype.UUID
+	Version     int32
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type ProjectConfig struct {

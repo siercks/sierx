@@ -15,7 +15,7 @@ const createProject = `-- name: CreateProject :one
 
 INSERT INTO project (workspace_id, key_prefix, name, kind)
 VALUES ($1, $2, $3, $4)
-RETURNING id, workspace_id, key_prefix, name, kind, next_key_num, archived_at
+RETURNING id, workspace_id, key_prefix, name, kind, next_key_num, archived_at, owner_id, version, updated_at
 `
 
 type CreateProjectParams struct {
@@ -43,6 +43,9 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.Kind,
 		&i.NextKeyNum,
 		&i.ArchivedAt,
+		&i.OwnerID,
+		&i.Version,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -83,7 +86,7 @@ func (q *Queries) DeleteLink(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, workspace_id, key_prefix, name, kind, next_key_num, archived_at FROM project WHERE id = $1
+SELECT id, workspace_id, key_prefix, name, kind, next_key_num, archived_at, owner_id, version, updated_at FROM project WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id pgtype.UUID) (Project, error) {
@@ -97,6 +100,9 @@ func (q *Queries) GetProject(ctx context.Context, id pgtype.UUID) (Project, erro
 		&i.Kind,
 		&i.NextKeyNum,
 		&i.ArchivedAt,
+		&i.OwnerID,
+		&i.Version,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
