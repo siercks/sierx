@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import {
   bootstrap,
+  cache,
   request,
   isProblem,
   listKey,
