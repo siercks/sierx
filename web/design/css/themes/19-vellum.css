@@ -1,0 +1,36 @@
+/* Vellum: drafting film over a non-photo-blue grid (the blue a copier drops).
+   Translucent cards let the grid through; heads carry dimension ticks; the list is a
+   ruled parts list; a blocked title gets a red-pencil wavy underline. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="vellum"] .sx-main {
+    background-image:
+      linear-gradient(var(--nonphoto-major) 1px, transparent 1px), linear-gradient(90deg, var(--nonphoto-major) 1px, transparent 1px),
+      linear-gradient(var(--nonphoto) 1px, transparent 1px), linear-gradient(90deg, var(--nonphoto) 1px, transparent 1px);
+    background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+    background-attachment: local;
+  }
+  [data-theme="vellum"] .sx-top { border-bottom-width: 1.5px; }
+  [data-theme="vellum"] .sx-brand { font-size: 1.125rem; font-weight: 600; letter-spacing: 0.08em; }
+  [data-theme="vellum"] :is(.sx-tab, .sx-query, .sx-btn, .sx-kbd, .sx-who, .sx-avatar) { border-radius: 0; }
+  [data-theme="vellum"] .sx-query { background: var(--card); }
+  [data-theme="vellum"] .sx-avatar { background: none; color: var(--foreground); border: 1.5px solid var(--foreground); }
+  [data-theme="vellum"] :is(.sx-key, .sx-col-count, .sx-c-num, .sx-roll-n, .sx-c-due) { font-family: var(--sx-font-mono); font-size: 0.92em; }
+  [data-theme="vellum"] .sx-col-h { position: relative; padding-inline: 8px; }
+  [data-theme="vellum"] .sx-col-h::before, [data-theme="vellum"] .sx-col-h::after { content: ""; position: absolute; bottom: -5px; width: 1px; height: 9px; background: var(--sx-rule); }
+  [data-theme="vellum"] .sx-col-h::before { left: 0; }
+  [data-theme="vellum"] .sx-col-h::after { right: 0; }
+  [data-theme="vellum"] .sx-card { border-color: var(--border); background: color-mix(in srgb, var(--card) 86%, transparent); }
+  [data-theme="vellum"] .sx-card[data-selected] { background: var(--card); }
+  [data-theme="vellum"] .sx-card[data-blocked] { border-style: solid; border-color: var(--border); }
+  [data-theme="vellum"] .sx-card[data-blocked] .sx-card-title { text-decoration: underline wavy var(--destructive) 1px; text-underline-offset: 3px; }
+  [data-theme="vellum"] .sx-blocker::before { content: "✎ "; }
+  [data-theme="vellum"] .sx-who { background: none; border: 1px solid var(--border); }
+  [data-theme="vellum"] .sx-list { background: color-mix(in srgb, var(--card) 92%, transparent); border: 1.5px solid var(--sx-rule); }
+  [data-theme="vellum"] .sx-list :is(th, td) { padding-left: 8px; border-right: 1px solid var(--sx-hairline); }
+  [data-theme="vellum"] .sx-list thead th { background: var(--card); color: var(--foreground); border-bottom-width: 1.5px; }
+  [data-theme="vellum"] .sx-group th { background: var(--muted); }
+  [data-theme="vellum"] .sx-node-row { background: color-mix(in srgb, var(--card) 86%, transparent); }
+  [data-theme="vellum"] .sx-comment p { background: none; border: 1px dashed var(--border); border-radius: 0; }
+  [data-theme="vellum"] .sx-foot { border-top-width: 1.5px; }
+}

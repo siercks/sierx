@@ -9,6 +9,7 @@ import {
 } from '../api/client';
 import { Dialog } from './ui/dialog';
 import { CustomFields, customValues } from './Fields';
+import { Button } from './ui/button';
 
 export function ActionForm({
   item,
@@ -20,6 +21,7 @@ export function ActionForm({
   body,
   optimistic,
   resetOnSuccess = false,
+  submitVariant = 'default',
 }: {
   item: Item;
   workspace: string;
@@ -30,6 +32,7 @@ export function ActionForm({
   body: (data: FormData) => unknown;
   optimistic?: (data: FormData) => Partial<Item>;
   resetOnSuccess?: boolean;
+  submitVariant?: 'default' | 'destructive';
 }) {
   const form = useRef<HTMLFormElement>(null);
   const mutation = useItemWrite(workspace, item.key);
@@ -72,6 +75,7 @@ export function ActionForm({
   }
   return (
     <form
+      className="workflow-form"
       ref={form}
       onChangeCapture={() => {
         if (!dirty) setVersion(item.version);
@@ -95,10 +99,7 @@ export function ActionForm({
         }
       }}
     >
-      <fieldset
-        disabled={mutation.isPending}
-        style={{ display: 'grid', gap: '1rem' }}
-      >
+      <fieldset className="workflow-fields" disabled={mutation.isPending}>
         <legend className="sr-only">{label}</legend>
         {children}
       </fieldset>
@@ -170,7 +171,8 @@ export function ActionForm({
             </tbody>
           </table>
           <div className="toolbar">
-            <button
+            <Button
+              variant="outline"
               type="button"
               disabled={mutation.isPending}
               onClick={() =>
@@ -181,8 +183,9 @@ export function ActionForm({
               }
             >
               Retry my changes
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
               type="button"
               onClick={() => {
                 setVersion(conflict.current.version);
@@ -193,13 +196,18 @@ export function ActionForm({
               }}
             >
               Cancel retry
-            </button>
+            </Button>
           </div>
         </section>
       )}
-      <button className="primary" disabled={mutation.isPending || !!conflict}>
+      <div className="workflow-form-actions">
+        <Button
+          variant={submitVariant}
+          disabled={mutation.isPending || !!conflict}
+        >
         {mutation.isPending ? 'Saving…' : label}
-      </button>
+        </Button>
+      </div>
     </form>
   );
 }
@@ -244,22 +252,25 @@ export function ItemActions({
             fields: customValues(d, config.fields, item.fields),
           })}
         >
-          <label>
+          <label className="workflow-field workflow-field-full">
             Title
             <input
+              className="sx-control"
               name="title"
               defaultValue={item.title}
               required
               maxLength={500}
             />
           </label>
-          <label>
+          <label className="workflow-field workflow-field-full">
             Description
-            <textarea name="body" defaultValue={item.body ?? ''} />
+            <textarea className="sx-control" name="body" defaultValue={item.body ?? ''} />
           </label>
-          <label>
+          <div className="workflow-field-grid">
+          <label className="workflow-field">
             Points
             <input
+              className="sx-control"
               type="number"
               name="points"
               min="0"
@@ -267,26 +278,29 @@ export function ItemActions({
               defaultValue={item.points ?? ''}
             />
           </label>
-          <label>
+          <label className="workflow-field">
             Assignee account ID
-            <input name="assignee" defaultValue={item.assignee?.id ?? ''} />
+            <input className="sx-control" name="assignee" defaultValue={item.assignee?.id ?? ''} />
           </label>
-          <label>
+          <label className="workflow-field">
             Start date
             <input
+              className="sx-control"
               type="date"
               name="start_date"
               defaultValue={item.start_date ?? ''}
             />
           </label>
-          <label>
+          <label className="workflow-field">
             Due date
             <input
+              className="sx-control"
               type="date"
               name="due_date"
               defaultValue={item.due_date ?? ''}
             />
           </label>
+          </div>
           <CustomFields definitions={config.fields} values={item.fields} />
         </ActionForm>
       </Dialog>
@@ -311,9 +325,10 @@ export function ItemActions({
               return { to_status: d.get('to_status'), fields };
             }}
           >
-            <label>
+            <label className="workflow-field">
               New status
               <select
+                className="sx-control"
                 name="to_status"
                 value={transition?.to_key}
                 onChange={(e) => setTarget(e.target.value)}
@@ -334,9 +349,10 @@ export function ItemActions({
               .filter((f) => !f.startsWith('fields.'))
               .map((field) =>
                 field === 'assignee' ? (
-                  <label key={field}>
+                  <label className="workflow-field" key={field}>
                     Assign to
                     <select
+                      className="sx-control"
                       name="required:assignee"
                       defaultValue={item.assignee?.id ?? userID}
                     >
@@ -349,9 +365,10 @@ export function ItemActions({
                     </select>
                   </label>
                 ) : (
-                  <label key={field}>
+                  <label className="workflow-field" key={field}>
                     {field.replaceAll('_', ' ')}
                     <input
+                      className="sx-control"
                       name={'required:' + field}
                       type={
                         field === 'points'
@@ -389,17 +406,18 @@ export function ItemActions({
             rank_after: optional(d, 'rank_after')?.toUpperCase() ?? null,
           })}
         >
-          <label>
+          <label className="workflow-field">
             Parent item key
             <input
+              className="sx-control"
               name="parent"
               defaultValue={item.parent?.key ?? ''}
               placeholder="Leave blank for top level"
             />
           </label>
-          <label>
+          <label className="workflow-field">
             Place after item key
-            <input name="rank_after" placeholder="Leave blank to place first" />
+            <input className="sx-control" name="rank_after" placeholder="Leave blank to place first" />
           </label>
           <p className="muted">
             Choose a parent in {item.project.key_prefix}. The preceding item
@@ -418,13 +436,13 @@ export function ItemActions({
             kind: d.get('kind'),
           })}
         >
-          <label>
+          <label className="workflow-field">
             Item key
-            <input name="to" required />
+            <input className="sx-control" name="to" required />
           </label>
-          <label>
+          <label className="workflow-field">
             Relationship
-            <select name="kind">
+            <select className="sx-control" name="kind">
               {[
                 'relates',
                 'blocks',
@@ -447,6 +465,7 @@ export function ItemActions({
           path={'/items/' + item.key}
           method="DELETE"
           label="Delete item"
+          submitVariant="destructive"
           body={() => undefined}
         >
           <p>

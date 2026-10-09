@@ -1138,3 +1138,14 @@ for the implemented boundary and acceptance gaps. Internal-registry acquisition,
 publisher signatures and complete physical recovery automation are not claimed
 by this first archive profile. No private host credentials or TLS keys enter a
 release bundle, and connected deployments remain supported.
+
+### ADR-027 interchangeable Sierx appearances
+
+The interface uses Sierx's semantic CSS and token contract instead of the
+Tailwind/shadcn styling path. All 23 visual directions from the supplied design
+package remain selectable. The 13 third-party font families were all OFL-1.1,
+so their files and declarations are excluded; themes use system font stacks and
+the reproducibly built Sierx faces. Theme assets are local, checked during the
+offline web build, and embedded with the application. The same component
+vocabulary governs the current workspace and planned Phase 3, 5, and 6 views.
+See [UI-DESIGN-SYSTEM.md](UI-DESIGN-SYSTEM.md).

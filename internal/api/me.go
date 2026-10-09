@@ -34,13 +34,11 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 	_, setMotion := raw["reduced_motion"]
 	if setTheme {
 		if json.Unmarshal(raw["theme"], &theme) != nil {
-			requestProblem(w, "theme must be system, light, dark, light-hc or dark-hc.")
+			requestProblem(w, "theme must be system or a named Sierx appearance.")
 			return
 		}
-		switch theme {
-		case "system", "light", "dark", "light-hc", "dark-hc":
-		default:
-			requestProblem(w, "theme must be system, light, dark, light-hc or dark-hc.")
+		if !validTheme(theme) {
+			requestProblem(w, "theme must be system or a named Sierx appearance.")
 			return
 		}
 	}

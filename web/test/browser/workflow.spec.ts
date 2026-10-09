@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { audit, keyboardActivate } from './accessibility';
+import { appearanceThemes } from '../../src/themes/catalog';
 const url = process.env.SIERX_TEST_URL;
 const session = process.env.SIERX_TEST_SESSION;
 if (!url || !session)
@@ -67,7 +68,53 @@ test('login supports keyboard, passwords and expired sessions', async ({
   await page.reload();
   await expect(page).toHaveURL(/\/login$/);
 });
-for (const theme of ['system', 'light', 'dark', 'light-hc', 'dark-hc'])
+const themeIDs = ['system', ...appearanceThemes.map(({ id }) => id)];
+function contrastRatio(foreground: string, background: string) {
+  const luminance = (value: string) => {
+    const channels = value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+    if (!channels || channels.length !== 3)
+      throw new Error(`Unsupported computed color: ${value}`);
+    const [r, g, b] = channels.map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const a = luminance(foreground);
+  const b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+test('native dropdowns keep readable colors in the affected themes', async ({
+  page,
+  context,
+}) => {
+  for (const theme of ['swiss', 'eink', 'eink-dark', 'brutal', 'civic', 'kraft']) {
+    const updated = await context.request.patch('/api/v1/me', {
+      data: { theme, reduced_motion: null },
+    });
+    expect(updated.ok()).toBe(true);
+    await page.goto('/');
+    const foreground = await page
+      .getByRole('combobox', { name: 'Theme', exact: true })
+      .evaluate((control) => {
+        const style = getComputedStyle(control);
+        return { color: style.color, background: style.backgroundColor };
+      });
+    expect(contrastRatio(foreground.color, foreground.background)).toBeGreaterThanOrEqual(4.5);
+    const options = await page.locator('select option').evaluateAll((elements) =>
+      elements.map((option) => {
+        const style = getComputedStyle(option);
+        return { color: style.color, background: style.backgroundColor };
+      }),
+    );
+    for (const option of options)
+      expect(contrastRatio(option.color, option.background)).toBeGreaterThanOrEqual(4.5);
+  }
+});
+for (const [index, theme] of themeIDs.entries()) {
+  const nextTheme = themeIDs[(index + 1) % themeIDs.length];
   test(`theme ${theme}: first frame, persistence and accessible pages`, async ({
     page,
     context,
@@ -82,24 +129,45 @@ for (const theme of ['system', 'light', 'dark', 'light-hc', 'dark-hc'])
     const response = await page.goto('/');
     expect(await response!.text()).toContain(`data-theme="${theme}"`);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    const optionColors = await page.locator('select option').evaluateAll((options) =>
+      options.map((option) => {
+        const style = getComputedStyle(option);
+        return { foreground: style.color, background: style.backgroundColor };
+      }),
+    );
+    const themeControlColors = await page
+      .getByRole('combobox', { name: 'Theme', exact: true })
+      .evaluate((control) => {
+        const style = getComputedStyle(control);
+        return { foreground: style.color, background: style.backgroundColor };
+      });
+    expect(
+      contrastRatio(themeControlColors.foreground, themeControlColors.background),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(optionColors.length).toBeGreaterThan(0);
+    for (const colors of optionColors)
+      expect(contrastRatio(colors.foreground, colors.background)).toBeGreaterThanOrEqual(4.5);
     await audit(page);
     await page
       .getByRole('combobox', { name: 'Theme', exact: true })
-      .selectOption(theme === 'light' ? 'dark' : 'light');
+      .selectOption(nextTheme);
     await expect(page.locator('html')).toHaveAttribute(
       'data-theme',
-      theme === 'light' ? 'dark' : 'light',
+      nextTheme,
     );
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute(
       'data-theme',
-      theme === 'light' ? 'dark' : 'light',
+      nextTheme,
     );
     await keyboardActivate(page, 'Create item');
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(
       page.getByRole('combobox', { name: 'Type', exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('combobox', { name: 'Type', exact: true }),
+    ).toHaveAccessibleDescription(/^Initial status: .+/);
     await audit(page);
     await page.keyboard.press('Escape');
     await expect(
@@ -108,17 +176,28 @@ for (const theme of ['system', 'light', 'dark', 'light-hc', 'dark-hc'])
     const item = await create(context, 'Theme detail ' + theme);
     await page.goto('/' + item.key);
     await audit(page);
+    await keyboardActivate(page, 'Edit item');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByLabel('Title', { exact: true })).toBeVisible();
+    await audit(page);
+    await page.keyboard.press('Escape');
   });
+}
 test('initial list, query and deep link need no client data waterfall', async ({
   page,
   context,
 }, info) => {
   const trace: { document: string; apiRequests: string[] }[] = [];
   const item = await create(context, 'Initial content <script>safe</script>');
-  for (const path of [
-    '/',
-    '/?q=' + encodeURIComponent('project = SRX'),
-    '/' + item.key,
+  // Each engine shares the backlog; newly created rows can be virtualized away.
+  const initial = await context.request.get('/api/v1/items?limit=1&fields=key,title');
+  expect(initial.ok()).toBe(true);
+  const first = (await initial.json()).data[0];
+  expect(first).toBeDefined();
+  for (const { path, title } of [
+    { path: '/', title: first.title },
+    { path: '/?q=' + encodeURIComponent(`key = "${item.key}"`), title: item.title },
+    { path: '/' + item.key, title: item.title },
   ]) {
     const requests: string[] = [];
     const handler = (r: { url: () => string }) => {
@@ -128,7 +207,7 @@ test('initial list, query and deep link need no client data waterfall', async ({
     await page.route('**/api/v1/**', (route) => route.abort());
     await page.goto(path);
     await expect(
-      page.getByText(item.title, { exact: true }).first(),
+      page.getByText(title, { exact: true }).first(),
     ).toBeVisible();
     expect(requests).toEqual([]);
     trace.push({
@@ -323,19 +402,44 @@ test('query errors, copied URLs, reload and history navigation', async ({
   context,
 }) => {
   const item = await create(context, 'Query target');
-  await page.goto('/?q=' + encodeURIComponent('project = SRX'));
+  const query = `project = SRX AND key = "${item.key}"`;
+  await page.goto('/?q=' + encodeURIComponent(query));
   await expect(
     page.getByRole('link', { name: item.title, exact: true }),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Search with SXQ')).toHaveValue('project = SRX');
-  await page.getByLabel('Search with SXQ').fill('nonsense = foo');
+  await expect(page.getByLabel('Search backlog', { exact: true })).toHaveValue(query);
+  await page.getByLabel('Search backlog', { exact: true }).fill('nonsense = foo');
   await keyboardActivate(page, 'Search');
   await expect(page.getByRole('alert')).toBeVisible();
   await audit(page);
   await page.goBack();
-  await expect(page.getByLabel('Search with SXQ')).toHaveValue('project = SRX');
+  await expect(page.getByLabel('Search backlog', { exact: true })).toHaveValue(query);
 });
+test('search controls stay within narrow viewports without an enclosing shell', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 280, height: 760 });
+  await page.goto('/?q=' + encodeURIComponent('project = SRX'));
+  const panel = page.locator('.search-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).not.toHaveClass(/sx-query/);
+  const geometry = await panel.evaluate((element) => {
+    const rects = [...element.querySelectorAll('input, .search-actions, .search-actions > *')]
+      .map((child) => child.getBoundingClientRect());
+    return {
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      borders: getComputedStyle(element).borderTopWidth,
+      controlsFit: rects.every((rect) => rect.left >= 0 && rect.right <= innerWidth),
+    };
+  });
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width);
+  expect(geometry.borders).toBe('0px');
+  expect(geometry.controlsFit).toBe(true);
+  await audit(page);
+});
+
 test('200 percent text, spacing overrides and reduced motion remain usable', async ({
   page,
 }) => {

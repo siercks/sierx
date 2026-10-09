@@ -1,56 +1,51 @@
 import { describe, it, expect } from 'vitest';
-import { wcagContrast, converter } from 'culori';
-import palettes from './palettes.json';
-import { readFileSync } from 'node:fs';
+import { wcagContrast } from 'culori';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import postcss from 'postcss';
-const chroma = converter('oklch');
-function check(name: string, p: Record<string, string>) {
-  const text = name.endsWith('hc') ? 7 : 4.5;
-  for (const bg of ['background', 'card', 'muted', 'input']) {
-    for (const fg of [
-      'foreground',
-      'muted-foreground',
-      'primary',
-      'destructive',
-    ])
-      expect(
-        wcagContrast(p[bg], p[fg]),
-        `${name} ${fg}/${bg}`,
-      ).toBeGreaterThanOrEqual(text);
-    for (const fg of ['border', 'ring'])
-      expect(
-        wcagContrast(p[bg], p[fg]),
-        `${name} ${fg}/${bg}`,
-      ).toBeGreaterThanOrEqual(3);
-  }
-  expect(
-    wcagContrast(p.primary, p['primary-foreground']),
-  ).toBeGreaterThanOrEqual(text);
-  for (const status of ['open', 'active', 'done', 'cancelled'])
-    expect(wcagContrast(p.card, p[`status-${status}`])).toBeGreaterThanOrEqual(
-      3,
-    );
-  for (const bg of ['background', 'card', 'muted'])
-    expect(chroma(p[bg])!.c).toBeLessThanOrEqual(0.02);
+const root = join('design', 'tokens');
+const files = readdirSync(root).filter((file) => /^\d.*\.json$/.test(file)).sort();
+const themes = files.map((file) => JSON.parse(readFileSync(join(root, file), 'utf8')));
+const pairs: [string, string, 'text' | 'ui'][] = [
+  ['foreground', 'background', 'text'], ['muted-foreground', 'background', 'text'],
+  ['card-foreground', 'card', 'text'], ['muted-foreground', 'card', 'text'],
+  ['foreground', 'muted', 'text'], ['foreground', 'sx-panel', 'text'],
+  ['muted-foreground', 'sx-panel', 'text'], ['primary-foreground', 'primary', 'text'],
+  ['accent-foreground', 'accent', 'text'], ['destructive', 'background', 'text'],
+  ['destructive', 'card', 'text'], ['destructive-foreground', 'destructive', 'text'],
+  ['sx-chrome-foreground', 'sx-chrome', 'text'], ['sx-chrome-muted', 'sx-chrome', 'text'],
+  ['sx-selected-foreground', 'sx-selected', 'text'], ['sx-selected-muted', 'sx-selected', 'text'],
+  ['border', 'background', 'ui'], ['input', 'background', 'ui'], ['ring', 'background', 'ui'],
+  ['ring', 'card', 'ui'], ['status-open', 'card', 'ui'], ['status-active', 'card', 'ui'],
+  ['status-done', 'card', 'ui'], ['status-cancelled', 'card', 'ui'],
+];
+function assertThemeContrast(theme: typeof themes[number]) {
+  const minText = theme.contrast === 'high' ? 7 : 4.5;
+  const values = { ...theme.tokens, ...(theme.private ?? {}) };
+  for (const [fg, bg, kind] of [...pairs, ...(theme.pairs ?? [])])
+    expect(wcagContrast(values[fg], values[bg]), `${theme.id}: ${fg}/${bg}`)
+      .toBeGreaterThanOrEqual(kind === 'text' ? minText : 3);
 }
 describe('declared theme pairs', () => {
-  for (const [name, p] of Object.entries(palettes))
-    it(name, () => check(name, p));
-  it('rejects weak text and chromatic surfaces', () => {
-    expect(() =>
-      check('light', { ...palettes.light, foreground: '#eeeeee' }),
-    ).toThrow();
-    expect(() =>
-      check('light', { ...palettes.light, background: '#ff0000' }),
-    ).toThrow();
+  for (const theme of themes) {
+    it(theme.id, () => {
+      assertThemeContrast(theme);
+    });
+  }
+  it('rejects unreadable declared theme pairs', () => {
+    const theme = themes[0];
+    expect(() => assertThemeContrast({
+      ...theme,
+      tokens: { ...theme.tokens, foreground: theme.tokens.background },
+    })).toThrow();
   });
-  it('delivered CSS contains the checked tokens', () => {
-    const root = postcss.parse(readFileSync('src/themes/tokens.css', 'utf8'));
-    for (const [name, p] of Object.entries(palettes)) {
+  it('delivered CSS contains every named theme and its declared colors', () => {
+    const css = postcss.parse(readFileSync('design/css/tokens.css', 'utf8'));
+    for (const theme of themes) {
       let found = false;
-      root.walkRules((rule) => {
+      css.walkRules((rule) => {
         if (
-          rule.selector.replaceAll("'", '"') !== `:root[data-theme="${name}"]`
+          rule.selector.replaceAll("'", '"') !== `[data-theme="${theme.id}"]`
         )
           return;
         found = true;
@@ -58,10 +53,10 @@ describe('declared theme pairs', () => {
         rule.walkDecls((d) => {
           declarations.set(d.prop, d.value);
         });
-        for (const [key, value] of Object.entries(p))
+        for (const [key, value] of Object.entries(theme.tokens))
           expect(declarations.get('--' + key)).toBe(value);
       });
-      expect(found).toBe(true);
+      expect(found, theme.id).toBe(true);
     }
   });
 });

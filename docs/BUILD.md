@@ -234,10 +234,10 @@ Where an ADR in §4 knowingly departs from a higher tier, it says so and carries
 | Agent role | Writes code; does not operate production | Human deploys and dogfoods |
 | Dev host | RHEL-family Linux, Podman (rootless) | No Docker, no docker-compose |
 | Database | PostgreSQL 18, self-hosted container, dev and prod | Full control of extensions and `pg_stat_statements` |
-| Go | **1.27.x** — pin `go 1.27.1` in `go.mod` | Go 1.27.0 released 2026-08-19; 1.27.1 on 2026-09-01. Supported lines are 1.27 and 1.26. **high (verified)** |
+| Go | **1.27.x** — pin `go 1.27.2` in `go.mod` | Go 1.27.0 released 2026-08-19; 1.27.2 on 2026-10-08 includes security fixes. Supported lines are 1.27 and 1.26. **high (verified)** |
 | Node | **24.x (Active LTS)** — pin in `.nvmrc` and `package.json` `engines` | Node 22 entered Maintenance 2025-10-21; Node 24 Active LTS since 2025-10-28, Maintenance 2026-10-20, EOL 2028-04-30. Node 26 becomes LTS in October 2026 — schedule a bump task then, don't chase it now. **high (verified)** |
 | JSON | Golden files are generated and verified under the pinned toolchain only | Go 1.27 backs `encoding/json` with the v2 engine: behaviour preserved, but escaping bytes and error text differ from 1.26. `GOEXPERIMENT=nojsonv2` is a comparison escape hatch, not a shipping configuration. **high (verified)** |
-| Frontend | Vite + React 19 + Tailwind + shadcn/ui on Base UI | SPEC §3.1. shadcn/ui defaults new projects to Base UI as of July 2026; Radix remains supported. Base UI uses `render` rather than `asChild` and pulls `@floating-ui/react` — both matter to §9.1's budget. **high (verified)** |
+| Frontend | Vite + React 19 + Sierx semantic CSS/tokens + Base UI interaction primitives | Sierx owns its visual contract and themes; Base UI supplies headless behavior for accessible interactions. Its render API and @floating-ui/react dependency matter to the section 9.1 budget. **high (verified)** |
 | Markdown | `markdown-it`, `html: false`, lazy-loaded | ADR-014 |
 | Git | Branch `phase/N-slug`, squash-merge to `main` at gate, tag `phase-N-complete` | §3.3 |
 | CI | GitHub Actions, **zero logic in YAML** — every job calls a `make` target | §3.4 |
@@ -356,7 +356,7 @@ history.
 - [x] 0.1 Repository skeleton and toolchain pins
       ```
       $ make bootstrap-check
-      go1.27.1 OK / node v24.x OK / podman OK / psql 18 OK
+      go1.27.2 OK / node v24.x OK / podman OK / psql 18 OK
       ```
 - [ ] 0.2 Dev database
 ...
@@ -1301,7 +1301,7 @@ against in one command.
    headers are **not** used; LICENSE plus NOTICE is sufficient for a
    single-author Apache-2.0 project and headers across several hundred files are
    noise the license gate does not need.
-1. `go mod init github.com/siercks/sierx`; set `go 1.27.1`. The module path
+1. `go mod init github.com/siercks/sierx`; set `go 1.27.2`. The module path
    matches the repository's `go-import` metadata, so it must be exactly this.
 2. `.nvmrc` → `24`; `package.json` `engines.node` → `>=24 <25`.
 3. Copy the specification to `docs/SPEC.md` verbatim and this guide to
@@ -2159,7 +2159,9 @@ list in §1.2, top first, each cut recorded.
 
 **Files.** `web/*`, `.github/workflows/ci.yml`, `Makefile`
 
-**Steps.** Vite + React 19 + Tailwind + shadcn/ui on Base UI primitives. Wire the
+**Steps.** Vite + React 19 with Sierx semantic CSS/tokens and Base UI
+interaction primitives. Keep design assets local and the theme build independent
+of remote fonts or services. Wire the
 §9.1 budgets as build failures **before writing features**: first-route JS ≤ 250KB
 brotli, first-route CSS ≤ 20KB brotli, any lazy chunk ≤ 60KB brotli, exactly one
 route with eager imports (lint rule). Brotli precompression at build time, not on
@@ -2193,13 +2195,10 @@ prefix.
 
 ### Task 2.2 — Theme tokens and the contrast gate
 
-**Files.** `web/src/themes/*.css`, `web/src/themes/tokens.test.ts`,
-`.stylelintrc`
+**Files.** `web/design/tokens/*.json`, `web/design/css/themes/*.css`,
+`web/src/themes/catalog.ts`, `web/src/themes/tokens.test.ts`, `.stylelintrc`
 
-**Steps.** Five settings over four palettes: `system`, `light`, `dark`,
-`light-hc`, `dark-hc` (§10.2). CSS custom properties on
-`:root[data-theme="…"]`, matching shadcn's token convention so components need no
-theme awareness. Zero runtime CSS-in-JS. Bands and constraints per ADR-009.
+**Steps.** The appearance catalog offers 23 named themes plus `system`, with legacy preference values retained. Theme tokens are CSS custom properties consumed by the semantic Sierx component vocabulary; components do not branch on theme names. Zero runtime CSS-in-JS. Third-party OFL font files are excluded; Sierx font faces are built from local source.
 
 The contrast gate enumerates **every declared token pair** and computes ratios,
 failing the build on violation (§10.3): foreground/background 4.5:1 (7:1 in HC),
@@ -2399,8 +2398,7 @@ keeping. Set `SIERX_BASE_URL` here too; it has no committable value (§3.7).
 
 **Steps.** Alias `react` → `preact/compat`, measure, decide. **Two-hour
 timebox**, a measured result in `PROGRESS.md`, and an easy revert. Base UI
-occasionally breaks under Preact — and Base UI is now the default shadcn
-primitive layer (§1), so this is an experiment, not a commitment (§9.1).
+interaction primitives may not work fully with Preact, so this remains an experiment, not a commitment.
 
 **Acceptance.** Either a recorded bundle delta with all gates still green, or a
 revert commit and a one-line note. Both outcomes are success.
@@ -2456,6 +2454,12 @@ task template in Appendix C and resolves that phase's open questions first,
 recording each as an ADR. Expansion is also where the endpoint-coverage check
 from task 1.24 is repeated: every route the phase adds gets an owning task before
 any code is written.
+
+All future visual surfaces follow the shared appearance contract in
+[UI-DESIGN-SYSTEM.md](UI-DESIGN-SYSTEM.md). Phase 3, 5, and 6 acceptance must
+exercise their new surface with every persisted appearance, verify status and
+selection without color alone, and confirm offline asset delivery. This records
+the visual standard without scaffolding the future feature implementation.
 
 ### Phase 3 — Kanban board
 

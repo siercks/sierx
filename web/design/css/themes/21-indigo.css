@@ -1,0 +1,28 @@
+/* Indigo: seams are sashiko running stitch, drawn as a repeating gradient so the
+   stitch length is exact. A stitched outline marks the selected card; red thread
+   marks a blocked one. Mincho for titles only. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="indigo"] {
+    --stitch-x: linear-gradient(90deg, color-mix(in srgb, var(--sashiko) 70%, transparent) 0 7px, transparent 7px 12px);
+    --stitch-y: linear-gradient(180deg, color-mix(in srgb, var(--sashiko) 70%, transparent) 0 7px, transparent 7px 12px);
+  }
+  [data-theme="indigo"] :is(.sx-brand, .sx-main-title, .sx-col-name, .sx-doc-title) { font-family: var(--sx-font-display); font-weight: 500; }
+  [data-theme="indigo"] .sx-brand { font-size: 1.25rem; letter-spacing: 0.04em; }
+  [data-theme="indigo"] .sx-main-title { font-size: 1.375rem; }
+  [data-theme="indigo"] .sx-top { border-bottom: 0; background-image: var(--stitch-x); background-size: 12px 1.5px; background-repeat: repeat-x; background-position: 0 100%; }
+  [data-theme="indigo"] .sx-query { background: var(--sx-panel); }
+  [data-theme="indigo"] .sx-col-h { border-bottom: 0; padding-bottom: 8px; background-image: var(--stitch-x); background-size: 12px 1.5px; background-repeat: repeat-x; background-position: 0 100%; }
+  [data-theme="indigo"] .sx-col-name { font-size: 1.0625rem; }
+  [data-theme="indigo"] .sx-card { border-color: transparent; }
+  [data-theme="indigo"] .sx-card[data-selected] { border-color: transparent; outline: 1.5px dashed var(--sashiko); outline-offset: -5px; }
+  [data-theme="indigo"] .sx-card[data-blocked] { border-color: transparent; outline: 1.5px dashed var(--destructive); outline-offset: -5px; }
+  [data-theme="indigo"] .sx-who { background: var(--background); }
+  [data-theme="indigo"] .sx-doc-title { font-size: 1.375rem; line-height: 1.35; }
+  [data-theme="indigo"] .sx-detail { border-left: 0; background-image: var(--stitch-y); background-size: 1.5px 12px; background-repeat: repeat-y; background-position: 0 0; }
+  [data-theme="indigo"] .sx-side { border-right: 0; background-image: var(--stitch-y); background-size: 1.5px 12px; background-repeat: repeat-y; background-position: 100% 0; }
+  [data-theme="indigo"] .sx-list thead th { border-bottom: 0; background-image: var(--stitch-x); background-size: 12px 1.5px; background-repeat: repeat-x; background-position: 0 100%; }
+  [data-theme="indigo"] .sx-roll-fill { fill: var(--sashiko); }
+  [data-theme="indigo"] .sx-node[data-selected] > .sx-node-row { outline: 1.5px dashed var(--sashiko); outline-offset: -4px; }
+  [data-theme="indigo"] .sx-foot { border-top: 0; background-image: var(--stitch-x); background-size: 12px 1.5px; background-repeat: repeat-x; }
+}

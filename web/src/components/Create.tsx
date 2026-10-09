@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { request, type Config, type Project, type Item } from '../api/client';
 import { Dialog } from './ui/dialog';
+import { Button } from './ui/button';
 export function Create({
   projects,
   workspace,
@@ -10,7 +11,11 @@ export function Create({
   workspace: string;
 }) {
   return (
-    <Dialog trigger="Create item" title="Create item">
+    <Dialog
+      trigger="Create item"
+      title="Create item"
+      triggerVariant="default"
+    >
       <CreateForm projects={projects} workspace={workspace} />
     </Dialog>
   );
@@ -22,6 +27,8 @@ function CreateForm({
   projects: Project[];
   workspace: string;
 }) {
+  const typeID = useId();
+  const statusHintID = useId();
   const [project, setProject] = useState(
     projects.find((p) => !p.archived_at)?.key_prefix ?? '',
   );
@@ -37,6 +44,7 @@ function CreateForm({
     config.data?.types.find((t) => t.key === type) ?? config.data?.types[0];
   return (
     <form
+      className="workflow-form create-form"
       onSubmit={async (e) => {
         e.preventDefault();
         if (pending || !selected) return;
@@ -66,9 +74,11 @@ function CreateForm({
           a project.
         </p>
       )}
-      <label>
+      <div className="workflow-field-grid">
+      <label className="workflow-field">
         Project
         <select
+          className="sx-control"
           value={project}
           onChange={(e) => {
             setProject(e.target.value);
@@ -91,9 +101,12 @@ function CreateForm({
         <p role="alert">{config.error.message}</p>
       ) : (
         <>
-          <label>
-            Type
+          <div className="workflow-field">
+            <label htmlFor={typeID}>Type</label>
             <select
+              id={typeID}
+              aria-describedby={statusHintID}
+              className="sx-control"
               value={selected?.key ?? ''}
               onChange={(e) => setType(e.target.value)}
             >
@@ -103,31 +116,34 @@ function CreateForm({
                 </option>
               ))}
             </select>
-          </label>
-          <p className="muted">
-            Initial status:{' '}
-            {config.data?.statuses.find(
-              (s) => s.key === selected?.initial_status,
-            )?.name ?? selected?.initial_status}
-          </p>
+            <span id={statusHintID} className="field-hint">
+              Initial status:{' '}
+              {config.data?.statuses.find(
+                (s) => s.key === selected?.initial_status,
+              )?.name ?? selected?.initial_status}
+            </span>
+          </div>
         </>
       )}
-      <label>
+      </div>
+      <label className="workflow-field workflow-field-full">
         Title
-        <input name="title" required maxLength={500} />
+        <input className="sx-control" name="title" required maxLength={500} />
       </label>
-      <label>
+      <label className="workflow-field workflow-field-full">
         Description
-        <textarea name="body" placeholder="Write in Markdown" />
+        <textarea className="sx-control" name="body" placeholder="Write in Markdown" />
       </label>
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
-      <button className="primary" disabled={pending || !selected}>
+      <div className="workflow-form-actions">
+        <Button variant="default" disabled={pending || !selected}>
         {pending ? 'Creating…' : 'Create item'}
-      </button>
+        </Button>
+      </div>
     </form>
   );
 }

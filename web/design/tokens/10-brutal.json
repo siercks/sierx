@@ -1,0 +1,81 @@
+{
+  "id": "brutal",
+  "name": "Neo-brutalist",
+  "scheme": "light",
+  "contrast": "normal",
+  "summary": "Thick outlines, flat saturated column fills and pill tabs. The hard offset shadow appears only on the selected card, so elevation still means state.",
+  "tokens": {
+    "background": "#e6edf0",
+    "foreground": "#111111",
+    "card": "#ffffff",
+    "card-foreground": "#111111",
+    "muted": "#ffffff",
+    "muted-foreground": "#3a3a3a",
+    "accent": "#111111",
+    "accent-foreground": "#ffffff",
+    "border": "#111111",
+    "input": "#111111",
+    "ring": "#0047ff",
+    "primary": "#111111",
+    "primary-foreground": "#ffd84a",
+    "destructive": "#b3200f",
+    "destructive-foreground": "#ffffff",
+    "status-open": "#111111",
+    "status-active": "#111111",
+    "status-done": "#111111",
+    "status-cancelled": "#555555",
+    "sx-chrome": "#ffffff",
+    "sx-chrome-foreground": "#111111",
+    "sx-chrome-muted": "#3a3a3a",
+    "sx-panel": "#ffffff",
+    "sx-rule": "#111111",
+    "sx-hairline": "#111111",
+    "sx-selected": "#ffffff",
+    "sx-selected-foreground": "#111111",
+    "sx-selected-muted": "#3a3a3a",
+    "sx-text": "0.875rem",
+    "sx-text-lg": "1.375rem",
+    "sx-leading": "1.35",
+    "sx-weight-strong": "800",
+    "sx-radius": "8px",
+    "sx-border-width": "2px",
+    "sx-rule-width": "3px",
+    "sx-shadow-selected": "5px 5px 0 #111111",
+    "sx-gutter": "20px",
+    "sx-gap": "10px",
+    "sx-font-mono": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-symbols": "\"Sierx Symbols\"",
+    "sx-font-ui": "system-ui, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "sx-font-display": "var(--sx-font-ui)"
+  },
+  "private": {
+    "brutal-yellow": "#ffd84a",
+    "brutal-pink": "#ffa6d4",
+    "brutal-green": "#a3f0bd",
+    "brutal-blue": "#a4dbff",
+    "brutal-red": "#ff6f5e",
+    "brutal-blush": "#ffe2dd"
+  },
+  "pairs": [
+    [
+      "foreground",
+      "brutal-yellow",
+      "text"
+    ],
+    [
+      "foreground",
+      "brutal-pink",
+      "text"
+    ],
+    [
+      "foreground",
+      "brutal-green",
+      "text"
+    ],
+    [
+      "foreground",
+      "brutal-red",
+      "text"
+    ]
+  ]
+}

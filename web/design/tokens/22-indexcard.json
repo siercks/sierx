@@ -1,0 +1,109 @@
+{
+  "id": "indexcard",
+  "name": "Index card",
+  "set": "curated",
+  "scheme": "light",
+  "contrast": "normal",
+  "summary": "The medium kanban started on: 3×5 cards with a red header rule and blue ruling, typed and laid on a desk blotter. Card stock colour follows the habit of real teams: white for stories, canary for bugs, blue for ideas, pink for blocked.",
+  "tokens": {
+    "background": "#ecebe4",
+    "foreground": "#22201c",
+    "card": "#fdfcf7",
+    "card-foreground": "#22201c",
+    "muted": "#e6e3d8",
+    "muted-foreground": "#57534c",
+    "accent": "#4a453d",
+    "accent-foreground": "#fdfcf7",
+    "border": "#84807a",
+    "input": "#84807a",
+    "ring": "#1f5fbf",
+    "primary": "#1f4e9c",
+    "primary-foreground": "#ffffff",
+    "destructive": "#a8261f",
+    "destructive-foreground": "#ffffff",
+    "status-open": "#57534c",
+    "status-active": "#1f4e9c",
+    "status-done": "#2e6a3a",
+    "status-cancelled": "#84807a",
+    "sx-chrome": "#22201c",
+    "sx-chrome-foreground": "#ecebe4",
+    "sx-chrome-muted": "#c5c0b4",
+    "sx-panel": "#f5f4ee",
+    "sx-rule": "#84807a",
+    "sx-hairline": "#d8d4c8",
+    "sx-selected": "#fdfcf7",
+    "sx-selected-foreground": "#22201c",
+    "sx-selected-muted": "#57534c",
+    "sx-leading": "18px",
+    "sx-weight-strong": "700",
+    "sx-radius": "2px",
+    "sx-shadow-selected": "0 14px 26px rgb(0 0 0 / 0.38)",
+    "sx-gap": "14px",
+    "sx-font-mono": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-symbols": "\"Sierx Symbols\"",
+    "sx-font-ui": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-display": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace"
+  },
+  "private": {
+    "felt": "#24392f",
+    "chalk": "#efeadb",
+    "chalk-muted": "#b8c5bb",
+    "card-red": "#e06464",
+    "card-blue": "#bcd5ea",
+    "stock-yellow": "#fff1c2",
+    "stock-blue": "#e4eefb",
+    "stock-pink": "#ffdfe2"
+  },
+  "pairs": [
+    [
+      "chalk",
+      "felt",
+      "text"
+    ],
+    [
+      "chalk-muted",
+      "felt",
+      "text"
+    ],
+    [
+      "stock-pink",
+      "felt",
+      "text"
+    ],
+    [
+      "foreground",
+      "stock-yellow",
+      "text"
+    ],
+    [
+      "foreground",
+      "stock-blue",
+      "text"
+    ],
+    [
+      "foreground",
+      "stock-pink",
+      "text"
+    ],
+    [
+      "muted-foreground",
+      "stock-yellow",
+      "text"
+    ],
+    [
+      "muted-foreground",
+      "stock-blue",
+      "text"
+    ],
+    [
+      "muted-foreground",
+      "stock-pink",
+      "text"
+    ],
+    [
+      "destructive",
+      "stock-pink",
+      "text"
+    ]
+  ]
+}

@@ -1,0 +1,31 @@
+/* Cockpit: FAA AC 25-11B colour roles. White = data, cyan = selectable or entered,
+   green = engaged, amber = caution, magenta = current target. Labels stay grey. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="cockpit"] .sx-brand { font-size: var(--sx-text-sm); letter-spacing: 0.12em; color: var(--sx-chrome-muted); }
+  [data-theme="cockpit"] .sx-tab { border: 1px solid transparent; border-radius: 2px; }
+  [data-theme="cockpit"] .sx-tab[aria-current] { background: none; color: var(--primary); border-color: var(--primary); font-weight: 400; }
+  [data-theme="cockpit"] .sx-query { background: var(--sx-chrome); border-radius: 2px; }
+  [data-theme="cockpit"] .sx-query-value { color: var(--primary); }
+  [data-theme="cockpit"] .sx-avatar { background: none; color: var(--foreground); border: 1px solid var(--sx-rule); border-radius: 2px; }
+  [data-theme="cockpit"] :is(.sx-key, .sx-col-count, .sx-c-num, .sx-roll-n, .sx-stat dd, .sx-who) { font-family: var(--sx-font-mono); }
+  [data-theme="cockpit"] .sx-col-h { border-bottom-color: var(--sx-rule); }
+  [data-theme="cockpit"] .sx-col-name { color: var(--muted-foreground); font-weight: 400; }
+  [data-theme="cockpit"] .sx-col-count { color: var(--foreground); }
+  [data-theme="cockpit"] .sx-col-flag { padding: 0 5px; border: 1px solid var(--destructive); font-weight: 400; }
+  [data-theme="cockpit"] .sx-card { border-color: var(--sx-hairline); }
+  [data-theme="cockpit"] .sx-status[data-cat="active"] { color: var(--status-active); }
+  /* Caution is annunciated in a box, not drawn around the card. */
+  [data-theme="cockpit"] .sx-card[data-blocked] { border-style: solid; border-color: var(--sx-hairline); }
+  [data-theme="cockpit"] .sx-blocker { justify-self: start; padding: 0 6px; border: 1px solid var(--destructive); font-weight: 400; }
+  [data-theme="cockpit"] .sx-blocker::before { content: "▲ "; }
+  [data-theme="cockpit"] .sx-who { background: none; border: 1px solid var(--sx-rule); border-radius: 2px; }
+  [data-theme="cockpit"] .sx-roll-track { fill: var(--sx-hairline); }
+  [data-theme="cockpit"] .sx-roll-fill { fill: var(--status-active); }
+  [data-theme="cockpit"] .sx-btn { background: none; color: var(--primary); border-color: var(--primary); border-radius: 2px; }
+  [data-theme="cockpit"] .sx-btn[data-variant="primary"] { background: var(--primary); color: var(--primary-foreground); }
+  [data-theme="cockpit"] .sx-foot .sx-kbd { color: var(--primary); border-color: var(--sx-rule); border-radius: 2px; }
+  [data-theme="cockpit"] .sx-list thead th { font-weight: 400; }
+  [data-theme="cockpit"] .sx-kbd { border-radius: 2px; }
+  [data-theme="cockpit"] .sx-comment p { border-radius: 2px; border-left: 2px solid var(--primary); }
+}

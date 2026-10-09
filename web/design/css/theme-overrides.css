@@ -1,0 +1,19 @@
+/* All view-specific theme refinements. Keep these free of remote assets. */
+@import "./themes/01-swiss.css";
+@import "./themes/03-ledger.css";
+@import "./themes/04-commander.css";
+@import "./themes/05-platinum.css";
+@import "./themes/06-blueprint.css";
+@import "./themes/08-ticker.css";
+@import "./themes/09-plain.css";
+@import "./themes/10-brutal.css";
+@import "./themes/11-civic.css";
+@import "./themes/13-cockpit.css";
+@import "./themes/14-chart.css";
+@import "./themes/15-appliance.css";
+@import "./themes/17-celadon.css";
+@import "./themes/18-riso.css";
+@import "./themes/19-vellum.css";
+@import "./themes/20-kraft.css";
+@import "./themes/21-indigo.css";
+@import "./themes/22-indexcard.css";

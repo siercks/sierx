@@ -1,27 +1,42 @@
 import { Dialog as Primitive } from '@base-ui/react/dialog';
 import type { ReactNode } from 'react';
 
-// Local shadcn-style composition over Base UI: semantics, focus trapping and
-// focus restoration belong to the primitive; appearance belongs to our tokens.
+// Base UI supplies dialog behavior; Sierx owns the component structure and style.
 export function Dialog({
   trigger,
   title,
   children,
+  triggerVariant = 'outline',
 }: {
   trigger: string;
   title: string;
   children: ReactNode;
+  triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive';
 }) {
   return (
     <Primitive.Root>
-      <Primitive.Trigger>{trigger}</Primitive.Trigger>
+      <Primitive.Trigger
+        aria-label={trigger}
+        className={`sx-btn button button-${triggerVariant}`}
+        data-variant={triggerVariant === 'default' ? 'primary' : triggerVariant}
+      >
+        {trigger}
+      </Primitive.Trigger>
       <Primitive.Portal>
         <Primitive.Backdrop className="dialog-backdrop" />
         <Primitive.Viewport className="dialog-viewport">
           <Primitive.Popup className="dialog">
-            <Primitive.Title>{title}</Primitive.Title>
-            {children}
-            <Primitive.Close>Close</Primitive.Close>
+            <div className="dialog-head">
+              <Primitive.Title className="dialog-title">{title}</Primitive.Title>
+              <Primitive.Close
+                className="sx-btn button button-ghost button-sm dialog-close"
+                data-variant="ghost"
+                aria-label="Close dialog"
+              >
+                Close
+              </Primitive.Close>
+            </div>
+            <div className="dialog-content">{children}</div>
           </Primitive.Popup>
         </Primitive.Viewport>
       </Primitive.Portal>

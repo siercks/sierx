@@ -1,0 +1,30 @@
+{
+  "$comment": "Non-colour defaults merged under every theme. Colour tokens have no defaults: each theme must declare all of them.",
+  "tokens": {
+    "sx-font-ui": "system-ui, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "sx-font-mono": "\"Sierx Mono\", ui-monospace, \"Cascadia Mono\", \"SF Mono\", Consolas, \"DejaVu Sans Mono\", monospace",
+    "sx-font-symbols": "\"Sierx Symbols\"",
+    "sx-font-display": "var(--sx-font-ui)",
+    "sx-text": "0.8125rem",
+    "sx-text-sm": "0.75rem",
+    "sx-text-lg": "1rem",
+    "sx-text-xl": "1.125rem",
+    "sx-leading": "1.45",
+    "sx-weight-strong": "600",
+    "sx-radius": "6px",
+    "sx-border-width": "1px",
+    "sx-rule-width": "1px",
+    "sx-focus-width": "2px",
+    "sx-shadow-selected": "0 0 0 1px var(--ring), 0 4px 14px rgb(0 0 0 / 0.12)",
+    "sx-shadow-drag": "0 10px 24px rgb(0 0 0 / 0.22)",
+    "sx-space": "4px",
+    "sx-gutter": "16px",
+    "sx-gap": "6px",
+    "sx-pad": "9px 10px",
+    "sx-cell-y": "6px",
+    "sx-column": "transparent",
+    "sx-column-pad": "0px",
+    "sx-side-w": "190px",
+    "sx-detail-w": "320px"
+  }
+}

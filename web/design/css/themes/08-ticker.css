@@ -1,0 +1,28 @@
+/* Ticker: amber labels, zebra rows, square everything. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="ticker"] .sx-top { padding: 4px 8px; gap: 14px; border-bottom: 1px solid var(--border); }
+  [data-theme="ticker"] .sx-brand { font-size: inherit; padding: 0 6px; background: var(--primary); color: var(--primary-foreground); }
+  [data-theme="ticker"] .sx-tabs { gap: 2px; }
+  [data-theme="ticker"] .sx-tab { min-height: 0; padding: 1px 8px; border: 1px solid var(--border); border-radius: 0; color: var(--primary); }
+  [data-theme="ticker"] .sx-tab[aria-current] { border-color: var(--accent); }
+  [data-theme="ticker"] .sx-query { padding: 2px 6px; border-radius: 0; }
+  [data-theme="ticker"] .sx-avatar { background: none; color: var(--primary); }
+  [data-theme="ticker"] .sx-main { padding: 6px 8px; }
+  [data-theme="ticker"] .sx-main-h { margin-bottom: 6px; }
+  [data-theme="ticker"] .sx-main-title { color: var(--primary); }
+  [data-theme="ticker"] .sx-stats { border-radius: 0; border-color: var(--border); }
+  [data-theme="ticker"] .sx-stat dt { color: var(--primary); }
+  [data-theme="ticker"] .sx-list thead th { background: var(--muted); color: var(--primary); font-weight: 400; border-bottom-width: 1px; }
+  [data-theme="ticker"] .sx-list :is(th, td) { padding-inline: 8px; }
+  [data-theme="ticker"] .sx-list tbody tr:nth-child(even) td { background: var(--tk-zebra); }
+  [data-theme="ticker"] .sx-list tbody tr.sx-row[data-selected] td { background: var(--sx-selected); box-shadow: inset 0 1px var(--primary), inset 0 -1px var(--primary); }
+  [data-theme="ticker"] :is(.sx-c-key, .sx-card .sx-key, .sx-col-name, .sx-doc-head .sx-key) { color: var(--primary); }
+  [data-theme="ticker"] .sx-col-h { border-bottom-width: 1px; }
+  [data-theme="ticker"] .sx-card { border-color: var(--border); }
+  [data-theme="ticker"] .sx-blocker::before { content: "■ "; }
+  [data-theme="ticker"] .sx-who { border-radius: 0; background: none; color: var(--muted-foreground); }
+  [data-theme="ticker"] :is(.sx-btn, .sx-comment p, .sx-kbd) { border-radius: 0; }
+  [data-theme="ticker"] .sx-fkey { color: var(--foreground); }
+  [data-theme="ticker"] .sx-fkey b { padding: 0 4px; font-weight: 400; background: var(--primary); color: var(--primary-foreground); }
+}

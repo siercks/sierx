@@ -1,0 +1,41 @@
+/* Neo-brutalist: 2px outlines, flat fills, hard shadow only on the selected card. */
+@layer sx.reset, sx.tokens, sx.layout, sx.components, sx.theme;
+@layer sx.theme {
+  [data-theme="brutal"] .sx-top { padding-block: 12px; border-bottom-width: 3px; }
+  [data-theme="brutal"] .sx-brand { padding: 3px 8px; background: var(--brutal-yellow); border: 2px solid var(--foreground); }
+  [data-theme="brutal"] .sx-tabs { gap: 8px; }
+  [data-theme="brutal"] .sx-tab { color: var(--foreground); background: var(--card); border: 2px solid var(--foreground); border-radius: 999px; font-weight: 700; }
+  [data-theme="brutal"] .sx-tab[aria-current] { background: var(--accent); color: var(--accent-foreground); }
+  [data-theme="brutal"] .sx-query { border-width: 2px; background: var(--card); padding-block: 5px; }
+  [data-theme="brutal"] .sx-query-label { color: var(--foreground); }
+  [data-theme="brutal"] .sx-avatar { width: 32px; height: 32px; background: var(--brutal-pink); color: var(--foreground); border: 2px solid var(--foreground); }
+  [data-theme="brutal"] .sx-main:has(.sx-board) > .sx-main-h { display: none; }
+  [data-theme="brutal"] .sx-board { gap: 14px; }
+  [data-theme="brutal"] .sx-col { padding: 10px; background: var(--card); border: 2px solid var(--foreground); border-radius: 10px; }
+  [data-theme="brutal"] .sx-col:nth-child(2) { background: var(--brutal-yellow); }
+  [data-theme="brutal"] .sx-col:nth-child(3) { background: var(--brutal-pink); }
+  [data-theme="brutal"] .sx-col:nth-child(4) { background: var(--brutal-green); }
+  [data-theme="brutal"] .sx-col-h { border: 0; padding: 0; }
+  [data-theme="brutal"] .sx-col-name { font-family: var(--sx-font-display); font-size: 1.0625rem; }
+  [data-theme="brutal"] .sx-col-count { padding: 0 8px; color: var(--foreground); font-weight: 800; background: var(--card); border: 2px solid var(--foreground); border-radius: 999px; }
+  [data-theme="brutal"] .sx-col-flag { padding: 1px 8px; color: var(--card); background: var(--foreground); border-radius: 999px; }
+  [data-theme="brutal"] .sx-card-title { font-weight: 650; }
+  [data-theme="brutal"] .sx-card-top, [data-theme="brutal"] .sx-card-meta { font-weight: 600; }
+  [data-theme="brutal"] .sx-card[data-selected] { translate: -3px -3px; }
+  [data-theme="brutal"] .sx-card[data-blocked] { border-style: solid; border-color: var(--foreground); background: repeating-linear-gradient(-45deg, var(--card) 0 10px, var(--brutal-blush) 10px 20px); }
+  [data-theme="brutal"] .sx-card:is([data-cat="done"], [data-cat="cancelled"]) { border-style: dashed; }
+  [data-theme="brutal"] .sx-blocker { justify-self: start; padding: 1px 8px; color: var(--foreground); background: var(--brutal-red); border: 2px solid var(--foreground); border-radius: 6px; }
+  [data-theme="brutal"] .sx-blocker::before { content: none; }
+  [data-theme="brutal"] .sx-who { width: 26px; background: var(--brutal-blue); border: 2px solid var(--foreground); }
+  [data-theme="brutal"] .sx-kbd { font-weight: 800; background: var(--brutal-yellow); border: 2px solid var(--foreground); box-shadow: 2px 2px 0 var(--foreground); }
+  [data-theme="brutal"] .sx-foot .sx-kbd { background: var(--brutal-yellow); border-color: var(--foreground); margin-right: 6px; }
+  [data-theme="brutal"] .sx-btn { border: 2px solid var(--foreground); box-shadow: 3px 3px 0 var(--foreground); font-weight: 700; }
+  [data-theme="brutal"] .sx-list { background: var(--card); border: 2px solid var(--foreground); }
+  [data-theme="brutal"] .sx-list :is(th, td):first-child { padding-left: 10px; }
+  [data-theme="brutal"] .sx-list thead th { background: var(--brutal-yellow); color: var(--foreground); }
+  [data-theme="brutal"] .sx-row[data-selected] td { background: var(--brutal-yellow); }
+  [data-theme="brutal"] .sx-node-row { background: var(--card); border: 2px solid var(--foreground); border-radius: 8px; margin-bottom: 6px; }
+  [data-theme="brutal"] .sx-node[data-selected] > .sx-node-row { box-shadow: 5px 5px 0 var(--foreground); translate: -3px -3px; background: var(--card); color: var(--foreground); }
+  [data-theme="brutal"] .sx-detail { border-left: 3px solid var(--foreground); }
+  [data-theme="brutal"] .sx-foot { font-weight: 600; border-top-width: 3px; }
+}
