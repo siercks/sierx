@@ -5,7 +5,7 @@ const source = readFileSync('src/routes/table.ts', 'utf8');
 export function generate(source, reserved, handlers) {
   const rows = [
     ...source.matchAll(
-      /\{ id: '([a-z]+)', path: '([^']+)', eager: (true|false), handler: '(\w+)' \}/g,
+      /\{ id: '([a-z-]+)', path: '([^']+)', eager: (true|false), handler: '(\w+)' \}/g,
     ),
   ];
   assert(rows.length > 0, 'No routes');

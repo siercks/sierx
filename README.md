@@ -64,3 +64,8 @@ file/line findings and the privacy, database isolation, accessibility and
 self-hosted deployment considerations that inform that plan. These documents
 include proposed work and conditional activation requirements; they do not
 claim that the controls are implemented or that Phase 2 has been accepted.
+The [data inventory](docs/DATA-INVENTORY.md), [privacy operations guide](docs/PRIVACY-OPERATIONS.md),
+and [legal design register](docs/LEGAL-DESIGN-REGISTER.md) track current handling
+and operator-specific decisions. Instance notices are served at `/privacy`,
+`/copyright`, and `/third-party`; complete their configuration before serving
+other people.

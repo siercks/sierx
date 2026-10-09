@@ -3,5 +3,5 @@ package web
 
 import "embed"
 
-//go:embed dist/index.html dist/assets/*
+//go:embed dist/index.html dist/third-party.json dist/assets/*
 var Files embed.FS

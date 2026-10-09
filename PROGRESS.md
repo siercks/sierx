@@ -1911,3 +1911,16 @@ encrypted physical recovery remain pending. See `docs/OFFLINE-DELIVERY.md`.
 The earlier ARM64 connected staging tests are recorded separately in
 `docs/RELEASE-ASSURANCE.md`. The owner disabled the stale required `gate` check to
 merge PR #11; required-check enforcement remains a follow-up, not a passing test.
+
+# Project management and local notice candidate - 2026-10-09
+
+Started implementation on `codex/project-management` from the clean project-management
+checkout. Added project metadata migration and versioned admin API, member lookup,
+project navigation/management UI, project-scoped list bootstrap, local privacy and
+copyright notice routes, generated third-party inventory, page titles, and external
+HTML resource rejection. Operator facts remain intentionally unset; the public notice
+marks the instance as needing setup instead of asserting unknown retention/contact
+practices. No database/RLS, release-promotion, rootless-host, recovery, or seven-day
+acceptance claim is made by this candidate. No test suites were run. The frontend build
+could not complete because the local `node_modules` tree is missing Windows-native
+TypeScript and Rolldown optional packages. This does not establish a passing build.

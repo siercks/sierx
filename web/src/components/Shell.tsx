@@ -179,6 +179,11 @@ export function Shell({
           </div>
         )}
         {children}
+        <footer className="legal-footer app-legal-links">
+          <a href="/privacy">Privacy</a>
+          <a href="/copyright">Copyright</a>
+          <a href="/third-party">Third-party notices</a>
+        </footer>
       </main>
     </div>
   );

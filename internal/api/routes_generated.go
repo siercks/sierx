@@ -7,6 +7,9 @@ func (s *Server) documentRoutes() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/": s.bootstrapList,
 		"/login": s.bootstrapLogin,
+		"/privacy": s.bootstrapPrivacy,
+		"/copyright": s.bootstrapCopyright,
+		"/third-party": s.bootstrapThirdParty,
 		"/:key": s.bootstrapItem,
 	}
 }

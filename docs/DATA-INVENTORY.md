@@ -1,0 +1,16 @@
+# Sierx data inventory
+
+This inventory describes data represented by the current application schema and request paths. It is not an instance-specific retention promise. Each operator must complete `/privacy` configuration for the deployed proxy, backup, contact, and retention facts.
+
+| Data group | Examples | Source | Current handling and open retention fact |
+|---|---|---|---|
+| Account and workspace identity | Email, display name, password hash or proxy identity, MFA secret, active flag, workspace membership and role | `migrations/0002_identity.sql`; `internal/api/auth/` | Local passwords are stored as hashes; session cookies are HttpOnly/Secure/SameSite and the database stores a token hash. MFA enrollment and recovery paths are optional. Account deactivation and membership-removal policy need operator procedures. |
+| Sessions | Session hash, creation, expiry, last-seen timestamp | `migrations/0002_identity.sql`; `internal/api/auth/local.go` | Sessions have an expiry. Operators must confirm the deployed expiry sweep and operational log retention. |
+| Work content | Project metadata, item title/body, custom fields, parent links, item links, comments | `migrations/0003_project.sql`, `0005_item.sql`, `0006_rollup_links_events.sql`, `0007_sprints_comments_views.sql` | Soft deletion does not erase the record or its history. Stable item keys and counters are retained by design. |
+| Change history | Actor/workspace, event kind, field, old and new JSON values, timestamp | `migrations/0006_rollup_links_events.sql` | The schema documentation says history is not pruned. Event payloads can contain prior user content; a purpose-limited retention/redaction design is still required. |
+| Preferences and saved views | Theme, motion preference, private/shared query text | `migrations/0002_identity.sql`, `0007_sprints_comments_views.sql` | Saved views retain their owner/shared scope. The operator must define access, correction and deactivation handling. |
+| Operational request data | Actor/workspace identifiers, method/path/status/duration; transient login rate-limit address | `internal/api/middleware.go`, `internal/api/auth.go` | Structured logs go to the configured process logger. Login rate-limit addresses are held in process memory for the rate-limit window. Host, proxy and log-sink retention are operator-specific. |
+| Backups and recovery artifacts | Database snapshots, WAL/archive and deployment bundles | `scripts/backup/`, `deploy/pgbackrest/`, `docs/OFFLINE-DELIVERY.md` | Encryption and expiry depend on the selected repository and operator configuration. Set the actual expiry and restore/erasure restrictions in `/privacy`. |
+| Browser-delivered assets | Bundled application libraries and local font files | `web/package.json`, `web/package-lock.json`, `web/licenses.json`, `web/design/fonts/fonts.json` | The runtime is served from the instance. The generated `/third-party` page records package versions/licenses and font sources. Device/system fallback fonts are selected locally. |
+
+Sierx currently has no public signup, analytics/replay SDK, email sender, or billing flow. Their future introduction requires a separate design and activation gate. This inventory does not establish legal applicability for a particular operator.

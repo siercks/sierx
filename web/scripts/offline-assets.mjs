@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { parseHTML } from 'linkedom';
 
 const fontManifest = JSON.parse(readFileSync('design/fonts/fonts.json', 'utf8'));
 assert.equal(fontManifest.families?.length ?? 0, 0, 'third-party font families are forbidden');
@@ -37,17 +38,38 @@ for (const file of scanned) {
     }
   }
   if (file.endsWith('.html')) {
-    for (const [, target] of content.matchAll(/(?:src|href)=["']([^"']+)["']/gi)) {
-      if (/^(?:data:|#|https?:\/\/|\/\/)/i.test(target)) continue;
+    const { document } = parseHTML(content);
+    const resourceAttrs = [
+      ['script[src],iframe[src],frame[src],img[src],source[src],video[src],audio[src],track[src],embed[src],input[type="image"][src]', 'src'],
+      ['video[poster]', 'poster'],
+      ['object[data]', 'data'],
+      ['img[srcset],source[srcset]', 'srcset'],
+    ];
+    const resources = [];
+    for (const [selector, attribute] of resourceAttrs) {
+      for (const element of document.querySelectorAll(selector)) {
+        const raw = element.getAttribute(attribute) ?? '';
+        if (attribute === 'srcset') {
+          for (const entry of raw.split(',')) resources.push(entry.trim().split(/\s+/)[0]);
+        } else resources.push(raw);
+      }
+    }
+    for (const link of document.querySelectorAll('link[href]')) {
+      const rel = (link.getAttribute('rel') ?? '').toLowerCase().split(/\s+/);
+      if (rel.some((value) => ['stylesheet', 'preload', 'modulepreload', 'icon', 'apple-touch-icon', 'manifest', 'prefetch', 'preconnect', 'dns-prefetch'].includes(value)))
+        resources.push(link.getAttribute('href'));
+    }
+    for (const base of document.querySelectorAll('base[href]')) resources.push(base.getAttribute('href'));
+    for (const target of resources) {
+      if (!target || /^(?:data:|blob:|#)/i.test(target)) continue;
+      assert(!/^(?:https?:)?\/\//i.test(target), `${file} automatically fetches a remote resource: ${target}`);
       if (/\.(?:js|css)(?:[?#]|$)/i.test(target))
-        assert(
-          !/[?#]/.test(target),
-          `${file} adds a query or fragment to a JavaScript/CSS entry URL; version its filename so lazy imports share the same module URL`,
-        );
-      const local = target.startsWith('/') ? resolve('dist', `.${target}`) : resolve(dirname(file), target);
+        assert(!/[?#]/.test(target), `${file} adds a query or fragment to a JavaScript/CSS entry URL; version its filename so lazy imports share the same module URL`);
+      const path = target.split(/[?#]/, 1)[0];
+      const local = path.startsWith('/') ? resolve('dist', `.${path}`) : resolve(dirname(file), path);
       assert(existsSync(local), `${file} references missing local asset ${target}`);
     }
   }
 }
 
-console.log(`offline assets: ${scanned.length} CSS/HTML files checked; no OFL fonts or remote references`);
+console.log(`offline assets: ${scanned.length} CSS/HTML files checked; no OFL fonts or automatically fetched remote resources`);

@@ -436,8 +436,12 @@ CREATE TABLE public.project (
     kind text NOT NULL,
     next_key_num integer DEFAULT 1 NOT NULL,
     archived_at timestamp with time zone,
+    owner_id uuid,
+    version integer DEFAULT 1 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT project_key_prefix_check CHECK ((key_prefix ~ '^[A-Z][A-Z0-9]{1,9}$'::text)),
-    CONSTRAINT project_kind_check CHECK ((kind = ANY (ARRAY['delivery'::text, 'discovery'::text, 'portfolio'::text])))
+    CONSTRAINT project_kind_check CHECK ((kind = ANY (ARRAY['delivery'::text, 'discovery'::text, 'portfolio'::text]))),
+    CONSTRAINT project_version_check CHECK ((version > 0))
 );
 
 
@@ -964,6 +968,13 @@ CREATE INDEX item_ws_seq ON public.item USING btree (workspace_id, change_seq);
 
 
 --
+-- Name: project_owner_membership_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX project_owner_membership_idx ON public.project USING btree (workspace_id, owner_id) WHERE (owner_id IS NOT NULL);
+
+
+--
 -- Name: session_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1291,6 +1302,14 @@ ALTER TABLE ONLY public.project_config
 
 ALTER TABLE ONLY public.project_config
     ADD CONSTRAINT project_config_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.project(id);
+
+
+--
+-- Name: project project_owner_membership_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.project
+    ADD CONSTRAINT project_owner_membership_fk FOREIGN KEY (workspace_id, owner_id) REFERENCES public.membership(workspace_id, user_id) ON DELETE RESTRICT;
 
 
 --
