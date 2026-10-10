@@ -1,6 +1,6 @@
 # Data lifecycle workflow design
 
-Status: proposed engineering design for owner/operator review. This document is not a retention promise or legal determination. No destructive lifecycle behavior is enabled by this proposal.
+Status: bounded export and reversible suspension are implemented; destructive lifecycle policy remains proposed for owner/operator review. This document is not a retention promise or legal determination. No destructive lifecycle behavior is enabled.
 
 ## Existing data boundaries
 
@@ -18,7 +18,9 @@ This intake record is not itself a data-access, correction, hold, or erasure cap
 
 ### 2. Access and export
 
-The first product workflow should be read-only and generate a bounded export from a consistent database snapshot. It must exclude password hashes, MFA secrets, session token hashes, and unrelated workspace content. Because items have no author field and history payloads may contain other people’s text, an export must not claim to be a complete personal-data export until its scope and review behavior are specified. Export creation and download should be audited, time-limited, and visible only to the verified requester or an authorized operator.
+Implemented as the operator-mediated `sierxctl exports create|download` workflow. The v1 export is a deliberately limited account export: profile fields (excluding credentials), workspace memberships, comments directly authored by the account (deleted comment bodies are omitted), and saved views owned by the account. Items have no author field, and change-event values can contain other people’s text, so item content and event old/new values are excluded. It includes at most 512 comments and 512 saved views, limits comment bodies and view queries to 4,096 characters each, and rejects payloads over 20 MiB. Truncation is marked in the payload. The export embeds an included/excluded scope manifest and explicitly says it is not a complete personal-data export.
+
+Creation and download require the maintenance database role and the same restricted case UUID. Creation uses one database statement snapshot, records both operations in the restricted audit table, and makes the payload available for one hour. The operator verifies the requester and controls the downloaded file in the restricted case workflow. The generated file is created without overwriting an existing path; the CLI requests owner-only file permissions where the host supports them. Expired server-side payloads are cleared during the next export creation while audit metadata remains. Downloaded copies require operator handling and deletion under the instance's configured process.
 
 ### 3. Correction
 
@@ -40,22 +42,21 @@ Before redaction or retention code is enabled, the owner must decide whether to 
 
 Backups follow the operator’s configured expiry schedule. If a restore predates a completed redaction, access to the restored database must remain blocked until the current redaction decisions have been replayed and verified. The durable decision record must survive loss of the database backup it governs, be access-controlled and tamper-evident, and be included in recovery drills. If that record is unavailable or cannot be applied, fail the restore acceptance rather than serving stale content.
 
-## Owner decisions required before destructive implementation
+## Remaining owner decisions before destructive implementation
 
-1. **Export scope:** self-only account/profile and authored records; operator-reviewed broader workspace export; or both with distinct authorization paths.
-2. **History treatment:** retain immutable old/new values; or permit value redaction while preserving event metadata and a redaction marker.
-3. **Content scope:** treatment of items without a recorded creator, comments, links, shared views, account identifiers, and derived/search/bootstrap copies.
-4. **Deactivation scope:** global account suspension (recommended for the current global account model) versus per-workspace membership removal. Define how project ownership references are reassigned.
-5. **Hold rules:** who can issue/release a hold, required review cadence, and which actions it blocks.
-6. **Restore authority:** who maintains the off-database redaction decision record, how it is authenticated, and who signs off after replay.
-7. **Retention:** the operator supplies actual durations for sessions, logs, backups, and any content/history retention; do not encode generic periods as a default legal requirement.
+1. **History treatment:** retain immutable old/new values; or permit value redaction while preserving event metadata and a redaction marker.
+2. **Content scope:** treatment of items without a recorded creator, comments, links, shared views, account identifiers, and derived/search/bootstrap copies.
+3. **Deactivation scope:** global account suspension (implemented for the current global account model) versus per-workspace membership removal. Define how project ownership references are reassigned.
+4. **Hold rules:** who can issue/release a hold, required review cadence, and which actions it blocks.
+5. **Restore authority:** who maintains the off-database redaction decision record, how it is authenticated, and who signs off after replay.
+6. **Retention:** the operator supplies actual durations for sessions, logs, backups, and any content/history retention; do not encode generic periods as a default legal requirement.
 
-Until these choices are recorded, safe implementation is limited to intake documentation, a non-destructive export design/prototype with an explicitly narrow scope, and reversible account suspension/session revocation that preserves all content. Redaction, pruning, purge, hard deletion, and automatic retention jobs remain disabled.
+Until the remaining choices are recorded, safe implementation is limited to explicitly bounded non-destructive workflows and reversible account suspension/session revocation that preserves all content. The v1 export above does not implement broader workspace export, history redaction, pruning, purge, hard deletion, or automatic retention jobs.
 
 ## Acceptance evidence
 
 - Access-denied and cross-workspace export controls, with tests proving auth secrets and unrelated workspace rows are absent.
-- Consistent export snapshot, bounded size, audit record, short-lived delivery, and no sensitive export contents in logs.
+- Consistent export snapshot, explicitly limited scope manifest, row/size caps with truncation markers, audit record, one-hour server-side availability, and no sensitive export contents in logs.
 - Deactivation atomically blocks login and revokes existing sessions; reactivation does not revive old sessions.
 - Held records cannot be redacted or expired; release is auditable.
 - Restore from before and after redaction replays current decisions before application access; missing/corrupt decision records fail closed.

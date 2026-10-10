@@ -27,6 +27,8 @@ func main() {
 		err = runRestoreTest(context.Background(), os.Args[2:])
 	case "accounts":
 		err = runAccountLifecycle(context.Background(), os.Args[2:])
+	case "exports":
+		err = runDataExport(context.Background(), os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -45,4 +47,6 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  sierxctl rollup --verify")
 	fmt.Fprintln(os.Stderr, "  sierxctl restore-test")
 	fmt.Fprintln(os.Stderr, "  sierxctl accounts suspend|reactivate --user UUID --case UUID")
+	fmt.Fprintln(os.Stderr, "  sierxctl exports create --user UUID --case UUID")
+	fmt.Fprintln(os.Stderr, "  sierxctl exports download --id UUID --case UUID --out FILE")
 }

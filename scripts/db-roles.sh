@@ -87,7 +87,11 @@ BEGIN
             AND ((p.proname='sierx_set_account_active'
                   AND pg_get_function_identity_arguments(p.oid)='p_user_id uuid, p_active boolean, p_case_ref uuid')
               OR (p.proname='sierx_create_session'
-                  AND pg_get_function_identity_arguments(p.oid)='p_hash bytea, p_user_id uuid'))
+                  AND pg_get_function_identity_arguments(p.oid)='p_hash bytea, p_user_id uuid')
+              OR (p.proname='sierx_create_data_export'
+                  AND pg_get_function_identity_arguments(p.oid)='p_user_id uuid, p_case_ref uuid')
+              OR (p.proname='sierx_read_data_export'
+                  AND pg_get_function_identity_arguments(p.oid)='p_export_id uuid, p_case_ref uuid'))
         )
       )
   ) OR EXISTS (

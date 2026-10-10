@@ -171,6 +171,24 @@ type OperatorAccountAction struct {
 	SessionsRevoked int32
 }
 
+type OperatorDataExport struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	CaseRef   pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+	Payload   []byte
+}
+
+type OperatorDataExportEvent struct {
+	ID           pgtype.UUID
+	ExportID     pgtype.UUID
+	OperatorRole string
+	CaseRef      pgtype.UUID
+	Event        string
+	OccurredAt   pgtype.Timestamptz
+}
+
 type Project struct {
 	ID          pgtype.UUID
 	WorkspaceID pgtype.UUID

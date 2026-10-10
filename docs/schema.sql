@@ -201,6 +201,113 @@ END $$;
 
 
 --
+-- Name: sierx_create_data_export(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_create_data_export(p_user_id uuid, p_case_ref uuid) RETURNS TABLE(export_id uuid, expires_at timestamp with time zone)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  export_payload jsonb;
+  new_id uuid;
+  expiry timestamptz := now() + interval '1 hour';
+BEGIN
+  IF p_case_ref IS NULL THEN
+    RAISE EXCEPTION 'a case reference is required' USING ERRCODE = '22023';
+  END IF;
+
+  -- Erase expired payloads while retaining the audit metadata.
+  UPDATE public.operator_data_export e
+     SET payload = NULL
+   WHERE e.expires_at <= now() AND e.payload IS NOT NULL;
+  INSERT INTO public.operator_data_export_event(export_id,operator_role,case_ref,event)
+    SELECT e.id, session_user, e.case_ref, 'expired'
+      FROM public.operator_data_export e
+     WHERE e.expires_at <= now() AND e.payload IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM public.operator_data_export_event ev
+          WHERE ev.export_id=e.id AND ev.event='expired'
+       );
+
+  SELECT jsonb_build_object(
+    'scope', 'sierx-account-export-v1-limited',
+    'completeness', 'This export is limited and is not a complete personal-data export.',
+    'included', jsonb_build_array('account profile', 'workspace memberships',
+                                  'authored comments', 'owned saved views'),
+    'excluded', jsonb_build_array('password hashes', 'MFA secrets', 'session token hashes',
+                                  'item content without author attribution',
+                                  'change-event old/new values', 'unrelated workspace content'),
+    'limits', jsonb_build_object(
+      'comments_max_rows', 512, 'saved_views_max_rows', 512,
+      'comment_body_max_characters', 4096, 'saved_view_query_max_characters', 4096,
+      'maximum_payload_bytes', 20971520
+    ),
+    'account', jsonb_build_object(
+      'id', u.id, 'email', u.email, 'display_name', u.display_name,
+      'theme', u.theme, 'reduced_motion', u.reduced_motion,
+      'is_active', u.is_active, 'created_at', u.created_at
+    ),
+    'memberships', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'workspace_id', w.id, 'workspace_slug', w.slug,
+        'workspace_name', w.name, 'role', m.role
+      ) ORDER BY w.slug)
+      FROM public.membership m JOIN public.workspace w ON w.id=m.workspace_id
+      WHERE m.user_id=u.id
+    ), '[]'::jsonb),
+    'authored_comments_truncated', (
+      SELECT count(*) > 512 FROM public.comment c WHERE c.author_id=u.id
+    ),
+    'authored_comments', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', c.id, 'item_id', c.item_id,
+        'body', CASE WHEN c.deleted_at IS NULL THEN left(c.body,4096) ELSE NULL END,
+        'body_truncated', c.deleted_at IS NULL AND char_length(c.body)>4096,
+        'created_at', c.created_at, 'edited_at', c.edited_at,
+        'deleted_at', c.deleted_at
+      ) ORDER BY c.created_at, c.id)
+      FROM (
+        SELECT * FROM public.comment
+         WHERE author_id=u.id ORDER BY created_at,id LIMIT 512
+      ) c
+    ), '[]'::jsonb),
+    'owned_saved_views_truncated', (
+      SELECT count(*) > 512 FROM public.saved_view v WHERE v.owner_id=u.id
+    ),
+    'owned_saved_views', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', v.id, 'workspace_id', v.workspace_id, 'name', v.name,
+        'query', left(v.query,4096), 'query_truncated', char_length(v.query)>4096,
+        'layout', v.layout, 'shared', v.shared
+      ) ORDER BY v.id)
+      FROM (
+        SELECT * FROM public.saved_view
+         WHERE owner_id=u.id ORDER BY id LIMIT 512
+      ) v
+    ), '[]'::jsonb)
+  ) INTO export_payload
+  FROM public.user_account u WHERE u.id=p_user_id;
+
+  IF export_payload IS NULL THEN
+    RAISE EXCEPTION 'account not found' USING ERRCODE = 'P0002';
+  END IF;
+  IF octet_length(export_payload::text) > 20971520 THEN
+    RAISE EXCEPTION 'bounded export exceeds maximum payload size' USING ERRCODE = '54000';
+  END IF;
+
+  INSERT INTO public.operator_data_export(user_id,case_ref,expires_at,payload)
+  VALUES (p_user_id,p_case_ref,expiry,export_payload)
+  RETURNING id INTO new_id;
+  INSERT INTO public.operator_data_export_event(export_id,operator_role,case_ref,event)
+  VALUES (new_id,session_user,p_case_ref,'created');
+
+  RETURN QUERY SELECT new_id, expiry;
+END
+$$;
+
+
+--
 -- Name: sierx_create_session(bytea, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -264,6 +371,31 @@ CREATE FUNCTION public.sierx_project_workspace_id(p_project_id uuid) RETURNS uui
     LANGUAGE sql STABLE
     SET search_path TO 'pg_catalog', 'public'
     AS $$ SELECT workspace_id FROM public.project WHERE id = p_project_id $$;
+
+
+--
+-- Name: sierx_read_data_export(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_read_data_export(p_export_id uuid, p_case_ref uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  SELECT e.payload INTO result
+    FROM public.operator_data_export e
+   WHERE e.id=p_export_id AND e.case_ref=p_case_ref AND e.expires_at>now()
+   FOR UPDATE;
+  IF NOT FOUND OR result IS NULL THEN
+    RAISE EXCEPTION 'export not found or expired' USING ERRCODE = 'P0002';
+  END IF;
+  INSERT INTO public.operator_data_export_event(export_id,operator_role,case_ref,event)
+  VALUES (p_export_id,session_user,p_case_ref,'downloaded');
+  RETURN result;
+END
+$$;
 
 
 --
@@ -616,6 +748,40 @@ ALTER TABLE ONLY public.operator_account_action FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: operator_data_export; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.operator_data_export (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    user_id uuid NOT NULL,
+    case_ref uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    payload jsonb,
+    CONSTRAINT operator_data_export_check CHECK ((expires_at > created_at))
+);
+
+ALTER TABLE ONLY public.operator_data_export FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: operator_data_export_event; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.operator_data_export_event (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    export_id uuid NOT NULL,
+    operator_role text NOT NULL,
+    case_ref uuid NOT NULL,
+    event text NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT operator_data_export_event_event_check CHECK ((event = ANY (ARRAY['created'::text, 'downloaded'::text, 'expired'::text])))
+);
+
+ALTER TABLE ONLY public.operator_data_export_event FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: project; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -963,6 +1129,22 @@ ALTER TABLE ONLY public.operator_account_action
 
 
 --
+-- Name: operator_data_export_event operator_data_export_event_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.operator_data_export_event
+    ADD CONSTRAINT operator_data_export_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: operator_data_export operator_data_export_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.operator_data_export
+    ADD CONSTRAINT operator_data_export_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: project_config project_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1191,6 +1373,13 @@ CREATE INDEX item_search ON public.item USING gin (search_tsv);
 --
 
 CREATE INDEX item_ws_seq ON public.item USING btree (workspace_id, change_seq);
+
+
+--
+-- Name: operator_data_export_expiry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX operator_data_export_expiry ON public.operator_data_export USING btree (expires_at) WHERE (payload IS NOT NULL);
 
 
 --
@@ -1544,6 +1733,22 @@ ALTER TABLE ONLY public.operator_account_action
 
 
 --
+-- Name: operator_data_export_event operator_data_export_event_export_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.operator_data_export_event
+    ADD CONSTRAINT operator_data_export_event_export_id_fkey FOREIGN KEY (export_id) REFERENCES public.operator_data_export(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: operator_data_export operator_data_export_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.operator_data_export
+    ADD CONSTRAINT operator_data_export_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: project_config project_config_applied_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1696,6 +1901,13 @@ CREATE POLICY change_event_runtime ON public.change_event TO sierx_runtime USING
 --
 
 ALTER TABLE public.comment ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: comment comment_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY comment_maintenance ON public.comment FOR SELECT TO sierx_maintenance USING (true);
+
 
 --
 -- Name: comment comment_runtime_insert; Type: POLICY; Schema: public; Owner: -
@@ -1891,6 +2103,13 @@ CREATE POLICY membership_auth ON public.membership FOR SELECT TO sierx_auth USIN
 
 
 --
+-- Name: membership membership_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY membership_maintenance ON public.membership FOR SELECT TO sierx_maintenance USING (true);
+
+
+--
 -- Name: membership membership_runtime; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1915,6 +2134,46 @@ CREATE POLICY operator_account_action_maintenance ON public.operator_account_act
 --
 
 CREATE POLICY operator_account_action_runtime_deny ON public.operator_account_action TO sierx_runtime USING (false) WITH CHECK (false);
+
+
+--
+-- Name: operator_data_export; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.operator_data_export ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: operator_data_export_event; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.operator_data_export_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: operator_data_export_event operator_data_export_event_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY operator_data_export_event_maintenance ON public.operator_data_export_event TO sierx_maintenance USING (true) WITH CHECK (true);
+
+
+--
+-- Name: operator_data_export_event operator_data_export_event_runtime_deny; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY operator_data_export_event_runtime_deny ON public.operator_data_export_event TO sierx_runtime USING (false) WITH CHECK (false);
+
+
+--
+-- Name: operator_data_export operator_data_export_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY operator_data_export_maintenance ON public.operator_data_export TO sierx_maintenance USING (true) WITH CHECK (true);
+
+
+--
+-- Name: operator_data_export operator_data_export_runtime_deny; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY operator_data_export_runtime_deny ON public.operator_data_export TO sierx_runtime USING (false) WITH CHECK (false);
 
 
 --
@@ -1976,6 +2235,13 @@ CREATE POLICY project_runtime_update ON public.project FOR UPDATE TO sierx_runti
 --
 
 ALTER TABLE public.saved_view ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: saved_view saved_view_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY saved_view_maintenance ON public.saved_view FOR SELECT TO sierx_maintenance USING (true);
+
 
 --
 -- Name: saved_view saved_view_runtime_insert; Type: POLICY; Schema: public; Owner: -
@@ -2145,6 +2411,13 @@ CREATE POLICY user_account_runtime_update ON public.user_account FOR UPDATE TO s
 --
 
 ALTER TABLE public.workspace ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: workspace workspace_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY workspace_maintenance ON public.workspace FOR SELECT TO sierx_maintenance USING (true);
+
 
 --
 -- Name: workspace workspace_runtime; Type: POLICY; Schema: public; Owner: -

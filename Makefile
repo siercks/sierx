@@ -121,6 +121,7 @@ gate-db-privileges: ## Verify app role attributes, ownership, DDL and RLS catalo
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@bash scripts/psql.sh -f test/sql/rls_privileges_test.sql
 	@bash scripts/psql.sh -f test/sql/account_lifecycle_test.sql
+	@bash scripts/psql.sh -f test/sql/data_export_test.sql
 prove-db-privileges:
 	@if bash scripts/psql.sh -c 'BEGIN; GRANT TRUNCATE ON item TO sierx_runtime' -f test/sql/rls_privileges_test.sql >/dev/null 2>&1; then echo 'prove-db-privileges: planted TRUNCATE grant was not detected'; exit 1; else echo 'prove-db-privileges: planted runtime TRUNCATE grant rejected'; fi
 
