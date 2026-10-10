@@ -69,3 +69,5 @@ and [legal design register](docs/LEGAL-DESIGN-REGISTER.md) track current handlin
 and operator-specific decisions. Instance notices are served at `/privacy`,
 `/copyright`, and `/third-party`; complete their configuration before serving
 other people.
+
+Operator lifecycle setup and recovery: [Lifecycle operations](docs/LIFECYCLE-OPERATIONS.md). Migration 0014 requires a protected trusted checkpoint before the application starts.

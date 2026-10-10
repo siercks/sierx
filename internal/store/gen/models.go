@@ -171,13 +171,25 @@ type OperatorAccountAction struct {
 	SessionsRevoked int32
 }
 
+type OperatorContentRestriction struct {
+	Kind           string
+	TargetID       pgtype.UUID
+	WorkspaceID    pgtype.UUID
+	RootPath       *string
+	Permanent      bool
+	CaseRef        pgtype.UUID
+	RestrictionRef pgtype.UUID
+}
+
 type OperatorDataExport struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
-	CaseRef   pgtype.UUID
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-	Payload   []byte
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	CaseRef     pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	Payload     []byte
+	WorkspaceID pgtype.UUID
+	RevokedAt   pgtype.Timestamptz
 }
 
 type OperatorDataExportEvent struct {
@@ -187,6 +199,34 @@ type OperatorDataExportEvent struct {
 	CaseRef      pgtype.UUID
 	Event        string
 	OccurredAt   pgtype.Timestamptz
+}
+
+type OperatorLifecycleEvent struct {
+	ID           pgtype.UUID
+	OccurredAt   pgtype.Timestamptz
+	OperatorRole string
+	CaseRef      pgtype.UUID
+	Outcome      string
+	Sequence     *int64
+	Decision     []byte
+}
+
+type OperatorLifecycleHold struct {
+	ID           pgtype.UUID
+	WorkspaceID  pgtype.UUID
+	CaseRef      pgtype.UUID
+	AuthorityRef pgtype.UUID
+	StartedAt    pgtype.Timestamptz
+	ReviewAt     pgtype.Timestamptz
+	ReleasedAt   pgtype.Timestamptz
+	ReleaseCase  pgtype.UUID
+}
+
+type OperatorLifecycleState struct {
+	Singleton  bool
+	InstanceID pgtype.UUID
+	Sequence   int64
+	Head       string
 }
 
 type Project struct {
@@ -231,6 +271,12 @@ type Session struct {
 	CreatedAt  pgtype.Timestamptz
 	ExpiresAt  pgtype.Timestamptz
 	LastSeenAt pgtype.Timestamptz
+}
+
+type SierxProjectReservedRank struct {
+	ID        interface{}
+	Rank      string
+	ProjectID pgtype.UUID
 }
 
 type Sprint struct {

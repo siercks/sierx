@@ -17,6 +17,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
+	"github.com/siercks/sierx/internal/lifecycle"
 	"net/url"
 	"os"
 	"os/exec"
@@ -65,8 +67,34 @@ func runRestoreTest(ctx context.Context, args []string) error {
 		return err
 	}
 
+	role, roleErr := url.Parse(os.Getenv("SIERX_MAINTENANCE_DATABASE_URL"))
+	source, sourceErr := url.Parse(dsn)
+	if roleErr != nil || sourceErr != nil || role.User == nil || role.User.Username() != "sierx_maintenance" ||
+		role.Host != source.Host || role.Path != source.Path || role.Query().Has("dbname") ||
+		role.Query().Has("host") || role.Query().Has("port") || (role.Scheme != "postgres" && role.Scheme != "postgresql") {
+		return errors.New("recovery requires the same source cluster/database through the separate maintenance role URL")
+	}
+	maintenance, err := replaceDatabase(role.String(), scratch)
+	if err != nil {
+		return errors.New("maintenance URL is required for recovery replay")
+	}
+
 	fmt.Printf("restore-test: run %d of the rotation -> driver %q (configured: %s)\n",
 		n+1, driver, strings.Join(drivers, ", "))
+
+	paths, err := lifecycle.EnvironmentPaths()
+	if err != nil {
+		return err
+	}
+	unlock, err := lifecycle.Lock(paths.Journal)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	journal, err := lifecycle.Load(paths.Journal, paths.Key, paths.Checkpoint)
+	if err != nil {
+		return err
+	}
 
 	// Recreate the scratch database through the driver-agnostic admin path.
 	adminDSN, err := replaceDatabase(dsn, "postgres")
@@ -90,6 +118,38 @@ func runRestoreTest(ctx context.Context, args []string) error {
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("restore-test FAILED for driver %q: %w", driver, err)
+	}
+	// Restored content stays unavailable until the latest external decisions
+	// have been replayed. This never changes the source database.
+	restored, err := pgx.Connect(ctx, maintenance)
+	if err != nil {
+		return errors.New("restored maintenance connection failed")
+	}
+	defer restored.Close(ctx)
+	tx, err := restored.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT public.sierx_lifecycle_lock()`); err != nil {
+		return err
+	}
+	head, err := lifecycle.DatabaseHead(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if !journal.Prefix(head) {
+		return errors.New("restored database does not match the current journal")
+	}
+	for _, record := range journal.Records {
+		if record.Sequence > head.Sequence {
+			if err = lifecycle.ApplyRecord(ctx, tx, record); err != nil {
+				return err
+			}
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return err
 	}
 	writeRotation(n + 1)
 	fmt.Printf("restore-test: driver %q restored into the scratch database\n", driver)

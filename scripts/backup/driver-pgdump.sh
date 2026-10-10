@@ -54,10 +54,13 @@ verb_backup() {
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   id="pgdump-$stamp"
   path="$DUMP_DIR/$id.dump"
+  # Preserve object owners and ACLs: restoring data without authorization can
+  # give PUBLIC access to security-definer functions and break app RLS. Recovery
+  # requires the original roles to exist; a missing role is a failed restore.
   # -Fc: custom format, the only one pg_restore can reorder and parallelise.
   # No --clean, no --create: restore-to takes an empty database, so a dump that
   # could drop objects in an existing one is a hazard with no upside.
-  pg_dump "$DATABASE_URL" -Fc --no-owner --no-privileges -f "$path.partial"
+  pg_dump "$DATABASE_URL" -Fc -f "$path.partial"
   mv "$path.partial" "$path"
   # The id is opaque to callers (ADR-017) — they pass it back, they don't parse it.
   echo "$id"
@@ -87,7 +90,7 @@ verb_restore_to() {
   [[ -n ${f:-} ]] || die "no dump to restore from $DUMP_DIR"
   # --exit-on-error: a restore that reports success having skipped failures is
   # exactly the failure mode the restore test exists to catch.
-  pg_restore --dbname "$dsn" --no-owner --no-privileges --exit-on-error "$f"
+  pg_restore --dbname "$dsn" --exit-on-error "$f"
   echo "pgdump: restored $(basename "$f")"
 }
 

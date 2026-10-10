@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"uuid"
@@ -17,6 +18,30 @@ import (
 )
 
 const itemJoins = ` FROM item i JOIN project p ON p.id=i.project_id JOIN status s ON s.id=i.status_id JOIN item_type t ON t.id=i.item_type_id LEFT JOIN item par ON par.id=i.parent_id LEFT JOIN user_account u ON u.id=i.assignee_id JOIN item_rollup r ON r.item_id=i.id `
+
+var itemFilterAlias = regexp.MustCompile(`\b(?:s|t|par|u|r)\.`)
+
+// Filtering names are compiler-authored SQL aliases; user values stay bound.
+// Hydrate expensive roster/rollup projections only after bounding the page.
+func itemFilterJoins(sql string) string {
+	joins := " FROM item i JOIN project p ON p.id=i.project_id "
+	aliases := map[string]bool{}
+	for _, alias := range itemFilterAlias.FindAllString(sql, -1) {
+		aliases[alias] = true
+	}
+	for _, pair := range [][2]string{
+		{"s.", " JOIN status s ON s.id=i.status_id "},
+		{"t.", " JOIN item_type t ON t.id=i.item_type_id "},
+		{"par.", " LEFT JOIN item par ON par.id=i.parent_id "},
+		{"u.", " LEFT JOIN user_account u ON u.id=i.assignee_id "},
+		{"r.", " JOIN item_rollup r ON r.item_id=i.id "},
+	} {
+		if aliases[pair[0]] {
+			joins += pair[1]
+		}
+	}
+	return joins
+}
 
 func (s *Server) customFields(ctx context.Context, workspace string) (map[string]string, error) {
 	rows, err := s.DB.Query(ctx, `SELECT f.key,f.data_type FROM field_def f JOIN project p ON p.id=f.project_id WHERE p.workspace_id=$1`, workspace)

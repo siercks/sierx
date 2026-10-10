@@ -1,65 +1,31 @@
 # Data lifecycle workflow design
 
-Status: bounded export and reversible suspension are implemented; destructive lifecycle policy remains proposed for owner/operator review. This document is not a retention promise or legal determination. No destructive lifecycle behavior is enabled.
+Status: operator tooling is implemented in migration 0014, with a durable encrypted decision journal and restore guard. Instance-specific authority, case review, retention durations and backup expiry remain operator responsibilities. This is an engineering scope record, not a complete personal-data erasure promise or legal determination. See `docs/LIFECYCLE-OPERATIONS.md` for commands and recovery.
 
-## Existing data boundaries
+## Authorized boundaries
 
-Sierx has globally identified accounts and workspace memberships. An account may be referenced by project ownership, comments, and change-event actor fields. Item rows do not consistently record a creator. Change-event values retain prior item content; comment soft deletion keeps the comment row and removes its body from normal API output. Backups can contain earlier database states. These properties mean an account export or erasure cannot be defined as a single-row operation.
+Each action uses a restricted case UUID and the separate maintenance login. Ordinary API requests cannot call the administrative functions or read holds, receipts, export payloads or operator audit. A plan validates scope without changing data. Apply enumerates bounded targets under writer locks, durably records the authenticated intent outside the database, then applies it atomically. An interrupted apply leaves access blocked until replay succeeds. Receipts preserve operator role, case, action, sequence and decision time; they exclude correction text. They are append-only for application, authentication and maintenance roles; a database superuser remains a privileged trust boundary.
 
-The database runtime role is tenant-scoped and intentionally cannot read authentication secrets. Any administrative lifecycle tooling must use a separate, audited, operator-authorized path. It must never run through ordinary API requests or ask an operator to edit production rows manually.
+Workspace holds require authority and review references. They do not expire automatically. Active holds block permanent redaction, historical correction, membership removal, account anonymization and content retention. Cleanup preserves sessions for members of held workspaces and export evidence while any hold exists. Access restrictions can still hide content while it is preserved. Blocked attempts are audited without adding an executable journal record.
 
-## Proposed sequence
+## Content and history
 
-### 1. Intake and decision record
+Reversible takedown hides an item's enumerated subtree and its frozen path from ordinary SQL/API reads and writes, including inherited comment/link/rollup access and related history. Independent overlapping takedowns survive another notice's release. Restoring access removes only that reversible notice. Permanent redaction cannot be undone by restoring access.
 
-Use a restricted operator case system outside the Sierx database. Record a case identifier, receipt date, instance identifier, request category, minimum verification result, affected account/content identifiers, hold status, decision owner, and completion/deferral evidence. Do not copy request documents, credentials, or full content into the case record unless the operator has a documented need. The requester receives a clear statement of what Sierx supports and what remains unavailable.
+Item redaction retains IDs, keys, hierarchy, ranks, sequence counters and event metadata. It replaces text with a marker, clears body/fields/assignment/points/dates, soft-deletes the row, redacts descendant comments and replaces affected event values with markers. Ancestor rollups are recalculated. Read policies use set-based scoped project predicates, and item pages select bounded IDs before expensive projections; all ordinary RLS checks remain active. Hidden ordering slots remain reserved through a scoped rank-only helper; hidden item IDs and content are not returned. Saved-view redaction clears the query and sharing. Comment redaction conservatively redacts event values for the affected item because old payloads may embed comment text. Targeted history redaction replaces old/new values; historical correction replaces old values with a marker and new values with an operator correction. The UI displays both markers as text. Event metadata and monthly partitions are retained; ordinary events are not pruned.
 
-This intake record is not itself a data-access, correction, hold, or erasure capability.
+Each decision is bounded to 512 items/views and 10,000 comments. Larger requests must be reviewed and split into independently scoped cases/actions. Retention processes at most 512 previously soft-deleted items and 512 previously soft-deleted comments per workspace/run, with an explicit past cutoff. There is no default content duration or automatic active-content expiry. Optional scheduled maintenance requires an explicit private enabled policy.
 
-### 2. Access and export
+## Accounts, memberships and exports
 
-Implemented as the operator-mediated `sierxctl exports create|download` workflow. The v1 export is a deliberately limited account export: profile fields (excluding credentials), workspace memberships, comments directly authored by the account (deleted comment bodies are omitted), and saved views owned by the account. Items have no author field, and change-event values can contain other people’s text, so item content and event old/new values are excluded. It includes at most 512 comments and 512 saved views, limits comment bodies and view queries to 4,096 characters each, and rejects payloads over 20 MiB. Truncation is marked in the payload. The export embeds an included/excluded scope manifest and explicitly says it is not a complete personal-data export.
+Global suspension remains reversible and revokes sessions atomically. Removing a workspace membership requires a different active administrator in that workspace, reassigns project ownership, clears item assignments and revokes the removed account's sessions. Account anonymization refuses other-workspace memberships, outstanding ownership or an administrator membership; remove those through reviewed actions first. It clears credentials/preferences, disables the account, uses a synthetic erased identifier and redacts directly authored comments/views and actor event values. Permanently anonymized accounts cannot be reactivated or repopulated. Items lack reliable author attribution, so this is not automatic erasure of all work associated with a person.
 
-Creation and download require the maintenance database role and the same restricted case UUID. Creation uses one database statement snapshot, records both operations in the restricted audit table, and makes the payload available for one hour. The operator verifies the requester and controls the downloaded file in the restricted case workflow. The generated file is created without overwriting an existing path; the CLI requests owner-only file permissions where the host supports them. Expired server-side payloads are cleared during the next export creation while audit metadata remains. Downloaded copies require operator handling and deletion under the instance's configured process.
+The account export retains its explicit limited manifest. The additional workspace export requires a verified requester with membership in exactly the requested workspace. It uses one consistent statement snapshot, includes bounded visible project/item/comment/view content, and excludes credentials, sessions, event values and unrelated workspace content. Limits are 512 rows per group, 4,096 text characters and 20 MiB, with truncation markers. Creation/download are case-bound, audited and available for one hour. Access/content decisions revoke existing server artifacts. Downloaded copies remain operator-controlled and cannot be remotely revoked. Held artifacts may be retained as inaccessible evidence.
 
-### 3. Correction
+## Recovery trust and limits
 
-Correct current profile or work content through the existing authenticated edit paths where available. Keep the resulting change event. The event log is historical evidence, so a correction does not imply rewriting prior event values. Until the redaction policy below is approved, disclose this limit for requests concerning historical copies.
+The AES-GCM journal and master key survive independently of database backups. A chained SHA-256 head and separately authenticated current checkpoint anchor the journal; replay verifies instance, workspace origin, prefix, targets and all encrypted records. The app receives only a derived verification key and checkpoint, never the master key or journal correction plaintext. Startup and every request compare the database receipt to the trusted checkpoint and fail closed on mismatch or unavailable metadata. A restored older database must replay current decisions before serving.
 
-### 4. Account deactivation and session revocation
+Protect the current checkpoint against rollback independently of old database backups. Anyone who controls both checkpoint and verification key, or the operator master key and journal, crosses the trusted operator boundary. Ordinary running app access verifies the checkpoint; restoring and verifying the full journal additionally requires the operator-only master key. Losing the journal/key/checkpoint means recovery cannot be accepted. Preserve those materials off-machine, including under applicable holds, and drill recovery before deployment. They may contain encrypted correction text and identifiers and require their own documented retention.
 
-Implemented as `sierxctl accounts suspend|reactivate --user UUID --case UUID`. Treat suspension as reversible access control, not erasure. In one transaction, mark the global account inactive and revoke all its sessions. Session issuance uses the same account-row lock, so a login racing with suspension cannot leave a token that becomes usable after reactivation. Preserve membership, project ownership references, stable item keys, comments, and history. Reactivation requires the maintenance role and does not recreate revoked sessions. The action audit stores the maintenance login role, case UUID, account UUID, state change, timestamp, and number of sessions revoked; the runtime role cannot read or change it.
-
-This command implements the code path only. The instance operator must authorize the target and case in a restricted case system before running it. It does not remove workspace membership, reassign project owners, notify the affected person, or erase any content. Define those operations separately before offering the workflow to users.
-
-### 5. Holds and redaction
-
-An approved hold must identify its authority, scope, start time, review date, and release decision. A hold blocks irreversible redaction and any retention job affecting the held records. Hold creation/release and blocked actions need an append-only operator audit trail.
-
-Before redaction or retention code is enabled, the owner must decide whether to preserve event metadata while replacing old/new content values with a redaction marker; which current content, comments, search/bootstrap copies, and account fields can be redacted; how links and stable identifiers behave; and how conflicts between holds and a request are resolved. No policy is selected here.
-
-### 6. Backups and restore
-
-Backups follow the operator’s configured expiry schedule. If a restore predates a completed redaction, access to the restored database must remain blocked until the current redaction decisions have been replayed and verified. The durable decision record must survive loss of the database backup it governs, be access-controlled and tamper-evident, and be included in recovery drills. If that record is unavailable or cannot be applied, fail the restore acceptance rather than serving stale content.
-
-## Remaining owner decisions before destructive implementation
-
-1. **History treatment:** retain immutable old/new values; or permit value redaction while preserving event metadata and a redaction marker.
-2. **Content scope:** treatment of items without a recorded creator, comments, links, shared views, account identifiers, and derived/search/bootstrap copies.
-3. **Deactivation scope:** global account suspension (implemented for the current global account model) versus per-workspace membership removal. Define how project ownership references are reassigned.
-4. **Hold rules:** who can issue/release a hold, required review cadence, and which actions it blocks.
-5. **Restore authority:** who maintains the off-database redaction decision record, how it is authenticated, and who signs off after replay.
-6. **Retention:** the operator supplies actual durations for sessions, logs, backups, and any content/history retention; do not encode generic periods as a default legal requirement.
-
-Until the remaining choices are recorded, safe implementation is limited to explicitly bounded non-destructive workflows and reversible account suspension/session revocation that preserves all content. The v1 export above does not implement broader workspace export, history redaction, pruning, purge, hard deletion, or automatic retention jobs.
-
-## Acceptance evidence
-
-- Access-denied and cross-workspace export controls, with tests proving auth secrets and unrelated workspace rows are absent.
-- Consistent export snapshot, explicitly limited scope manifest, row/size caps with truncation markers, audit record, one-hour server-side availability, and no sensitive export contents in logs.
-- Deactivation atomically blocks login and revokes existing sessions; reactivation does not revive old sessions.
-- Held records cannot be redacted or expired; release is auditable.
-- Restore from before and after redaction replays current decisions before application access; missing/corrupt decision records fail closed.
-- Operator runbook documents case handling, authorization, backup expiry, escalation and user communication without promising unsupported actions.
-
-See `docs/PRIVACY-OPERATIONS.md` and `docs/LEGAL-DESIGN-REGISTER.md` for the current disclosure and unresolved lifecycle status.
+Expired sessions/artifacts are cleaned only through reviewed lifecycle maintenance or existing expiry paths, respecting holds. Log files, proxy records, downloaded exports and historical backup expiry remain external operator duties. The code does not claim hard deletion, retroactive modification of old backups, or complete person-wide erasure. Public signup, child admission, email and billing remain disabled/out of scope.

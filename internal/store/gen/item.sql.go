@@ -321,9 +321,7 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (InsertI
 }
 
 const listProjectRanks = `-- name: ListProjectRanks :many
-SELECT id, rank FROM item
-WHERE project_id = $1
-ORDER BY rank
+SELECT id::uuid AS id, rank::text AS rank FROM sierx_project_reserved_ranks WHERE project_id=$1 ORDER BY rank
 `
 
 type ListProjectRanksRow struct {
@@ -425,6 +423,21 @@ type SetItemChangeSeqParams struct {
 
 func (q *Queries) SetItemChangeSeq(ctx context.Context, arg SetItemChangeSeqParams) error {
 	_, err := q.db.Exec(ctx, setItemChangeSeq, arg.ChangeSeq, arg.ID)
+	return err
+}
+
+const setProjectRanks = `-- name: SetProjectRanks :exec
+SELECT sierx_set_project_ranks($1::uuid, $2::text[], $3::text[])
+`
+
+type SetProjectRanksParams struct {
+	ProjectID pgtype.UUID
+	OldRanks  []string
+	NewRanks  []string
+}
+
+func (q *Queries) SetProjectRanks(ctx context.Context, arg SetProjectRanksParams) error {
+	_, err := q.db.Exec(ctx, setProjectRanks, arg.ProjectID, arg.OldRanks, arg.NewRanks)
 	return err
 }
 

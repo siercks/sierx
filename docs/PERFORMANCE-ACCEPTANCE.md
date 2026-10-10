@@ -40,8 +40,16 @@ sample count cannot be lowered below 500. Public/tunnel measurements are useful
 for user-perceived latency but include network and gateway overhead and should
 be reported separately from direct-host results.
 
-This report does not measure steady-state process RSS or cold-start time. Those
-remain separate acceptance measurements and are not inferred from Go
-`ns/op` averages. Manual operator evidence records the hardware model and
-results in `docs/PHASE-2-ACCEPTANCE.md` without hostnames, credentials or
-database contents.
+## Native process readiness and RSS
+
+`bench-http` measures HTTP only. `make bench-process` uses the explicit executable in `SIERX_BENCH_BINARY` and the same protected benchmark credentials/10k fixture. It requires Linux `/proc`, at least five fresh starts (default ten), and at least 500 samples for each warmed HTTP scenario. Supply native app runtime/auth/session and lifecycle checkpoint/verification settings. The collector passes only app inputs to the child; operator URLs/master keys are excluded. It owns a fresh loopback port and stops all child processes, including on failure.
+
+```bash
+umask 077
+export SIERX_BENCH_BINARY='/opt/accepted/sierx'
+make bench-process > /path/to/private/process-report.json
+```
+
+The report includes the executable hash, hardware label, startup p50/p95/max, and RSS p50/p95/max during the warmed authenticated workload. Startup ends at successful guarded database health. OS page cache is retained, so this is process cold start, not cold disk/cache. A fixed ten-second authenticated workload precedes steady-state samples, regardless of memory values. Conditioning RSS peak (including transient authentication allocations) is reported separately and never erased from the report. RSS reads occur after request timing. Loopback HTTP excludes public TLS/tunnel costs; record public HTTP measurements separately. The executable `test/bench/thresholds.go` uses binary units: 80 * 1,024 * 1,024 bytes for RSS and 20 * 1,024 bytes for the change response. The collector uses those exact values; SPEC prose MB/KB should be read with that recorded convention. The report evaluates one-second readiness and 80 MiB RSS limits honestly and records failure rather than skipping unavailable metrics. Its report is evidence to review, not an automatic host acceptance decision.
+
+Record actual hardware and results in `docs/PHASE-2-ACCEPTANCE.md`. CI timing or a large testbed cannot establish smaller reference-hardware performance. Reports must exclude hostnames, credentials and database content.

@@ -39,3 +39,10 @@ describe('history presentation', () => {
     expect(historyValue(removed, removed.new_value, statuses)).toBe('Deleted');
   });
 });
+
+// Operator lifecycle markers carry no old content and are displayed as text.
+it('explains operator redaction and historical correction', () => {
+  const event = { kind: 'field_changed', field: 'comment' };
+  expect(historyValue(event, { redacted: true }, [])).toBe('Removed by operator');
+  expect(historyValue(event, { operator_correction: '<script>text</script>' }, [])).toBe('Operator correction: <script>text</script>');
+});

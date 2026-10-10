@@ -27,6 +27,8 @@ func main() {
 		err = runRestoreTest(context.Background(), os.Args[2:])
 	case "accounts":
 		err = runAccountLifecycle(context.Background(), os.Args[2:])
+	case "lifecycle":
+		err = runLifecycle(context.Background(), os.Args[2:])
 	case "exports":
 		err = runDataExport(context.Background(), os.Args[2:])
 	default:
@@ -40,13 +42,15 @@ func main() {
 }
 
 func usage() {
+	fmt.Fprintln(os.Stderr, "  sierxctl lifecycle init|plan|apply|replay|verify|reconcile-checkpoint [--file protected-action.json]")
 	fmt.Fprintln(os.Stderr, "  sierxctl bootstrap (SIERX_BOOTSTRAP_* environment variables)")
 	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  sierxctl lifecycle maintain --policy protected-retention.json")
 	fmt.Fprintln(os.Stderr, "  sierxctl partitions ensure --months-ahead N")
 	fmt.Fprintln(os.Stderr, "  sierxctl seed [--seed N] [--items N] [--projects N] [--max-depth N]")
 	fmt.Fprintln(os.Stderr, "  sierxctl rollup --verify")
 	fmt.Fprintln(os.Stderr, "  sierxctl restore-test")
 	fmt.Fprintln(os.Stderr, "  sierxctl accounts suspend|reactivate --user UUID --case UUID")
-	fmt.Fprintln(os.Stderr, "  sierxctl exports create --user UUID --case UUID")
+	fmt.Fprintln(os.Stderr, "  sierxctl exports create --user UUID [--workspace UUID] --case UUID")
 	fmt.Fprintln(os.Stderr, "  sierxctl exports download --id UUID --case UUID --out FILE")
 }

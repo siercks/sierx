@@ -45,6 +45,8 @@ class HttpBenchmarkTests(unittest.TestCase):
                     body = json.dumps({"project": {"key_prefix": "SRX"}}).encode()
                 elif path.startswith("/api/v1/items?"):
                     query = parse_qs(urlsplit(path).query)
+                    fields=set(query.get('fields',[''])[0].split(','))
+                    assert fields and fields <= {'key','title','status','type','assignee','points','due_date'}
                     if "project" in query and "q" not in query:
                         cursor = int(query.get("cursor", ["0"])[0])
                         next_cursor = str(cursor + 1) if cursor < 99 else None
@@ -63,7 +65,9 @@ class HttpBenchmarkTests(unittest.TestCase):
             "SIERX_BENCH_PASSWORD": "private-test-password",
         }
         with mock.patch.dict("os.environ", environment), mock.patch.object(bench, "Client", FakeClient):
-            report = bench.run(SimpleNamespace(warmups=1, samples=2))
+            conditioned=[]
+            report = bench.run(SimpleNamespace(warmups=1, samples=2,workload_warmup=lambda client,scenarios:conditioned.append(set(scenarios))))
+        self.assertEqual(conditioned,[set(bench.LIMITS_MS)])
         self.assertEqual(report["active_fixture_items"], 10000)
         self.assertEqual(set(report["results"]), set(bench.LIMITS_MS))
         self.assertTrue(all(item["samples"] == 2 for item in report["results"].values()))

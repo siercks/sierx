@@ -232,3 +232,9 @@ initial branch must not be described as complete production airgap certification
 
 Implementation references: [Podman 4.9 Quadlet](https://docs.podman.io/en/v4.9.3/markdown/podman-systemd.unit.5.html)
 and [Caddy supplied certificates](https://caddyserver.com/docs/caddyfile/directives/tls).
+
+## Lifecycle-aware adoption and recovery
+
+Migration 0014 requires the independently protected current checkpoint and derived verification key before the new application starts. Initialize/copy these through `docs/LIFECYCLE-OPERATIONS.md`; offline bundles intentionally never carry instance journal keys, checkpoints or credentials. The app mounts only the guard directory read-only using the rootless host owner's mapped UID. Keep master journal material in the protected operator environment, outside backup restore trees.
+
+Logical recovery preserves owners and ACLs. Provision original operator/runtime/auth/maintenance roles on the isolated restore cluster; role or permission errors fail the restore rather than accepting a partial result. Supply journal/master/current checkpoint in the operator recovery environment. Replay and verify the restored database before application checks. The application hook uses restored runtime/auth URLs and guard files, with no operator credentials in the container. Exercise a backup predating actual test redaction, a missing/corrupt journal, and session revocation. Never roll back the trusted checkpoint together with the database. Actual encrypted off-machine physical recovery and target-host acceptance remain required private evidence.

@@ -15,7 +15,8 @@ import (
 )
 
 type Server struct {
-	auth       *authState
+	auth           *authState
+	CheckLifecycle func(context.Context) error
 	// Pool is retained for controlled setup and test-fixture access. Runtime
 	// endpoint queries must use DB, which refuses queries without request scope.
 	Pool       *pgxpool.Pool

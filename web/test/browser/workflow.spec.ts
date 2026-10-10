@@ -170,6 +170,7 @@ for (const [index, theme] of themeIDs.entries()) {
     ).toHaveAccessibleDescription(/^Initial status: .+/);
     await audit(page);
     await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
     await expect(
       page.getByRole('button', { name: 'Create item', exact: true }),
     ).toBeFocused();

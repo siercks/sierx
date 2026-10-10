@@ -8,7 +8,7 @@ name: ci
 
 on:
   push:
-    branches: ["main", "phase/**", "build/**", "uplift/**"]
+    branches: ["main", "phase/**", "build/**", "uplift/**", "codex/**"]
   pull_request:
   workflow_dispatch:
   workflow_call:

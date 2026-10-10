@@ -71,7 +71,7 @@ class Client:
     def post(self, path, body):
         data = json.dumps(body).encode()
         request = urllib.request.Request(self.base + path, data=data,
-            headers={"Accept": "application/json", "Content-Type": "application/json"})
+            headers={"Accept": "application/json", "Content-Type": "application/json", "Origin": self.base})
         try:
             with self.opener.open(request, timeout=30) as response:
                 response.read()
@@ -99,7 +99,7 @@ def run(args):
         count = 0
         cursor = None
         for _ in range(101):
-            query = {"project": prefix, "limit": "100"}
+            query = {"project": prefix, "limit": "100", "fields": "key"}
             if cursor:
                 query["cursor"] = cursor
             _, _, page_raw = client.get("/api/v1/items?" + urllib.parse.urlencode(query))
@@ -113,14 +113,16 @@ def run(args):
         q_project = urllib.parse.quote("project = " + prefix, safe="")
         q_text = urllib.parse.quote('text ~ "rollup cursor"', safe="")
         scenarios = {
-            "board_page_100": ["/api/v1/items?project=" + prefix + "&limit=100"],
+            "board_page_100": ["/api/v1/items?project=" + prefix + "&limit=100&fields=key,title,status,type,assignee,points,due_date"],
             "item_detail_and_history": ["/api/v1/items/" + key,
                                         "/api/v1/items/" + key + "/history?limit=50"],
-            "sxq_indexed_project": ["/api/v1/items?q=" + q_project + "&limit=100"],
+            "sxq_indexed_project": ["/api/v1/items?q=" + q_project + "&limit=100&fields=key,title,status,type,assignee,points,due_date"],
             "item_rollup": ["/api/v1/items/" + key + "/rollup"],
             "changes_50": ["/api/v1/changes?since_seq=0&limit=50"],
-            "sxq_full_text": ["/api/v1/items?q=" + q_text + "&limit=100"],
+            "sxq_full_text": ["/api/v1/items?q=" + q_text + "&limit=100&fields=key,title,status,type,assignee,points,due_date"],
         }
+        if getattr(args,"workload_warmup",None):
+            args.workload_warmup(client,scenarios)
         results = {}
         for name, paths in scenarios.items():
             samples, response_bytes = [], []
@@ -133,6 +135,8 @@ def run(args):
                 if iteration >= args.warmups:
                     samples.append(elapsed)
                     response_bytes.append(size)
+                    if getattr(args,"sample_observer",None):
+                        args.sample_observer()
             p95 = percentile(samples, .95)
             results[name] = {
                 "samples": len(samples), "p50_ms": round(percentile(samples, .50), 3),

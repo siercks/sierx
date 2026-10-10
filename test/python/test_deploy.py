@@ -1,3 +1,4 @@
+from lifecycle_fixture import configure_lifecycle
 """Release input and rendering controls; host acceptance is a separate run."""
 import importlib.util
 import pathlib
@@ -54,6 +55,7 @@ class RollbackTests(unittest.TestCase):
                 home=pathlib.Path(temporary)
                 config=home/'.config/sierx';config.mkdir(parents=True)
                 app=config/'app.env';app.write_text('SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test\nSIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:runtime@localhost/sierx\nSIERX_AUTH_DATABASE_URL=postgres://sierx_auth:authentication@localhost/sierx\n')
+                configure_lifecycle(home, config/"app.env")
                 maintenance=config/'maintenance.env';maintenance.write_text('SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:maintenance@localhost/sierx\n')
                 units=home/'.config/containers/systemd';units.mkdir(parents=True)
                 old=units/'sierx.container'

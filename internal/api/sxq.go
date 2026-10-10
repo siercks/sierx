@@ -138,7 +138,12 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	if plan.Desc {
 		direction = " DESC"
 	}
-	query := "SELECT " + expression + ",i.id::text,to_jsonb(" + plan.OrderExpr + ")" + itemJoins + `WHERE i.workspace_id=$1 AND $2::uuid IS NOT NULL AND i.id<=$3::uuid AND ($4='' OR p.key_prefix=$4) AND i.deleted_at IS NULL AND ` + plan.Where + " AND " + predicate + " ORDER BY " + plan.OrderExpr + direction + " NULLS LAST,i.id ASC LIMIT $5"
+	filterSQL := plan.Where + " " + predicate + " " + plan.OrderExpr
+	selection := "SELECT i.id," + plan.OrderExpr + " AS sort_value" + itemFilterJoins(filterSQL) +
+		`WHERE i.workspace_id=$1 AND $2::uuid IS NOT NULL AND i.id<=$3::uuid AND ($4='' OR p.key_prefix=$4) AND i.deleted_at IS NULL AND ` +
+		plan.Where + " AND " + predicate + " ORDER BY " + plan.OrderExpr + direction + " NULLS LAST,i.id ASC LIMIT $5"
+	query := "WITH selected_page AS MATERIALIZED (" + selection + ") SELECT hydrated.doc,page.id::text,to_jsonb(page.sort_value) FROM selected_page page JOIN LATERAL (SELECT " +
+		expression + " AS doc" + itemJoins + "WHERE i.id=page.id OFFSET 0) hydrated ON true ORDER BY page.sort_value" + direction + " NULLS LAST,page.id ASC"
 	rows, err := s.DB.Query(r.Context(), query, args...)
 	if err != nil {
 		databaseProblem(w, err)

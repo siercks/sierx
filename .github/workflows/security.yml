@@ -3,7 +3,7 @@ name: security
 on:
   pull_request:
   push:
-    branches: [main, "build/**", "uplift/**"]
+    branches: [main, "build/**", "uplift/**", "codex/**"]
   schedule:
     - cron: "23 8 * * 1"
   workflow_dispatch:

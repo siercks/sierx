@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/siercks/sierx/internal/api"
 	"github.com/siercks/sierx/internal/config"
+	"github.com/siercks/sierx/internal/lifecycle"
 )
 
 func main() {
@@ -34,6 +35,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer authPool.Close()
+	guard, err := lifecycle.NewGuard(pool)
+	if err != nil {
+		logger.Error("lifecycle recovery configuration is required")
+		os.Exit(1)
+	}
+	if err = guard.Check(ctx); err != nil {
+		logger.Error("lifecycle recovery verification failed; reconcile before serving")
+		os.Exit(1)
+	}
 	listener, err := net.Listen("tcp", c.ListenAddr)
 	if err != nil {
 		logger.Error("server could not listen; check SIERX_LISTEN_ADDR")
@@ -41,6 +51,7 @@ func main() {
 	}
 	logger.Info("server ready")
 	server := api.NewWithAuthPool(pool, authPool, logger)
+	server.CheckLifecycle = guard.Check
 	server.ConfigureAuth(c)
 	server.ConfigureDocuments()
 	if err := server.Serve(ctx, listener); err != nil {

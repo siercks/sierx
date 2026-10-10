@@ -1,3 +1,4 @@
+from lifecycle_fixture import configure_lifecycle
 """Deployment boundaries for a local tunnel origin and reviewed artifacts."""
 import contextlib
 import importlib.util
@@ -68,6 +69,7 @@ class GatewayTests(unittest.TestCase):
                     directory.mkdir(parents=True, exist_ok=True)
                 app = config / "app.env"
                 app.write_text("SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test\nSIERX_AUTH_MODE=local\nSIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:fixture@localhost/sierx\nSIERX_AUTH_DATABASE_URL=postgres://sierx_auth:fixture@localhost/sierx\n")
+                configure_lifecycle(home, config/"app.env")
                 (config / "maintenance.env").write_text("SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:fixture@localhost/sierx\n")
                 release = {"image": "example.test/sierx@sha256:" + "a" * 64, "revision": "b" * 40}
                 (state / "current.json").write_text(json.dumps(release))

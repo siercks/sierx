@@ -76,7 +76,8 @@ def main():
         created = False
         try:
             print("release-image: preparing disposable database and migrations", flush=True)
-            run("podman", "pod", "create", "--name", pod, "-p", "127.0.0.1::8080", "-p", "127.0.0.1::5432")
+            mapping=[] if os.geteuid()==0 else ["--userns=keep-id:uid=65532,gid=65532"]
+            run("podman", "pod", "create", *mapping, "--name", pod, "-p", "127.0.0.1::8080", "-p", "127.0.0.1::5432")
             created = True
             run("podman", "run", "-d", "--pod", pod, "--name", db,
                 "--tmpfs", "/var/lib/postgresql", "-e", "POSTGRES_PASSWORD=artifact-only-password",
@@ -100,6 +101,8 @@ def main():
             env.write_text("\n".join([
                 "SIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
                 "SIERX_AUTH_DATABASE_URL=postgres://sierx_auth:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "SIERX_LIFECYCLE_CHECKPOINT=/var/lib/sierx/lifecycle/guard/checkpoint.json",
+                "SIERX_LIFECYCLE_GUARD_KEY_FILE=/var/lib/sierx/lifecycle/guard/verification.key",
                 "SIERX_AUTH_MODE=local", "SIERX_BASE_URL=" + origin,
                 "SIERX_LISTEN_ADDR=0.0.0.0:8080", "SIERX_SESSION_KEY=artifact-only-session-key-0000000000000000",
                 "SIERX_BOOTSTRAP_WORKSPACE_SLUG=artifact", "SIERX_BOOTSTRAP_WORKSPACE_NAME=Artifact",
@@ -110,7 +113,18 @@ def main():
             options = ["--pod", pod, "--read-only", "--security-opt", "no-new-privileges", "--env-file", str(env)]
             print("release-image: executing shipped bootstrap, application and maintenance commands", flush=True)
             run("podman", "run", "--rm", "--env", "DATABASE_URL=postgres://postgres:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable", *options, "--entrypoint", "/usr/local/bin/sierxctl", image, "bootstrap")
-            run("podman", "run", "-d", "--name", app, *options, image)
+            lifecycle_dir=scratch/"lifecycle";guard=lifecycle_dir/"guard"
+            guard.mkdir(parents=True,mode=0o700);lifecycle_dir.chmod(0o700)
+            if os.geteuid()==0:
+                os.chown(lifecycle_dir,65532,65532);os.chown(guard,65532,65532)
+            run("podman","run","--rm",*options,
+                "--volume",str(lifecycle_dir)+":/var/lib/sierx/lifecycle:rw,z",
+                "--env","SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "--env","SIERX_LIFECYCLE_JOURNAL=/var/lib/sierx/lifecycle/journal.jsonl",
+                "--env","SIERX_LIFECYCLE_KEY_FILE=/var/lib/sierx/lifecycle/master.key",
+                "--entrypoint","/usr/local/bin/sierxctl",image,"lifecycle","init")
+            run("podman", "run", "-d", "--name", app, *options,
+                "--volume",str(guard)+":/var/lib/sierx/lifecycle/guard:ro,z",image)
             run("podman", "exec", "--env", "SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable", app, "/usr/local/bin/sierxctl", "partitions", "ensure", "--months-ahead", "1")
             # A shell-free runtime must not acquire operator tooling accidentally.
             for shell in ("/bin/sh", "/bin/bash"):

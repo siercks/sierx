@@ -16,6 +16,7 @@ func runDataExport(ctx context.Context, args []string) error {
 		return errors.New("usage: sierxctl exports create|download --case UUID [--user UUID | --id UUID --out FILE]")
 	}
 	fs := flag.NewFlagSet("exports "+args[0], flag.ContinueOnError)
+	workspaceID := fs.String("workspace", "", "explicit authorized workspace export scope")
 	userID := fs.String("user", "", "account UUID")
 	exportID := fs.String("id", "", "export UUID")
 	caseRef := fs.String("case", "", "restricted operator case UUID")
@@ -41,18 +42,24 @@ func runDataExport(ctx context.Context, args []string) error {
 		if !canonicalUUID.MatchString(*userID) || *exportID != "" || *out != "" {
 			return errors.New("create requires --user UUID and does not accept --id or --out")
 		}
+		if *workspaceID != "" && !canonicalUUID.MatchString(*workspaceID) {
+			return errors.New("--workspace must be a canonical UUID")
+		}
 		var id string
 		var expires time.Time
-		if err := conn.QueryRow(ctx,
-			`SELECT export_id::text, expires_at FROM public.sierx_create_data_export($1::uuid,$2::uuid)`,
-			*userID, *caseRef,
-		).Scan(&id, &expires); err != nil {
+		query := `SELECT export_id::text, expires_at FROM public.sierx_create_data_export($1::uuid,$2::uuid)`
+		values := []any{*userID, *caseRef}
+		if *workspaceID != "" {
+			query = `SELECT export_id::text,expires_at FROM public.sierx_create_workspace_export($1::uuid,$2::uuid,$3::uuid)`
+			values = []any{*workspaceID, *userID, *caseRef}
+		}
+		if err := conn.QueryRow(ctx, query, values...).Scan(&id, &expires); err != nil {
 			return errors.New("export creation failed (check case authorization and account UUID)")
 		}
 		fmt.Printf("limited export created: id=%s case=%s expires_at=%s\n", id, *caseRef, expires.UTC().Format(time.RFC3339))
 		return nil
 	case "download":
-		if !canonicalUUID.MatchString(*exportID) || *userID != "" || *out == "" {
+		if !canonicalUUID.MatchString(*exportID) || *userID != "" || *workspaceID != "" || *out == "" {
 			return errors.New("download requires --id UUID and --out FILE; --user is not accepted")
 		}
 		var payload []byte

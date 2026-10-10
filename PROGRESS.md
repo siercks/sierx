@@ -1924,3 +1924,13 @@ practices. No database/RLS, release-promotion, rootless-host, recovery, or seven
 acceptance claim is made by this candidate. No test suites were run. The frontend build
 could not complete because the local `node_modules` tree is missing Windows-native
 TypeScript and Rolldown optional packages. This does not establish a passing build.
+
+## 2026-10-10 — Remaining Phase 2 implementation candidate
+
+Implemented ADR-028 lifecycle controls: independently protected authenticated encrypted operator journal/checkpoint, holds, independent reversible takedowns, bounded permanent item/comment/view/history handling, membership replacement, account anonymization, workspace exports, explicit retention policy/optional maintenance timer, and replay before restored application access. Migration 0014 preserves scoped rank reservations and blocks unsafe moves around restricted descendants. App startup and requests fail closed on receipt/checkpoint mismatch; ordinary roles cannot write operator records. Logical backup/restore now preserves ownership and ACLs.
+
+Added native process cold-start/RSS collection and improved scoped 10k query plans with set-based read policies and page-first projection hydration. Retained write predicates and real isolation acceptance. Fixed an asynchronous dialog-close assertion in the theme browser test without relaxing focus acceptance. Branch CI/security checks now also run on codex branches.
+
+Verification already executed: real CLI/HTTP/SQL lifecycle and restored-backup replay acceptance; migration down/up, schema/sqlc consistency; lifecycle and CLI unit checks; frontend build/unit/budget checks; all 44 Python tooling checks. A complete gate passed before the final query optimization. The current complete rerun and exact native artifact/offline acceptance are being collected; no current packaged or host acceptance is claimed by this entry.
+
+Implementation is a candidate, not Phase 2 exit. Operator notice/policy facts, protected journal recovery custody, chosen-hardware measurements, actual Rocky/SELinux/rootless reboot and encrypted off-machine recovery, compatible two-release behavior, manual browser/accessibility review, real backlog use and owner sign-off remain required. No seven-day evidence is pre-filled and no server changes were performed.

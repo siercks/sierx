@@ -155,6 +155,7 @@ test-golden: ## Regenerate fixtures and fail on any drift or uncovered route
 
 smoke-api: ## Bootstrap a disposable workspace and exercise the real server with curl
 	@bash scripts/smoke-api.sh
+	@$(MAKE) --no-print-directory test-lifecycle
 
 gate-1: gate-0 ## Complete Phase 1 automated gate; Spark walkthrough remains human acceptance
 	@$(MAKE) --no-print-directory test-api test-golden test-sxq fuzz-sxq test-concurrency gate-gen smoke-api
@@ -390,3 +391,17 @@ release-offline-archive: ## Archive only a bundle with matching native acceptanc
 	@bash scripts/offline-release.sh archive
 release-offline-evidence: ## Require both native offline bundles to pass before release promotion
 	@python3 -B scripts/offline-promotion.py verify --repository "$(or $(SIERX_RELEASE_REPOSITORY),ghcr.io/siercks/sierx)" --revision "$(shell git rev-parse HEAD)"
+
+.PHONY: test-lifecycle
+test-lifecycle: ## Real case-bound lifecycle and pre-redaction backup replay in new scratch databases
+	@go build -o bin/sierxctl ./cmd/sierxctl
+	@go build -o bin/sierx ./cmd/sierx
+	@python3 -B test/lifecycle/acceptance.py
+
+.PHONY: bench-process
+bench-process: ## Measure fresh process readiness and warmed RSS on an explicit 10k target
+	@python3 -B scripts/bench-process.py --binary "$(SIERX_BENCH_BINARY)"
+
+.PHONY: deploy-lifecycle-timer
+deploy-lifecycle-timer: ## Install the optional operator-configured lifecycle cleanup/retention timer
+	@python3 scripts/deploy.py install-lifecycle-timer

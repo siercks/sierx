@@ -1,6 +1,6 @@
 # Phase 2 acceptance record
 
-Status: Phase 2 code merged; host, recovery and full owner acceptance remain pending.
+Status: historical Phase 2 code merged; the current lifecycle uplift is an implementation candidate. Exact-candidate automated results, host recovery and full owner acceptance must be recorded before exit.
 
 September 23 reconciliation: the owner-supplied September 22 post-mortem reports
 successful offline gate-2 at PR head `1c14c0246b0bb3ee1b2819f61caa841f90ac4527`,
@@ -54,3 +54,9 @@ day of primary-backlog work. Record any fallback to another tracker honestly.
 Owner approval, date and any explicitly accepted deferrals:
 
 Retrospective: what worked, what failed, changes to the next phase's plan:
+
+## Current remaining-code uplift
+
+Migration 0014 and ADR-028 add holds, independent reversible takedowns, permanent bounded content/history handling, membership replacement and account anonymization, workspace exports, explicit retention scheduling and authenticated replay before restored access. Native process startup/RSS collection is also implemented. Run `make test-lifecycle`, `make ci-local`, native release/offline acceptance and chosen-host `bench-process` on the exact candidate. Consult `docs/LIFECYCLE-OPERATIONS.md` before adoption; guard initialization is a required deployment step.
+
+Before the seven-day collection window, record candidate checks, initialized protected journal/checkpoint with independent recovery custody, instance notice/policy facts, actual accepted deployment/recovery, and manual accessibility/browser review. Completion of code does not pre-fill these records or certify encrypted off-machine recovery/reference-hardware limits. Keep daily evidence factual and record changes in revision or fallback.

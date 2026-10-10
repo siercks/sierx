@@ -1157,3 +1157,13 @@ the reproducibly built Sierx faces. Theme assets are local, checked during the
 offline web build, and embedded with the application. The same component
 vocabulary governs the current workspace and planned Phase 3, 5, and 6 views.
 See [UI-DESIGN-SYSTEM.md](UI-DESIGN-SYSTEM.md).
+
+## ADR-028 - Operator lifecycle decisions and restore guard
+
+Status: implemented under the owner's direction to finish the remaining Phase 2 code before validation; instance policy facts remain operator-configured.
+
+Ordinary event metadata and partitions are retained. Reviewed case-bound value redaction/correction, bounded workspace export, workspace holds, reversible takedowns, membership replacement and account anonymization are supported through the maintenance role. Retention has no default destructive duration and touches previously deleted content only. Stable keys/counters/tombstones remain. This amends SPEC section 4.9's former blanket absence of a retention mechanism; it does not enable routine event pruning or claim complete person-wide erasure.
+
+Record exact bounded intents in an encrypted chain outside database backups before committing their effects. Independently preserve the current authenticated checkpoint. A restored database must be an exact prefix, replay and verify before access. The app holds only a derived verification key and checks its receipt against the checkpoint on startup and each request. Recovery fails closed on missing, stale, wrong-instance or corrupt evidence. The app does not receive the journal master key.
+
+Logical backup recovery preserves original owners/ACLs and rejects errors rather than granting restored security-definer functions to PUBLIC. Original roles must exist on the recovery cluster. Native performance collection separately measures repeated process readiness and warmed RSS; actual reference hardware thresholds remain human acceptance evidence. See `docs/LIFECYCLE-OPERATIONS.md` and `docs/PERFORMANCE-ACCEPTANCE.md`.

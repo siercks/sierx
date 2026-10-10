@@ -390,7 +390,7 @@ CREATE TABLE seq_counter (
 );
 ```
 
-Monthly range partitions, created by a scheduled job one month ahead. **No retention or pruning policy** — pruning destroys the audit trail, the activity feed, the forecast inputs, and the history views. Partition, don't prune.
+Monthly range partitions, created by a scheduled job one month ahead. **No ordinary event pruning.** Retain event metadata and partitions. ADR-028 permits reviewed operator value redaction/correction and explicit retention of already deleted content while preserving stable identifiers, counters and replay evidence. Soft deletion alone is not erasure.
 
 ### 4.8 Sprints, comments, views
 

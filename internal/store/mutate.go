@@ -543,21 +543,17 @@ func (s *Store) rankForNewItem(ctx context.Context, db gen.DBTX, q *gen.Queries,
 // constraint is checked at end of statement even while immediate, so this
 // matters only because the respread is one UPDATE per row.)
 func rebalanceProjectRanks(ctx context.Context, db gen.DBTX, q *gen.Queries, projectID uuid.UUID, ranks []gen.ListProjectRanksRow) error {
-	// SET CONSTRAINTS is a transaction-control statement, not a query sqlc can
-	// model, so it goes through the connection directly.
-	if _, err := db.Exec(ctx, "SET CONSTRAINTS item_project_rank_uniq DEFERRED"); err != nil {
-		return fmt.Errorf("defer rank constraint: %w", err)
+	// Rank-only remapping includes hidden tombstones without exposing their IDs.
+	if len(ranks) == 0 {
+		return nil
 	}
-	fresh := RankSequence(len(ranks))
+	old := make([]string, len(ranks))
 	for i, r := range ranks {
-		if err := q.UpdateItemRank(ctx, gen.UpdateItemRankParams{ID: r.ID, Rank: fresh[i]}); err != nil {
-			return fmt.Errorf("rebalance %s: %w", fromPgUUID(r.ID), err)
-		}
+		old[i] = r.Rank
 	}
-	if _, err := db.Exec(ctx, "SET CONSTRAINTS item_project_rank_uniq IMMEDIATE"); err != nil {
-		return fmt.Errorf("restore rank constraint: %w", err)
-	}
-	return nil
+	return q.SetProjectRanks(ctx, gen.SetProjectRanksParams{
+		ProjectID: toPgUUID(projectID), OldRanks: old, NewRanks: RankSequence(len(ranks)),
+	})
 }
 
 // RebalanceProject respreads one project's ranks. Exposed for the property

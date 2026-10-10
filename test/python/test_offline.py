@@ -1,3 +1,4 @@
+from lifecycle_fixture import configure_lifecycle
 """Offline delivery boundaries, including rejection before any host mutation."""
 import contextlib
 import importlib.util
@@ -182,6 +183,7 @@ class OfflineGatewayTests(unittest.TestCase):
             config = home / ".config/sierx"
             (config / "tls").mkdir(parents=True)
             (config / "app.env").write_text("SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test:8443\nSIERX_AUTH_MODE=local\nSIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:fixture@localhost/sierx\nSIERX_AUTH_DATABASE_URL=postgres://sierx_auth:fixture@localhost/sierx\n")
+            configure_lifecycle(home, config/"app.env")
             (config / "maintenance.env").write_text("SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:fixture@localhost/sierx\n")
             for name in ("server.crt", "server.key"):
                 (config / "tls" / name).write_text("fixture")

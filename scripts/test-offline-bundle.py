@@ -87,6 +87,16 @@ def main():
                     time.sleep(1)
             run("bash", "scripts/migrate.sh", "up", cwd=root, env=environment)
             run(str(root / "bin/sierxctl"), "bootstrap", cwd=root, env=environment)
+            lifecycle_dir=scratch/"lifecycle"
+            guard_dir=lifecycle_dir/"guard"
+            guard_dir.mkdir(parents=True,mode=0o700)
+            environment.update(SIERX_LIFECYCLE_JOURNAL=str(lifecycle_dir/"journal.jsonl"),SIERX_LIFECYCLE_KEY_FILE=str(lifecycle_dir/"key"),SIERX_LIFECYCLE_CHECKPOINT=str(guard_dir/"checkpoint.json"))
+            run(str(root/"bin/sierxctl"),"lifecycle","init",cwd=root,env=environment)
+            # This fixture is explicitly rootful. Match the image UID on the
+            # scratch guard files; production rootless units use keep-id instead.
+            os.chown(guard_dir,65532,65532)
+            for file in guard_dir.iterdir():os.chown(file,65532,65532)
+            environment.update(SIERX_LIFECYCLE_CHECKPOINT="/var/lib/sierx/lifecycle/guard/checkpoint.json",SIERX_LIFECYCLE_GUARD_KEY_FILE="/var/lib/sierx/lifecycle/guard/verification.key")
             # Generate an ephemeral site certificate; no public CA or DNS needed.
             tls = scratch / "tls"
             tls.mkdir()
@@ -97,7 +107,7 @@ def main():
             environment["SSL_CERT_FILE"] = str(tls / "server.crt")
             envfile = scratch / "app.env"
             envfile.write_text("\n".join(key + "=" + environment[key] for key in
-                                         ("SIERX_RUNTIME_DATABASE_URL", "SIERX_AUTH_DATABASE_URL", "SIERX_ENV", "SIERX_BASE_URL", "SIERX_LISTEN_ADDR", "SIERX_AUTH_MODE", "SIERX_SESSION_KEY")) + "\n")
+                                         ("SIERX_RUNTIME_DATABASE_URL", "SIERX_AUTH_DATABASE_URL", "SIERX_ENV", "SIERX_BASE_URL", "SIERX_LISTEN_ADDR", "SIERX_AUTH_MODE", "SIERX_SESSION_KEY", "SIERX_LIFECYCLE_CHECKPOINT", "SIERX_LIFECYCLE_GUARD_KEY_FILE")) + "\n")
             envfile.chmod(0o600)
             app = data["images"]["app"]["id"]
             container("create", "--name", "assets", "--pull=never", app)
@@ -118,7 +128,7 @@ def main():
                 caddyfile.write_text(deploy.gateway_config("localhost:18443", "18081", {"SIERX_AUTH_MODE": "local"}))
             finally:
                 os.environ.clear(); os.environ.update(saved)
-            container("run", "-d", "--name", "app", *common, "--read-only", "--env-file", str(envfile), app)
+            container("run", "-d", "--name", "app", *common, "--read-only", "-v", str(guard_dir)+":/var/lib/sierx/lifecycle/guard:ro", "--env-file", str(envfile), app)
             container("run", "-d", "--name", "gateway", *common,
                       "-v", str(caddyfile) + ":/etc/caddy/Caddyfile:ro", "-v", str(tls) + ":/etc/sierx/tls:ro",
                       "-v", str(assets) + ":/srv/sierx/assets:ro", data["images"]["caddy"]["id"])
