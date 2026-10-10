@@ -88,6 +88,11 @@ export default function Login() {
         </form>
       )}
         <p className="auth-footnote">A clear place for your work.</p>
+        <footer className="legal-footer">
+          <a href="/privacy">Privacy</a>
+          <a href="/copyright">Copyright</a>
+          <a href="/third-party">Third-party notices</a>
+        </footer>
       </section>
     </main>
     </div>

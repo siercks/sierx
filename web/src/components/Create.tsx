@@ -1,14 +1,20 @@
-import { useId, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useId, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { request, type Config, type Project, type Item } from '../api/client';
 import { Dialog } from './ui/dialog';
 import { Button } from './ui/button';
 export function Create({
   projects,
   workspace,
+  defaultProject = '',
+  projectsNextCursor = null,
+  selectedProject,
 }: {
   projects: Project[];
   workspace: string;
+  defaultProject?: string;
+  projectsNextCursor?: string | null;
+  selectedProject?: Project | null;
 }) {
   return (
     <Dialog
@@ -16,23 +22,45 @@ export function Create({
       title="Create item"
       triggerVariant="default"
     >
-      <CreateForm projects={projects} workspace={workspace} />
+      <CreateForm projects={projects} workspace={workspace} defaultProject={defaultProject} projectsNextCursor={projectsNextCursor} selectedProject={selectedProject} />
     </Dialog>
   );
 }
 function CreateForm({
   projects,
   workspace,
+  defaultProject,
+  projectsNextCursor,
+  selectedProject,
 }: {
   projects: Project[];
   workspace: string;
+  defaultProject: string;
+  projectsNextCursor: string | null;
+  selectedProject?: Project | null;
 }) {
   const typeID = useId();
   const statusHintID = useId();
-  const [project, setProject] = useState(
-    projects.find((p) => !p.archived_at)?.key_prefix ?? '',
-  );
+  const projectID = useId();
+  const [projectSearch, setProjectSearch] = useState('');
   const [type, setType] = useState('');
+  const projectPages = useInfiniteQuery({
+    queryKey: [workspace, 'projects', projectSearch],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) => request<{ data: Project[]; next_cursor: string | null }>(`/projects?${new URLSearchParams({ limit: '100', ...(projectSearch ? { search: projectSearch } : {}), ...(pageParam ? { cursor: pageParam } : {}) })}`, { signal }),
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+    initialData: projectSearch ? undefined : { pages: [{ data: projects, next_cursor: projectsNextCursor }], pageParams: [null] },
+    enabled: !!projects.length || !!projectSearch,
+  });
+  const availableProjects = [...new Map([...(projectPages.data?.pages.flatMap((page) => page.data) ?? projects), ...(selectedProject ? [selectedProject] : [])].filter((item) => !item.archived_at).map((item) => [item.key_prefix, item])).values()];
+  const activeProjects = availableProjects;
+  const [project, setProject] = useState(
+    defaultProject || (activeProjects.length === 1 ? activeProjects[0].key_prefix : ''),
+  );
+  useEffect(() => {
+    setProject(defaultProject || (activeProjects.length === 1 ? activeProjects[0].key_prefix : ''));
+    setType('');
+  }, [defaultProject]);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const config = useQuery({
@@ -75,9 +103,11 @@ function CreateForm({
         </p>
       )}
       <div className="workflow-field-grid">
-      <label className="workflow-field">
-        Project
+      <div className="workflow-field">
+        <label htmlFor={projectID}>Project</label>
+        {(projects.length > 10 || projectsNextCursor !== null || !!projectSearch) && <input className="sx-control" type="search" value={projectSearch} onChange={(e) => setProjectSearch(e.target.value)} placeholder="Search projects" aria-label="Search projects" />}
         <select
+          id={projectID}
           className="sx-control"
           value={project}
           onChange={(e) => {
@@ -86,15 +116,15 @@ function CreateForm({
           }}
           required
         >
-          {projects
-            .filter((p) => !p.archived_at)
-            .map((p) => (
+          {project === '' && <option value="">Choose a project</option>}
+          {activeProjects.map((p) => (
               <option key={p.key_prefix} value={p.key_prefix}>
                 {p.name} ({p.key_prefix})
               </option>
             ))}
         </select>
-      </label>
+        {projectPages.hasNextPage && <Button variant="ghost" type="button" disabled={projectPages.isFetchingNextPage} onClick={() => void projectPages.fetchNextPage()}>{projectPages.isFetchingNextPage ? 'Loading projects…' : 'Load more projects'}</Button>}
+      </div>
       {config.isPending ? (
         <p role="status">Loading project configuration…</p>
       ) : config.error ? (

@@ -7,14 +7,18 @@ export function Dialog({
   title,
   children,
   triggerVariant = 'outline',
+  open,
+  onOpenChange,
 }: {
   trigger: string;
   title: string;
   children: ReactNode;
   triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <Primitive.Root>
+    <Primitive.Root open={open} onOpenChange={onOpenChange}>
       <Primitive.Trigger
         aria-label={trigger}
         className={`sx-btn button button-${triggerVariant}`}

@@ -788,6 +788,14 @@ the thing to avoid.
 /api/v1/*               reserved; never an SPA route
 ```
 
+**Phase 2 project context extension:** `/?project=PLAT` keeps the same list
+document and adds a workspace-validated project filter; it is list state, not
+an authorization boundary. `q` remains an `sxq` filter and can be combined with
+the project context. Equivalent saved-view queries include the project clause
+in `sxq` (for example `project = PLAT`) so the view remains meaningful when
+opened without the `project` URL parameter. Permanent item links remain
+`/PLAT-42` regardless of later project changes.
+
 **No project segment in an item's URL, ever.** A.1 says an item's key never
 changes when it moves between projects, so an item's key prefix need not match
 its current project. `/PLAT/SRX-42` is a URL that can become wrong; `/SRX-42`

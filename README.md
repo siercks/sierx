@@ -55,3 +55,17 @@ The example publishes the rootless PostgreSQL container only on
 `127.0.0.1:55432`; PostgreSQL continues to use port 5432 inside the container.
 Set a different explicit port in the private `DATABASE_URL` if 55432 is already
 occupied.
+## Phase 2 closeout design
+
+The [closeout implementation plan](docs/PHASE-2-CLOSEOUT-PLAN.md) covers project
+management, loading budgets, offline delivery tests and remaining acceptance.
+The [legal and security audit](docs/LEGAL-SECURITY-AUDIT.md) records baseline
+file/line findings and the privacy, database isolation, accessibility and
+self-hosted deployment considerations that inform that plan. These documents
+include proposed work and conditional activation requirements; they do not
+claim that the controls are implemented or that Phase 2 has been accepted.
+The [data inventory](docs/DATA-INVENTORY.md), [privacy operations guide](docs/PRIVACY-OPERATIONS.md),
+and [legal design register](docs/LEGAL-DESIGN-REGISTER.md) track current handling
+and operator-specific decisions. Instance notices are served at `/privacy`,
+`/copyright`, and `/third-party`; complete their configuration before serving
+other people.

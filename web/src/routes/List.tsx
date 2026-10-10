@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import {
   bootstrap,
+  cache,
   request,
   isProblem,
   listKey,
@@ -17,12 +18,16 @@ import { Shell } from '../components/Shell';
 import { Create } from '../components/Create';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { ProjectNavigation } from '../components/ProjectNavigation';
+const ProjectManagement = lazy(() => import('../components/ProjectManagement').then((module) => ({ default: module.ProjectManagement })));
 type State = {
   me: Me;
   auth_mode: string;
   query: string;
   items: Page<Item> | Problem;
   projects: Page<Project>;
+  project?: string;
+  selected_project?: Project;
 };
 export function Rows({ items }: { items: Item[] }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -118,22 +123,52 @@ export function Rows({ items }: { items: Item[] }) {
 export default function List() {
   const state = useState(() => bootstrap<State>())[0];
   const [query, setQuery] = useState(state.query);
+  const [project, setProject] = useState(state.project ?? '');
+  const [managing, setManaging] = useState(false);
+  const [projectRows, setProjectRows] = useState(state.projects.data ?? []);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const initialProblem = isProblem(state.items) ? state.items : null;
+  const initialMatches = query === state.query && project === (state.project ?? '');
+  const initialProblem = initialMatches && isProblem(state.items) ? state.items : null;
+  const selectedProjectQuery = useQuery({
+    queryKey: [state.me.workspace_id, 'project', project],
+    queryFn: ({ signal }) => request<Project>(`/projects/${encodeURIComponent(project)}`, { signal }),
+    enabled: !!project,
+    initialData: state.selected_project?.key_prefix === project ? state.selected_project : undefined,
+  });
   const result = useInfiniteQuery({
-    queryKey: listKey(state.me.workspace_id, state.query),
+    queryKey: listKey(state.me.workspace_id, query, project),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
       request<Page<Item>>(
-        `/items?${new URLSearchParams({ fields: LIST_FIELDS, q: state.query, limit: '100', ...(pageParam ? { cursor: pageParam } : {}) })}`,
+        `/items?${new URLSearchParams({ fields: LIST_FIELDS, q: query, limit: '100', ...(project ? { project } : {}), ...(pageParam ? { cursor: pageParam } : {}) })}`,
         { signal },
       ),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    initialData: initialProblem
+    initialData: !initialMatches || initialProblem
       ? undefined
       : { pages: [state.items as Page<Item>], pageParams: [null] },
     enabled: !initialProblem,
   });
+  useEffect(() => {
+    const update = () => {
+      setProject(new URLSearchParams(location.search).get('project') ?? '');
+      setQuery(new URLSearchParams(location.search).get('q') ?? '');
+    };
+    window.addEventListener('popstate', update);
+    return () => window.removeEventListener('popstate', update);
+  }, []);
+  useEffect(() => {
+    const active = listKey(state.me.workspace_id, query, project);
+    const contexts = cache.getQueryCache().findAll({ queryKey: [state.me.workspace_id, 'list'] });
+    const recent = contexts
+      .filter((entry) => entry.state.data !== undefined)
+      .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)
+      .slice(0, 3);
+    for (const entry of contexts) {
+      const isActive = entry.queryKey.length === active.length && entry.queryKey.every((value, index) => value === active[index]);
+      if (!isActive && !recent.includes(entry)) cache.removeQueries({ queryKey: entry.queryKey, exact: true });
+    }
+  }, [state.me.workspace_id, query, project]);
   useEffect(() => {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
@@ -152,22 +187,41 @@ export default function List() {
   }, [query, state.query]);
   const items = result.data?.pages.flatMap((p) => p.data) ?? [];
   const unique = [...new Map(items.map((i) => [i.id, i])).values()];
+  const projects = projectRows;
+  const selected = selectedProjectQuery.data ?? projects.find((item) => item.key_prefix === project) ?? null;
+  useEffect(() => { document.title = `${selected ? selected.name : 'Workspace'} · Sierx`; }, [selected?.name]);
+  function navigateProject(key: string) {
+    const url = new URL(location.href);
+    if (key) url.searchParams.set('project', key); else url.searchParams.delete('project');
+    history.pushState({}, '', url);
+    setProject(key);
+  }
+  function projectSaved(saved: Project) {
+    setProjectRows((current) => [...new Map([...current, saved].map((item) => [item.key_prefix, item])).values()]);
+    cache.setQueryData([state.me.workspace_id, 'project', saved.key_prefix], saved);
+    void cache.invalidateQueries({ queryKey: [state.me.workspace_id, 'projects'] });
+    navigateProject(saved.key_prefix);
+  }
   return (
     <Shell me={state.me} authMode={state.auth_mode}>
       <section className="sx-main-h page-heading">
         <div>
-          <p className="eyebrow">Workspace</p>
-          <h1 className="sx-main-title">Your backlog</h1>
-          <p className="sx-main-sub page-description">
-            Keep the work moving, one clear next step at a time.
-          </p>
+          <p className="eyebrow">{selected ? 'Project dashboard' : 'Workspace'}</p>
+          <h1 className="sx-main-title">{selected?.name ?? 'Your backlog'}</h1>
+          <p className="sx-main-sub page-description">{selected ? `${selected.key_prefix} · ${selected.kind}` : 'Keep the work moving, one clear next step at a time.'}</p>
         </div>
         <Create
-          projects={state.projects.data ?? []}
+          projects={projects}
           workspace={state.me.workspace_id}
+          defaultProject={project}
+          projectsNextCursor={state.projects.next_cursor}
+          selectedProject={selected}
         />
       </section>
+      <ProjectNavigation workspace={state.me.workspace_id} me={state.me} projectPage={state.projects} selected={selected} onNavigate={navigateProject} onManage={() => setManaging(true)} />
+      {managing && state.me.role === 'admin' && <Suspense fallback={<p role="status">Loading project management…</p>}><ProjectManagement project={selected ?? undefined} workspace={state.me.workspace_id} onSaved={projectSaved} onDismiss={() => setManaging(false)} /></Suspense>}
       <form action="/" method="get" className="search-panel">
+        {project && <input type="hidden" name="project" value={project} />}
         <label className="sx-field search-field workflow-field">
           <span>Search backlog</span>
           <input
@@ -190,8 +244,8 @@ export default function List() {
           <Button variant="default" type="submit">
             Search
           </Button>
-          {state.query && (
-            <a className="button button-ghost" href="/">
+          {query && (
+            <a className="button button-ghost" href={project ? `/?project=${encodeURIComponent(project)}` : '/'}>
               Clear
             </a>
           )}
@@ -216,8 +270,8 @@ export default function List() {
         <>
           <div className="list-heading">
             <div>
-              <h2 className="sx-main-title">{state.query ? 'Search results' : 'All work'}</h2>
-              <p className="muted">Items in this workspace</p>
+            <h2 className="sx-main-title">{query ? 'Search results' : selected ? 'Project work' : 'All work'}</h2>
+              <p className="muted">{selected ? `Items in ${selected.name}` : 'Items in this workspace'}</p>
             </div>
             <Badge variant="outline">{unique.length} loaded</Badge>
           </div>
@@ -232,16 +286,16 @@ export default function List() {
           <section className="empty-state">
             <div className="empty-icon" aria-hidden="true">+</div>
             <h2>
-              {state.query
+              {query
                 ? 'No items match this query'
                 : 'Your backlog starts here'}
             </h2>
             <p>
-              {state.query
+              {query
                 ? 'Clear the query or create an item.'
                 : 'Create an item to capture the work ahead.'}
             </p>
-            {state.query && <a className="button button-outline" href="/">Clear query</a>}
+            {query && <a className="button button-outline" href={project ? `/?project=${encodeURIComponent(project)}` : '/'}>Clear query</a>}
           </section>
         )
       )}

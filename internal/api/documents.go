@@ -5,15 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/siercks/sierx/internal/api/auth"
-	webassets "github.com/siercks/sierx/web"
+	"html"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/siercks/sierx/internal/api/auth"
+	webassets "github.com/siercks/sierx/web"
 )
 
 const listProjection = "id,key,title,version,change_seq,status,type,parent,project,assignee,rank,points,updated_at"
@@ -51,7 +53,7 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, NotFound())
 		return
 	}
-	if path == "/login" {
+	if path == "/login" || path == "/privacy" || path == "/copyright" || path == "/third-party" {
 		handler(w, r)
 		return
 	}
@@ -71,6 +73,58 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	handler(w, authorized)
+}
+
+func (s *Server) bootstrapPrivacy(w http.ResponseWriter, r *http.Request) {
+	var notice map[string]string
+	if s.auth != nil {
+		c := s.auth.cfg
+		notice = map[string]string{"operator": c.OperatorName, "contact": c.PrivacyContact, "retention": c.PrivacyRetention, "backups": c.PrivacyBackups, "services": c.PrivacyServices, "version": c.PrivacyVersion, "effective_date": c.PrivacyEffectiveDate}
+	} else {
+		notice = map[string]string{}
+	}
+	complete := true
+	for _, key := range []string{"operator", "contact", "retention", "backups", "services", "version", "effective_date"} {
+		if strings.TrimSpace(notice[key]) == "" {
+			complete = false
+		}
+	}
+	s.renderDocument(w, r, map[string]any{"route": "privacy", "notice": notice, "configured": complete}, auth.Identity{Theme: "system"})
+}
+
+func (s *Server) bootstrapCopyright(w http.ResponseWriter, r *http.Request) {
+	notice := map[string]string{}
+	if s.auth != nil {
+		c := s.auth.cfg
+		notice = map[string]string{"operator": c.OperatorName, "agent": c.CopyrightAgent, "contact": c.CopyrightContact, "notice_process": c.CopyrightNotice, "counter_notice_process": c.CopyrightCounterNotice, "repeat_infringer_policy": c.RepeatInfringerPolicy}
+	}
+	complete := true
+	for _, key := range []string{"operator", "agent", "contact", "notice_process", "counter_notice_process", "repeat_infringer_policy"} {
+		if strings.TrimSpace(notice[key]) == "" {
+			complete = false
+		}
+	}
+	s.renderDocument(w, r, map[string]any{"route": "copyright", "notice": notice, "configured": complete}, auth.Identity{Theme: "system"})
+}
+
+func (s *Server) bootstrapThirdParty(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(webassets.Files, "dist/third-party.json")
+	if err != nil {
+		WriteProblem(w, Unavailable())
+		return
+	}
+	var inventory map[string]any
+	if err = json.Unmarshal(data, &inventory); err != nil {
+		WriteProblem(w, InternalError())
+		return
+	}
+	if s.auth != nil {
+		if strings.TrimSpace(s.auth.cfg.PrivacyServices) != "" {
+			inventory["operator_services"] = s.auth.cfg.PrivacyServices
+		}
+		inventory["operator"] = s.auth.cfg.OperatorName
+	}
+	s.renderDocument(w, r, map[string]any{"route": "third-party", "inventory": inventory}, auth.Identity{Theme: "system"})
 }
 
 func (s *Server) bootstrapLogin(w http.ResponseWriter, r *http.Request) {
@@ -106,13 +160,32 @@ func (s *Server) bootstrapList(w http.ResponseWriter, r *http.Request) {
 		databaseProblem(w, err)
 		return
 	}
+	project := r.URL.Query().Get("project")
+	if project != "" {
+		var exists bool
+		if err := s.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM project WHERE workspace_id=$1 AND key_prefix=$2 AND archived_at IS NULL)`, Identity(r).WorkspaceID, project).Scan(&exists); err != nil {
+			databaseProblem(w, err)
+			return
+		}
+		if !exists {
+			WriteProblem(w, NotFound())
+			return
+		}
+	}
 	q := url.Values{"q": {r.URL.Query().Get("q")}}
+	if project != "" {
+		q.Set("project", project)
+	}
 	q.Set("fields", listProjection)
 	q.Set("limit", "100")
 	q.Del("cursor")
 	data := captureAPI(r, "/api/v1/items?"+q.Encode(), s.listItems, "")
-	s.renderDocument(w, r, map[string]any{"route": "list", "change_seq": sequence, "query": r.URL.Query().Get("q"), "items": data,
-		"projects": captureAPI(r, "/api/v1/projects", s.listProjects, ""), "me": Identity(r), "auth_mode": s.auth.cfg.AuthMode}, Identity(r))
+	state := map[string]any{"route": "list", "change_seq": sequence, "query": r.URL.Query().Get("q"), "project": project, "items": data,
+		"projects": captureAPI(r, "/api/v1/projects?limit=100", s.listProjects, ""), "me": Identity(r), "auth_mode": s.auth.cfg.AuthMode}
+	if project != "" {
+		state["selected_project"] = captureAPI(r, "/api/v1/projects/"+project, s.getProject, project)
+	}
+	s.renderDocument(w, r, state, Identity(r))
 }
 
 func (s *Server) bootstrapItem(w http.ResponseWriter, r *http.Request) {
@@ -125,12 +198,15 @@ func (s *Server) bootstrapItem(w http.ResponseWriter, r *http.Request) {
 	data := captureAPI(r, "/api/v1/items/"+key, s.getItem, key)
 	state := map[string]any{"route": "item", "change_seq": sequence, "item": data, "me": Identity(r), "auth_mode": s.auth.cfg.AuthMode}
 	var item struct {
+		Key       string `json:"key"`
+		Title     string `json:"title"`
 		Project struct {
 			Key string `json:"key_prefix"`
 		} `json:"project"`
 		DeletedAt *string `json:"deleted_at"`
 	}
 	if json.Unmarshal(data, &item) == nil && item.Project.Key != "" {
+		state["document_title"] = item.Key + " · " + item.Title + " · Sierx"
 		state["config"] = captureAPI(r, "/api/v1/projects/"+item.Project.Key+"/config", s.projectConfig, item.Project.Key)
 		state["history"] = captureAPI(r, "/api/v1/items/"+key+"/history", s.itemHistory, key)
 		if item.DeletedAt == nil {
@@ -166,6 +242,21 @@ func (s *Server) renderDocument(w http.ResponseWriter, r *http.Request, state ma
 	}
 	template = bytes.Replace(template, []byte(`data-theme="system"`), []byte(`data-theme="`+theme+`"`), 1)
 	template = bytes.Replace(template, []byte(`data-motion="system"`), []byte(`data-motion="`+motion+`"`), 1)
+	title := "Sierx"
+	switch state["route"] {
+	case "login": title = "Sign in · Sierx"
+	case "list":
+		if project, ok := state["selected_project"].(json.RawMessage); ok {
+			var metadata struct { Name string `json:"name"` }
+			if json.Unmarshal(project, &metadata) == nil && metadata.Name != "" { title = metadata.Name + " · Sierx" } else { title = "Workspace · Sierx" }
+		} else { title = "Workspace · Sierx" }
+	case "item": title = "Work item · Sierx"
+	case "privacy": title = "Privacy · Sierx"
+	case "copyright": title = "Copyright · Sierx"
+	case "third-party": title = "Third-party notices · Sierx"
+	}
+	if custom, ok := state["document_title"].(string); ok && custom != "" { title = custom }
+	template = bytes.Replace(template, []byte(`<title>Sierx</title>`), []byte(`<title>`+html.EscapeString(title)+`</title>`), 1)
 	bootstrap := append([]byte(`<script id="sierx-state" type="application/json">`), payload...)
 	bootstrap = append(bootstrap, []byte("</script></head>")...)
 	template = bytes.Replace(template, []byte("</head>"), bootstrap, 1)
@@ -174,7 +265,7 @@ func (s *Server) renderDocument(w http.ResponseWriter, r *http.Request, state ma
 	w.Header().Add("Vary", "Cookie")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "same-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 	_, _ = w.Write(template)
 }
 

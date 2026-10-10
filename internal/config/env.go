@@ -18,10 +18,24 @@ type Env struct {
 	BaseURL        string
 	SessionKey     string
 	ListenAddr     string
+	OperatorName   string
+	PrivacyContact string
+	PrivacyRetention string
+	PrivacyBackups string
+	PrivacyServices string
+	PrivacyVersion string
+	PrivacyEffectiveDate string
+	CopyrightAgent string
+	CopyrightContact string
+	CopyrightNotice string
+	CopyrightCounterNotice string
+	RepeatInfringerPolicy string
 }
 
 func Load(get func(string) string) (Env, error) {
-	c := Env{DatabaseURL: get("DATABASE_URL"), AuthMode: get("SIERX_AUTH_MODE"), BaseURL: get("SIERX_BASE_URL"), SessionKey: get("SIERX_SESSION_KEY"), ListenAddr: get("SIERX_LISTEN_ADDR")}
+	c := Env{DatabaseURL: get("DATABASE_URL"), AuthMode: get("SIERX_AUTH_MODE"), BaseURL: get("SIERX_BASE_URL"), SessionKey: get("SIERX_SESSION_KEY"), ListenAddr: get("SIERX_LISTEN_ADDR"),
+		OperatorName: get("SIERX_OPERATOR_NAME"), PrivacyContact: get("SIERX_PRIVACY_CONTACT"), PrivacyRetention: get("SIERX_PRIVACY_RETENTION"), PrivacyBackups: get("SIERX_PRIVACY_BACKUPS"), PrivacyServices: get("SIERX_PRIVACY_SERVICES"), PrivacyVersion: get("SIERX_PRIVACY_VERSION"), PrivacyEffectiveDate: get("SIERX_PRIVACY_EFFECTIVE_DATE"),
+		CopyrightAgent: get("SIERX_COPYRIGHT_AGENT"), CopyrightContact: get("SIERX_COPYRIGHT_CONTACT"), CopyrightNotice: get("SIERX_COPYRIGHT_NOTICE_PROCESS"), CopyrightCounterNotice: get("SIERX_COPYRIGHT_COUNTER_NOTICE_PROCESS"), RepeatInfringerPolicy: get("SIERX_REPEAT_INFRINGER_POLICY")}
 	for _, pair := range [][2]string{{"DATABASE_URL", c.DatabaseURL}, {"SIERX_AUTH_MODE", c.AuthMode}, {"SIERX_BASE_URL", c.BaseURL}, {"SIERX_SESSION_KEY", c.SessionKey}} {
 		if strings.TrimSpace(pair[1]) == "" {
 			return Env{}, fmt.Errorf("%s is required; set the environment variable", pair[0])

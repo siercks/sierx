@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func fixtureSession(t *testing.T, s *Server, email string) *http.Cookie {
@@ -83,7 +84,7 @@ func TestProjects(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &project); err != nil {
 		t.Fatal(err)
 	}
-	replace := map[string]string{project.ID: "project-1"}
+	replace := map[string]string{project.ID: "project-1", project.UpdatedAt.Format(time.RFC3339Nano): "timestamp"}
 	assertGolden(t, "projects-create", w.Body.Bytes(), replace)
 	w = apiCall(s, "GET", "/api/v1/projects/SRX", "", cookie)
 	if w.Code != 200 {

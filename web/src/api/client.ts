@@ -31,10 +31,16 @@ export type Me = {
   reduced_motion: boolean | null;
 };
 export type Project = {
+  id: string;
   key_prefix: string;
   name: string;
+  kind: 'delivery' | 'discovery' | 'portfolio';
   archived_at: string | null;
+  owner: { id: string; display_name: string } | null;
+  version: number;
+  updated_at: string;
 };
+export type Member = { id: string; display_name: string };
 export type Config = {
   types: { key: string; name: string; initial_status: string }[];
   statuses: { key: string; name: string; category: string }[];
@@ -47,6 +53,8 @@ export type Problem = {
   detail?: string;
   current?: Item;
   submitted?: unknown;
+  current_project?: Project;
+  submitted_project?: Partial<Project>;
 };
 export class APIError extends Error {
   constructor(public problem: Problem) {
@@ -101,8 +109,8 @@ export const cache = new QueryClient({
 });
 export const itemKey = (workspace: string, key: string) =>
   [workspace, 'item', key, DETAIL_FIELDS] as const;
-export const listKey = (workspace: string, query: string) =>
-  [workspace, 'list', query, LIST_FIELDS] as const;
+export const listKey = (workspace: string, query: string, project = '') =>
+	[workspace, 'list', project, query, LIST_FIELDS] as const;
 export type Write = {
   path: string;
   method: string;
