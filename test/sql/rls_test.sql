@@ -160,7 +160,9 @@ DO $$ BEGIN
   IF (SELECT count(*) FROM user_account WHERE email='rls-b@example.test' AND password_hash='fixture-hash-b') <> 1 THEN
     RAISE EXCEPTION 'auth role cannot read the required credential fields';
   END IF;
-  INSERT INTO session(id_hash,user_id,expires_at) VALUES (decode(repeat('ab',32),'hex'),'12000000-0000-7000-8000-000000000002',now()+interval '1 hour');
+  IF NOT sierx_create_session(decode(repeat('ab',32),'hex'),'12000000-0000-7000-8000-000000000002') THEN
+    RAISE EXCEPTION 'auth role could not create an active user session through the scoped function';
+  END IF;
   DELETE FROM session WHERE id_hash=decode(repeat('ab',32),'hex');
 END $$;
 RESET ROLE;

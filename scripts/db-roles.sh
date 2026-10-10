@@ -78,6 +78,18 @@ BEGIN
       AND d.deptype = 'o'
       AND d.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
       AND r.rolname IN ('sierx_runtime','sierx_auth','sierx_maintenance')
+      AND NOT (
+        r.rolname = 'sierx_maintenance'
+        AND d.classid = 'pg_proc'::regclass
+        AND EXISTS (
+          SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+          WHERE p.oid=d.objid AND n.nspname='public' AND p.prokind='f'
+            AND ((p.proname='sierx_set_account_active'
+                  AND pg_get_function_identity_arguments(p.oid)='p_user_id uuid, p_active boolean, p_case_ref uuid')
+              OR (p.proname='sierx_create_session'
+                  AND pg_get_function_identity_arguments(p.oid)='p_hash bytea, p_user_id uuid'))
+        )
+      )
   ) OR EXISTS (
     SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
     WHERE r.rolname IN ('sierx_runtime','sierx_auth','sierx_maintenance')
@@ -91,7 +103,7 @@ BEGIN
     SELECT 1 FROM pg_default_acl d JOIN pg_roles r ON r.oid = d.defaclrole
     WHERE r.rolname IN ('sierx_runtime','sierx_auth','sierx_maintenance')
   ) THEN
-    RAISE EXCEPTION 'application role owns objects/databases/default ACLs or has role memberships; inventory and resolve before changing it';
+    RAISE EXCEPTION 'application role owns unapproved objects/databases/default ACLs or has role memberships; inventory and resolve before changing it';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='sierx_runtime') THEN
     EXECUTE 'CREATE ROLE sierx_runtime';

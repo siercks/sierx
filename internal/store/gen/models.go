@@ -160,6 +160,17 @@ type Membership struct {
 	Role        string
 }
 
+type OperatorAccountAction struct {
+	ID              pgtype.UUID
+	OccurredAt      pgtype.Timestamptz
+	OperatorRole    string
+	CaseRef         pgtype.UUID
+	UserID          pgtype.UUID
+	ActiveBefore    bool
+	ActiveAfter     bool
+	SessionsRevoked int32
+}
+
 type Project struct {
 	ID          pgtype.UUID
 	WorkspaceID pgtype.UUID

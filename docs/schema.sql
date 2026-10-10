@@ -201,6 +201,32 @@ END $$;
 
 
 --
+-- Name: sierx_create_session(bytea, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_create_session(p_hash bytea, p_user_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  account_active boolean;
+BEGIN
+  SELECT u.is_active INTO account_active
+  FROM public.user_account u
+  WHERE u.id = p_user_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT account_active THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO public.session (id_hash,user_id,expires_at)
+  VALUES (p_hash,p_user_id,now()+interval '12 hours');
+  RETURN true;
+END
+$$;
+
+
+--
 -- Name: sierx_current_role(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -238,6 +264,45 @@ CREATE FUNCTION public.sierx_project_workspace_id(p_project_id uuid) RETURNS uui
     LANGUAGE sql STABLE
     SET search_path TO 'pg_catalog', 'public'
     AS $$ SELECT workspace_id FROM public.project WHERE id = p_project_id $$;
+
+
+--
+-- Name: sierx_set_account_active(uuid, boolean, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_set_account_active(p_user_id uuid, p_active boolean, p_case_ref uuid) RETURNS TABLE(account_id uuid, active_before boolean, active_after boolean, sessions_revoked integer)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  prior_active boolean;
+  revoked integer;
+BEGIN
+  IF p_case_ref IS NULL THEN
+    RAISE EXCEPTION 'a case reference is required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT u.is_active INTO prior_active
+  FROM public.user_account u
+  WHERE u.id = p_user_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'account not found' USING ERRCODE = 'P0002';
+  END IF;
+
+  UPDATE public.user_account SET is_active = p_active WHERE id = p_user_id;
+  DELETE FROM public.session WHERE user_id = p_user_id;
+  GET DIAGNOSTICS revoked = ROW_COUNT;
+
+  INSERT INTO public.operator_account_action (
+    operator_role, case_ref, user_id, active_before, active_after, sessions_revoked
+  ) VALUES (
+    session_user, p_case_ref, p_user_id, prior_active, p_active, revoked
+  );
+
+  RETURN QUERY SELECT p_user_id, prior_active, p_active, revoked;
+END
+$$;
 
 
 --
@@ -529,6 +594,25 @@ CREATE TABLE public.membership (
 );
 
 ALTER TABLE ONLY public.membership FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: operator_account_action; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.operator_account_action (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    operator_role text NOT NULL,
+    case_ref uuid NOT NULL,
+    user_id uuid NOT NULL,
+    active_before boolean NOT NULL,
+    active_after boolean NOT NULL,
+    sessions_revoked integer NOT NULL,
+    CONSTRAINT operator_account_action_sessions_revoked_check CHECK ((sessions_revoked >= 0))
+);
+
+ALTER TABLE ONLY public.operator_account_action FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -868,6 +952,14 @@ ALTER TABLE ONLY public.item
 
 ALTER TABLE ONLY public.membership
     ADD CONSTRAINT membership_pkey PRIMARY KEY (workspace_id, user_id);
+
+
+--
+-- Name: operator_account_action operator_account_action_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.operator_account_action
+    ADD CONSTRAINT operator_account_action_pkey PRIMARY KEY (id);
 
 
 --
@@ -1444,6 +1536,14 @@ ALTER TABLE ONLY public.membership
 
 
 --
+-- Name: operator_account_action operator_account_action_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.operator_account_action
+    ADD CONSTRAINT operator_account_action_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: project_config project_config_applied_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1798,6 +1898,26 @@ CREATE POLICY membership_runtime ON public.membership FOR SELECT TO sierx_runtim
 
 
 --
+-- Name: operator_account_action; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.operator_account_action ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: operator_account_action operator_account_action_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY operator_account_action_maintenance ON public.operator_account_action TO sierx_maintenance USING (true) WITH CHECK (true);
+
+
+--
+-- Name: operator_account_action operator_account_action_runtime_deny; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY operator_account_action_runtime_deny ON public.operator_account_action TO sierx_runtime USING (false) WITH CHECK (false);
+
+
+--
 -- Name: project; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1912,6 +2032,27 @@ CREATE POLICY session_auth ON public.session TO sierx_auth USING (true) WITH CHE
 
 
 --
+-- Name: session session_maintenance_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY session_maintenance_delete ON public.session FOR DELETE TO sierx_maintenance USING (true);
+
+
+--
+-- Name: session session_maintenance_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY session_maintenance_insert ON public.session FOR INSERT TO sierx_maintenance WITH CHECK (true);
+
+
+--
+-- Name: session session_maintenance_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY session_maintenance_select ON public.session FOR SELECT TO sierx_maintenance USING (true);
+
+
+--
 -- Name: sprint; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1974,6 +2115,13 @@ ALTER TABLE public.user_account ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY user_account_auth ON public.user_account TO sierx_auth USING (true) WITH CHECK (true);
+
+
+--
+-- Name: user_account user_account_maintenance; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_account_maintenance ON public.user_account TO sierx_maintenance USING (true) WITH CHECK (true);
 
 
 --

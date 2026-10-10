@@ -25,6 +25,8 @@ func main() {
 		err = runRollup(context.Background(), os.Args[2:])
 	case "restore-test":
 		err = runRestoreTest(context.Background(), os.Args[2:])
+	case "accounts":
+		err = runAccountLifecycle(context.Background(), os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -42,4 +44,5 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  sierxctl seed [--seed N] [--items N] [--projects N] [--max-depth N]")
 	fmt.Fprintln(os.Stderr, "  sierxctl rollup --verify")
 	fmt.Fprintln(os.Stderr, "  sierxctl restore-test")
+	fmt.Fprintln(os.Stderr, "  sierxctl accounts suspend|reactivate --user UUID --case UUID")
 }
