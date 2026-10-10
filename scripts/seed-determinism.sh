@@ -43,15 +43,27 @@ url_for_db() {
   [[ $DATABASE_URL == *\?* ]] && query="?${DATABASE_URL#*\?}"
   printf '%s/%s%s' "${base%/*}" "$1" "$query"
 }
+url_for_db_from() {
+  python3 - "$1" "$2" <<'PY'
+import sys, urllib.parse
+url = urllib.parse.urlsplit(sys.argv[1])
+print(urllib.parse.urlunsplit(url._replace(path="/" + sys.argv[2])))
+PY
+}
 admin_url=$(url_for_db postgres)
 
 run_one() {   # run_one DBNAME -> prints the checksum
   local db=$1 url
   url=$(url_for_db "$db")
+  local runtime authentication maintenance
+  runtime=$(url_for_db_from "${SIERX_RUNTIME_DATABASE_URL:?}" "$db")
+  authentication=$(url_for_db_from "${SIERX_AUTH_DATABASE_URL:?}" "$db")
+  maintenance=$(url_for_db_from "${SIERX_MAINTENANCE_DATABASE_URL:?}" "$db")
   psql "$admin_url" -X -q -v ON_ERROR_STOP=1 \
     -c "DROP DATABASE IF EXISTS $db" \
     -c "CREATE DATABASE $db TEMPLATE template0 ENCODING 'UTF8' LOCALE 'C'" >/dev/null
-  DATABASE_URL=$url bash scripts/migrate.sh up >/dev/null 2>&1 \
+  DATABASE_URL=$url SIERX_RUNTIME_DATABASE_URL=$runtime SIERX_AUTH_DATABASE_URL=$authentication \
+    SIERX_MAINTENANCE_DATABASE_URL=$maintenance bash scripts/migrate.sh up >/dev/null 2>&1 \
     || die "migrating $db failed"
   DATABASE_URL=$url bash scripts/sierxctl.sh seed \
     --seed "$SEED" --items "$ITEMS" --projects "$PROJECTS" --max-depth "$DEPTH" \

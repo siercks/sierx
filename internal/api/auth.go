@@ -36,7 +36,7 @@ type authState struct {
 }
 
 func (s *Server) ConfigureAuth(c config.Env) {
-	s.auth = &authState{service: auth.New(s.rawPool, c.SessionKey), cfg: c, attempts: map[string]attemptWindow{}, passwordWork: make(chan struct{}, 1)}
+	s.auth = &authState{service: auth.New(s.authPool, c.SessionKey), cfg: c, attempts: map[string]attemptWindow{}, passwordWork: make(chan struct{}, 1)}
 	s.Router.Post("/api/v1/auth/login", s.login)
 	s.Router.With(s.requireAuth).Post("/api/v1/auth/logout", s.logout)
 	s.Router.With(s.requireAuth).Get("/api/v1/me", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, Identity(r)) })

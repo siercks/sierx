@@ -87,12 +87,19 @@ def main():
             app_port = ports["8080/tcp"][0]["HostPort"]
             pg_port = ports["5432/tcp"][0]["HostPort"]
             origin = "http://127.0.0.1:" + app_port
+            admin_database = "postgres://postgres:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable"
+            role_environment = {**os.environ, "DATABASE_URL": admin_database,
+                                "SIERX_RUNTIME_DATABASE_URL": "postgres://sierx_runtime:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable",
+                                "SIERX_AUTH_DATABASE_URL": "postgres://sierx_auth:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable",
+                                "SIERX_MAINTENANCE_DATABASE_URL": "postgres://sierx_maintenance:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable"}
+            run("bash", "scripts/db-roles.sh", env=role_environment, cwd=ROOT)
             goose = os.environ["GOOSE"]
             run(goose, "-dir", str(ROOT / "migrations"), "postgres",
-                "postgres://postgres:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable", "up")
+                admin_database, "up")
             env = scratch / "app.env"
             env.write_text("\n".join([
-                "DATABASE_URL=postgres://postgres:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "SIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "SIERX_AUTH_DATABASE_URL=postgres://sierx_auth:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
                 "SIERX_AUTH_MODE=local", "SIERX_BASE_URL=" + origin,
                 "SIERX_LISTEN_ADDR=0.0.0.0:8080", "SIERX_SESSION_KEY=artifact-only-session-key-0000000000000000",
                 "SIERX_BOOTSTRAP_WORKSPACE_SLUG=artifact", "SIERX_BOOTSTRAP_WORKSPACE_NAME=Artifact",
@@ -102,9 +109,9 @@ def main():
             env.chmod(0o600)
             options = ["--pod", pod, "--read-only", "--security-opt", "no-new-privileges", "--env-file", str(env)]
             print("release-image: executing shipped bootstrap, application and maintenance commands", flush=True)
-            run("podman", "run", "--rm", *options, "--entrypoint", "/usr/local/bin/sierxctl", image, "bootstrap")
+            run("podman", "run", "--rm", "--env", "DATABASE_URL=postgres://postgres:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable", *options, "--entrypoint", "/usr/local/bin/sierxctl", image, "bootstrap")
             run("podman", "run", "-d", "--name", app, *options, image)
-            run("podman", "exec", app, "/usr/local/bin/sierxctl", "partitions", "ensure", "--months-ahead", "1")
+            run("podman", "exec", "--env", "SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable", app, "/usr/local/bin/sierxctl", "partitions", "ensure", "--months-ahead", "1")
             # A shell-free runtime must not acquire operator tooling accidentally.
             for shell in ("/bin/sh", "/bin/bash"):
                 result = subprocess.run(["podman", "exec", app, shell, "-c", "true"], capture_output=True)

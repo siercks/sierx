@@ -103,10 +103,12 @@ export SIERX_OFFLINE_BUNDLE=/opt/sierx/releases/REVIEWED_RELEASE
 export SIERX_OFFLINE_SHA256=APPROVED_LOCK_SHA256
 ```
 
-Create private mode-0600 `~/.config/sierx/app.env` and `deploy.env` using the
-existing deployment documentation. In app.env, use the intended local database
-URL, local authentication, a generated session key, HTTPS origin and loopback
-application address. In deploy.env set:
+Create private mode-0600 `~/.config/sierx/app.env`, `maintenance.env` and
+`deploy.env` using the existing deployment documentation. In app.env, use the
+separate runtime and authentication database URLs, local authentication, a
+generated session key, HTTPS origin and loopback application address. Keep the
+privileged `DATABASE_URL` in the operator shell only. Put only the restricted
+partition-maintenance URL in `maintenance.env`. In deploy.env set:
 
 ```ini
 SIERX_BASE_URL=https://tracker.example.test:8443

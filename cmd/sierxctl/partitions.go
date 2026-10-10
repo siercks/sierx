@@ -3,9 +3,10 @@
 //	sierxctl partitions ensure --months-ahead N
 //
 // Idempotent: creates the monthly partitions for the current UTC month and the
-// next N months if missing, via change_event_ensure_partitions() in migration
-// 0009, and prints the names it created. There is no drop, prune, or retention
-// command and none will be added: pruning destroys the audit trail (§4.7).
+// next N months if missing, via the maintenance-only
+// change_event_ensure_partitions() function (migration 0011 hardens the
+// original 0009 function), and prints the names it created. There is no drop,
+// prune, or retention command: pruning destroys the audit trail (§4.7).
 package main
 
 import (
@@ -30,9 +31,9 @@ func runPartitions(ctx context.Context, args []string) error {
 	if *months < 0 {
 		return errors.New("--months-ahead must be >= 0")
 	}
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv("SIERX_MAINTENANCE_DATABASE_URL")
 	if dsn == "" {
-		return errors.New("DATABASE_URL is unset")
+		return errors.New("SIERX_MAINTENANCE_DATABASE_URL is unset")
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

@@ -53,7 +53,8 @@ class RollbackTests(unittest.TestCase):
             with self.subTest(existing=existing),tempfile.TemporaryDirectory() as temporary:
                 home=pathlib.Path(temporary)
                 config=home/'.config/sierx';config.mkdir(parents=True)
-                app=config/'app.env';app.write_text('SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test\n')
+                app=config/'app.env';app.write_text('SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test\nSIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:runtime@localhost/sierx\nSIERX_AUTH_DATABASE_URL=postgres://sierx_auth:authentication@localhost/sierx\n')
+                maintenance=config/'maintenance.env';maintenance.write_text('SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:maintenance@localhost/sierx\n')
                 units=home/'.config/containers/systemd';units.mkdir(parents=True)
                 old=units/'sierx.container'
                 if existing:old.write_text('prior accepted unit')
@@ -62,7 +63,7 @@ class RollbackTests(unittest.TestCase):
                 real_stat=pathlib.Path.stat
                 def private_stat(path,*args,**kwargs):
                     result=real_stat(path,*args,**kwargs)
-                    if path==app:
+                    if path in (app,maintenance):
                         fields=list(result);fields[0]=0o100600;return os.stat_result(fields)
                     return result
                 commands=[]

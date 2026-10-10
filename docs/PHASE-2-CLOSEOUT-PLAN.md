@@ -1,8 +1,14 @@
 # Sierx Phase 2: code design and implementation plan
 
-Prepared October 9, 2026. Status: proposed implementation plan, grounded in the current checkout at merge commit `a10425611a4492cc2469366231049b76a0838cec`; working branch `codex/project-management`. This document does not claim implementation or phase acceptance.
+Prepared October 9, 2026. Plan baseline: merge commit `a10425611a4492cc2469366231049b76a0838cec`. Implementation status is tracked below and in the current branch; this document does not claim Phase 2 acceptance.
 
 Revised October 9 to incorporate the legal/security audit and owner direction: the current US-operated testbed is private to the owner; self-hosted deployments may later enable public signup; children need an explicit admission/handling design; notification email is optional future work; no paid subscriptions are planned. See the companion legal/security audit for baseline file/line evidence and legal-source references.
+
+## Implementation status (October 2026)
+
+The current implementation branch covers the security/privacy workstream F1–F7 and automated checks are being run against the complete branch. F1 role separation/RLS, F2 local legal-document surfaces and truthful operator-configured privacy content, F3 fail-closed signup modes, F4 offline asset/secret/request controls, F5 scope boundaries, F6 title/accessibility automation, and F7 machine-checkable release gates have code or documentation evidence. F2's data-lifecycle handling remains incomplete: there is no supported authenticated access/export, correction/redaction, hold, deactivation/session-revocation, or erasure-aware restore workflow. A restricted operator intake procedure is documented but is not a substitute for these product and recovery workflows.
+
+F5 adds no email delivery or billing implementation; public signup, invitation and child admission remain disabled. F6's manual screen-reader and whole-workflow review has not been performed, so automated accessibility evidence is not a WCAG conformance claim. Operator-specific privacy facts, deployment role transition/recovery, host acceptance, and Phase 2 real-use/signoff requirements remain open. F7 is the implementation boundary, not a declaration that Phase 2 has exited.
 
 ## Objective and known state
 

@@ -28,7 +28,7 @@ offline, deploy = load("offline"), load("deploy")
 def fixture(root):
     release = {"image": "example.test/sierx@sha256:" + "a" * 64, "revision": "b" * 40}
     names = ["bin/goose", "bin/sierxctl", "LICENSE", "NOTICE", "scripts/offline.py", "scripts/deploy.py",
-             "scripts/db.sh", "scripts/migrate.sh", "migrations/0001.sql", "inventory/application.cdx.json"]
+             "scripts/db.sh", "scripts/db-roles.sh", "scripts/migrate.sh", "migrations/0001.sql", "inventory/application.cdx.json"]
     images = {}
     for index, role in enumerate(sorted(offline.ROLES)):
         name = "images/" + role + ".tar"
@@ -138,7 +138,7 @@ class AssemblyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)
             release = {"image": "example.test/sierx@sha256:" + "a" * 64, "revision": "b" * 40}
-            source = {name: b"tracked fixture" for name in ("LICENSE", "NOTICE", "scripts/offline.py", "scripts/deploy.py", "scripts/db.sh", "scripts/migrate.sh", "migrations/0001.sql")}
+            source = {name: b"tracked fixture" for name in ("LICENSE", "NOTICE", "scripts/offline.py", "scripts/deploy.py", "scripts/db.sh", "scripts/db-roles.sh", "scripts/migrate.sh", "migrations/0001.sql")}
             source["deploy/quadlet/sierx-postgres.container"] = ("Image=example.test/postgres@sha256:" + "c" * 64 + "\n").encode()
             blobs = {str(index): content for index, content in enumerate(source.values())}
             (parent / "release.json").write_text(json.dumps(release))
@@ -181,13 +181,14 @@ class OfflineGatewayTests(unittest.TestCase):
             shutil.copytree(ROOT / "deploy", bundle / "deploy")
             config = home / ".config/sierx"
             (config / "tls").mkdir(parents=True)
-            (config / "app.env").write_text("SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test:8443\nSIERX_AUTH_MODE=local\n")
+            (config / "app.env").write_text("SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test:8443\nSIERX_AUTH_MODE=local\nSIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:fixture@localhost/sierx\nSIERX_AUTH_DATABASE_URL=postgres://sierx_auth:fixture@localhost/sierx\n")
+            (config / "maintenance.env").write_text("SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:fixture@localhost/sierx\n")
             for name in ("server.crt", "server.key"):
                 (config / "tls" / name).write_text("fixture")
             real_stat = Path.stat
             def private_stat(path, *args, **kwargs):
                 result = real_stat(path, *args, **kwargs)
-                if path in (config / "app.env", config / "tls/server.key"):
+                if path in (config / "app.env", config / "maintenance.env", config / "tls/server.key"):
                     fields = list(result); fields[0] = 0o100600
                     return os.stat_result(fields)
                 return result

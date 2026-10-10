@@ -63,7 +63,8 @@ COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching
 --
 
 CREATE FUNCTION public.change_event_ensure_partitions(months_ahead integer) RETURNS SETOF text
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
     AS $$
 DECLARE
   m        int;
@@ -71,18 +72,22 @@ DECLARE
   end_at   timestamptz;
   pname    text;
 BEGIN
-  IF months_ahead < 0 THEN
-    RAISE EXCEPTION 'months_ahead must be >= 0';
+  IF months_ahead < 0 OR months_ahead > 12 THEN
+    RAISE EXCEPTION 'months_ahead must be from 0 through 12';
   END IF;
   FOR m IN 0..months_ahead LOOP
     start_at := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
                 + make_interval(months => m);
     end_at   := start_at + interval '1 month';
     pname    := 'change_event_' || to_char(start_at AT TIME ZONE 'UTC', 'YYYY_MM');
-    IF to_regclass(pname) IS NULL THEN
+    IF to_regclass(format('public.%I', pname)) IS NULL THEN
       EXECUTE format(
-        'CREATE TABLE %I PARTITION OF change_event FOR VALUES FROM (%L) TO (%L)',
+        'CREATE TABLE public.%I PARTITION OF public.change_event FOR VALUES FROM (%L) TO (%L)',
         pname, start_at, end_at);
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', pname);
+      EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', pname);
+      EXECUTE format('CREATE POLICY change_event_partition_runtime ON public.%I FOR ALL TO sierx_runtime USING (workspace_id = public.sierx_current_workspace_id()) WITH CHECK (workspace_id = public.sierx_current_workspace_id())', pname);
+      EXECUTE format('GRANT SELECT, INSERT ON public.%I TO sierx_runtime', pname);
       RETURN NEXT pname;
     END IF;
   END LOOP;
@@ -162,6 +167,80 @@ END $$;
 
 
 --
+-- Name: project_runtime_update_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.project_runtime_update_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN
+  IF NEW.key_prefix IS DISTINCT FROM OLD.key_prefix OR NEW.kind IS DISTINCT FROM OLD.kind THEN
+    RAISE EXCEPTION 'project key_prefix and kind are immutable';
+  END IF;
+  IF current_user = 'sierx_runtime' THEN
+    IF NEW.next_key_num IS DISTINCT FROM OLD.next_key_num
+       AND NEW.next_key_num <> OLD.next_key_num + 1 THEN
+      RAISE EXCEPTION 'project key counter may only advance by one';
+    END IF;
+    IF NEW.name IS DISTINCT FROM OLD.name
+       OR NEW.owner_id IS DISTINCT FROM OLD.owner_id
+       OR NEW.archived_at IS DISTINCT FROM OLD.archived_at
+       OR NEW.version IS DISTINCT FROM OLD.version
+       OR NEW.updated_at IS DISTINCT FROM OLD.updated_at THEN
+      IF public.sierx_current_role() IS DISTINCT FROM 'admin' THEN
+        RAISE EXCEPTION 'project metadata updates require workspace admin';
+      END IF;
+      IF NEW.version <> OLD.version + 1 THEN
+        RAISE EXCEPTION 'project metadata update must increment version';
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: sierx_current_role(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_current_role() RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO 'pg_catalog'
+    AS $$ SELECT NULLIF(current_setting('sierx.role', true), '') $$;
+
+
+--
+-- Name: sierx_current_user_id(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_current_user_id() RETURNS uuid
+    LANGUAGE sql STABLE
+    SET search_path TO 'pg_catalog'
+    AS $$ SELECT NULLIF(current_setting('sierx.user_id', true), '')::uuid $$;
+
+
+--
+-- Name: sierx_current_workspace_id(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_current_workspace_id() RETURNS uuid
+    LANGUAGE sql STABLE
+    SET search_path TO 'pg_catalog'
+    AS $$ SELECT NULLIF(current_setting('sierx.workspace_id', true), '')::uuid $$;
+
+
+--
+-- Name: sierx_project_workspace_id(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sierx_project_workspace_id(p_project_id uuid) RETURNS uuid
+    LANGUAGE sql STABLE
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$ SELECT workspace_id FROM public.project WHERE id = p_project_id $$;
+
+
+--
 -- Name: status_immutable(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -211,6 +290,8 @@ CREATE TABLE public.change_event (
 )
 PARTITION BY RANGE (at);
 
+ALTER TABLE ONLY public.change_event FORCE ROW LEVEL SECURITY;
+
 
 SET default_table_access_method = heap;
 
@@ -230,6 +311,8 @@ CREATE TABLE public.change_event_2026_09 (
     new_value jsonb
 );
 
+ALTER TABLE ONLY public.change_event_2026_09 FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: change_event_2026_10; Type: TABLE; Schema: public; Owner: -
@@ -246,6 +329,8 @@ CREATE TABLE public.change_event_2026_10 (
     old_value jsonb,
     new_value jsonb
 );
+
+ALTER TABLE ONLY public.change_event_2026_10 FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -264,6 +349,8 @@ CREATE TABLE public.change_event_2026_11 (
     new_value jsonb
 );
 
+ALTER TABLE ONLY public.change_event_2026_11 FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: comment; Type: TABLE; Schema: public; Owner: -
@@ -279,6 +366,8 @@ CREATE TABLE public.comment (
     deleted_at timestamp with time zone
 );
 
+ALTER TABLE ONLY public.comment FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: config_status; Type: TABLE; Schema: public; Owner: -
@@ -290,6 +379,8 @@ CREATE TABLE public.config_status (
     status_id uuid NOT NULL,
     display_order integer NOT NULL
 );
+
+ALTER TABLE ONLY public.config_status FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -304,6 +395,8 @@ CREATE TABLE public.config_transition (
     requires jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
+ALTER TABLE ONLY public.config_transition FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: config_type; Type: TABLE; Schema: public; Owner: -
@@ -315,6 +408,8 @@ CREATE TABLE public.config_type (
     item_type_id uuid NOT NULL,
     initial_status_id uuid NOT NULL
 );
+
+ALTER TABLE ONLY public.config_type FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -330,6 +425,8 @@ CREATE TABLE public.field_def (
     options jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT field_def_data_type_check CHECK ((data_type = ANY (ARRAY['text'::text, 'number'::text, 'date'::text, 'select'::text, 'multiselect'::text, 'user'::text, 'url'::text, 'bool'::text])))
 );
+
+ALTER TABLE ONLY public.field_def FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -365,6 +462,8 @@ CREATE TABLE public.item (
     CONSTRAINT item_title_check CHECK (((length(title) >= 1) AND (length(title) <= 500)))
 );
 
+ALTER TABLE ONLY public.item FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: item_link; Type: TABLE; Schema: public; Owner: -
@@ -380,6 +479,8 @@ CREATE TABLE public.item_link (
     CONSTRAINT item_link_check CHECK ((from_item_id <> to_item_id)),
     CONSTRAINT item_link_kind_check CHECK ((kind = ANY (ARRAY['blocks'::text, 'duplicates'::text, 'relates'::text, 'implements'::text, 'discovered_from'::text])))
 );
+
+ALTER TABLE ONLY public.item_link FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -397,6 +498,8 @@ CREATE TABLE public.item_rollup (
     computed_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE ONLY public.item_rollup FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: item_type; Type: TABLE; Schema: public; Owner: -
@@ -411,6 +514,8 @@ CREATE TABLE public.item_type (
     is_idea boolean DEFAULT false NOT NULL
 );
 
+ALTER TABLE ONLY public.item_type FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: membership; Type: TABLE; Schema: public; Owner: -
@@ -422,6 +527,8 @@ CREATE TABLE public.membership (
     role text NOT NULL,
     CONSTRAINT membership_role_check CHECK ((role = ANY (ARRAY['member'::text, 'admin'::text])))
 );
+
+ALTER TABLE ONLY public.membership FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -444,6 +551,8 @@ CREATE TABLE public.project (
     CONSTRAINT project_version_check CHECK ((version > 0))
 );
 
+ALTER TABLE ONLY public.project FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: project_config; Type: TABLE; Schema: public; Owner: -
@@ -456,6 +565,8 @@ CREATE TABLE public.project_config (
     applied_at timestamp with time zone DEFAULT now() NOT NULL,
     applied_by uuid
 );
+
+ALTER TABLE ONLY public.project_config FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -473,6 +584,8 @@ CREATE TABLE public.saved_view (
     CONSTRAINT saved_view_layout_check CHECK ((layout = ANY (ARRAY['list'::text, 'board'::text, 'timeline'::text, 'grid'::text])))
 );
 
+ALTER TABLE ONLY public.saved_view FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: seq_counter; Type: TABLE; Schema: public; Owner: -
@@ -482,6 +595,8 @@ CREATE TABLE public.seq_counter (
     workspace_id uuid NOT NULL,
     value bigint DEFAULT 0 NOT NULL
 );
+
+ALTER TABLE ONLY public.seq_counter FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -495,6 +610,8 @@ CREATE TABLE public.session (
     expires_at timestamp with time zone NOT NULL,
     last_seen_at timestamp with time zone
 );
+
+ALTER TABLE ONLY public.session FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -513,6 +630,8 @@ CREATE TABLE public.sprint (
     CONSTRAINT sprint_state_check CHECK ((state = ANY (ARRAY['planned'::text, 'active'::text, 'closed'::text])))
 );
 
+ALTER TABLE ONLY public.sprint FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: sprint_item; Type: TABLE; Schema: public; Owner: -
@@ -524,6 +643,8 @@ CREATE TABLE public.sprint_item (
     added_at timestamp with time zone DEFAULT now() NOT NULL,
     removed_at timestamp with time zone
 );
+
+ALTER TABLE ONLY public.sprint_item FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -538,6 +659,8 @@ CREATE TABLE public.status (
     category text NOT NULL,
     CONSTRAINT status_category_check CHECK ((category = ANY (ARRAY['open'::text, 'active'::text, 'done'::text, 'cancelled'::text])))
 );
+
+ALTER TABLE ONLY public.status FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -556,6 +679,8 @@ CREATE TABLE public.user_account (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE ONLY public.user_account FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: workspace; Type: TABLE; Schema: public; Owner: -
@@ -568,6 +693,8 @@ CREATE TABLE public.workspace (
     origin_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+ALTER TABLE ONLY public.workspace FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -912,6 +1039,13 @@ CREATE INDEX change_event_2026_11_workspace_id_seq_idx ON public.change_event_20
 
 
 --
+-- Name: comment_item_rls; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX comment_item_rls ON public.comment USING btree (item_id);
+
+
+--
 -- Name: item_assignee; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -975,10 +1109,24 @@ CREATE INDEX project_owner_membership_idx ON public.project USING btree (workspa
 
 
 --
+-- Name: saved_view_workspace_owner_rls; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX saved_view_workspace_owner_rls ON public.saved_view USING btree (workspace_id, owner_id);
+
+
+--
 -- Name: session_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX session_expires_at ON public.session USING btree (expires_at);
+
+
+--
+-- Name: sprint_project_rls; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX sprint_project_rls ON public.sprint USING btree (project_id);
 
 
 --
@@ -1056,6 +1204,13 @@ CREATE TRIGGER item_path_check_trg BEFORE INSERT OR UPDATE OF parent_id, path ON
 --
 
 CREATE TRIGGER item_type_immutable_trg BEFORE UPDATE ON public.item_type FOR EACH ROW EXECUTE FUNCTION public.item_type_immutable();
+
+
+--
+-- Name: project project_runtime_update_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER project_runtime_update_guard_trg BEFORE UPDATE ON public.project FOR EACH ROW EXECUTE FUNCTION public.project_runtime_update_guard();
 
 
 --
@@ -1382,6 +1537,472 @@ ALTER TABLE ONLY public.sprint
 
 ALTER TABLE ONLY public.status
     ADD CONSTRAINT status_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.project(id);
+
+
+--
+-- Name: change_event; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.change_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: change_event_2026_09; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.change_event_2026_09 ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: change_event_2026_10; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.change_event_2026_10 ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: change_event_2026_11; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.change_event_2026_11 ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: change_event_2026_09 change_event_partition_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY change_event_partition_runtime ON public.change_event_2026_09 TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id())) WITH CHECK ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: change_event_2026_10 change_event_partition_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY change_event_partition_runtime ON public.change_event_2026_10 TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id())) WITH CHECK ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: change_event_2026_11 change_event_partition_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY change_event_partition_runtime ON public.change_event_2026_11 TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id())) WITH CHECK ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: change_event change_event_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY change_event_runtime ON public.change_event TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id())) WITH CHECK ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: comment; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.comment ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: comment comment_runtime_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY comment_runtime_insert ON public.comment FOR INSERT TO sierx_runtime WITH CHECK (((author_id = public.sierx_current_user_id()) AND (EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = comment.item_id)))));
+
+
+--
+-- Name: comment comment_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY comment_runtime_read ON public.comment FOR SELECT TO sierx_runtime USING ((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = comment.item_id))));
+
+
+--
+-- Name: comment comment_runtime_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY comment_runtime_update ON public.comment FOR UPDATE TO sierx_runtime USING (((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = comment.item_id))) AND ((author_id = public.sierx_current_user_id()) OR (public.sierx_current_role() = 'admin'::text)))) WITH CHECK (((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = comment.item_id))) AND ((author_id = public.sierx_current_user_id()) OR (public.sierx_current_role() = 'admin'::text))));
+
+
+--
+-- Name: config_status; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.config_status ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_status config_status_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_status_runtime_read ON public.config_status FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: config_status config_status_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_status_runtime_write ON public.config_status FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: config_transition; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.config_transition ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_transition config_transition_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_transition_runtime_read ON public.config_transition FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: config_transition config_transition_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_transition_runtime_write ON public.config_transition FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: config_type; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.config_type ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_type config_type_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_type_runtime_read ON public.config_type FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: config_type config_type_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_type_runtime_write ON public.config_type FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: field_def; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.field_def ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: field_def field_def_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY field_def_runtime_read ON public.field_def FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: field_def field_def_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY field_def_runtime_write ON public.field_def FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: item; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.item ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: item_link; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.item_link ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: item_link item_link_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY item_link_runtime ON public.item_link TO sierx_runtime USING (((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = item_link.from_item_id))) AND (EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = item_link.to_item_id))))) WITH CHECK (((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = item_link.from_item_id))) AND (EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = item_link.to_item_id)))));
+
+
+--
+-- Name: item_rollup; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.item_rollup ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: item_rollup item_rollup_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY item_rollup_runtime ON public.item_rollup TO sierx_runtime USING ((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = item_rollup.item_id)))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.item i
+  WHERE (i.id = item_rollup.item_id))));
+
+
+--
+-- Name: item item_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY item_runtime ON public.item TO sierx_runtime USING (((workspace_id = public.sierx_current_workspace_id()) AND (public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()))) WITH CHECK (((workspace_id = public.sierx_current_workspace_id()) AND (public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id())));
+
+
+--
+-- Name: item_type; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.item_type ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: item_type item_type_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY item_type_runtime_read ON public.item_type FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: item_type item_type_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY item_type_runtime_write ON public.item_type FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: membership; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.membership ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: membership membership_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY membership_auth ON public.membership FOR SELECT TO sierx_auth USING (true);
+
+
+--
+-- Name: membership membership_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY membership_runtime ON public.membership FOR SELECT TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: project; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.project ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: project_config; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.project_config ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: project_config project_config_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY project_config_runtime_read ON public.project_config FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: project_config project_config_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY project_config_runtime_write ON public.project_config FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: project project_runtime_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY project_runtime_insert ON public.project FOR INSERT TO sierx_runtime WITH CHECK (((workspace_id = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: project project_runtime_key_counter; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY project_runtime_key_counter ON public.project FOR UPDATE TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id())) WITH CHECK ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: project project_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY project_runtime_read ON public.project FOR SELECT TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: project project_runtime_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY project_runtime_update ON public.project FOR UPDATE TO sierx_runtime USING (((workspace_id = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text))) WITH CHECK (((workspace_id = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: saved_view; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.saved_view ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: saved_view saved_view_runtime_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY saved_view_runtime_insert ON public.saved_view FOR INSERT TO sierx_runtime WITH CHECK (((workspace_id = public.sierx_current_workspace_id()) AND (owner_id = public.sierx_current_user_id())));
+
+
+--
+-- Name: saved_view saved_view_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY saved_view_runtime_read ON public.saved_view FOR SELECT TO sierx_runtime USING (((workspace_id = public.sierx_current_workspace_id()) AND (shared OR (owner_id = public.sierx_current_user_id()))));
+
+
+--
+-- Name: saved_view saved_view_runtime_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY saved_view_runtime_update ON public.saved_view FOR UPDATE TO sierx_runtime USING (((workspace_id = public.sierx_current_workspace_id()) AND (owner_id = public.sierx_current_user_id()))) WITH CHECK (((workspace_id = public.sierx_current_workspace_id()) AND (owner_id = public.sierx_current_user_id())));
+
+
+--
+-- Name: seq_counter; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.seq_counter ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seq_counter seq_counter_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY seq_counter_runtime ON public.seq_counter FOR SELECT TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: seq_counter seq_counter_runtime_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY seq_counter_runtime_update ON public.seq_counter FOR UPDATE TO sierx_runtime USING ((workspace_id = public.sierx_current_workspace_id())) WITH CHECK ((workspace_id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: session; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.session ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: session session_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY session_auth ON public.session TO sierx_auth USING (true) WITH CHECK (true);
+
+
+--
+-- Name: sprint; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.sprint ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: sprint_item; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.sprint_item ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: sprint_item sprint_item_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY sprint_item_runtime ON public.sprint_item TO sierx_runtime USING ((EXISTS ( SELECT 1
+   FROM (public.item i
+     JOIN public.sprint s ON ((s.project_id = i.project_id)))
+  WHERE ((i.id = sprint_item.item_id) AND (s.id = sprint_item.sprint_id))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM (public.item i
+     JOIN public.sprint s ON ((s.project_id = i.project_id)))
+  WHERE ((i.id = sprint_item.item_id) AND (s.id = sprint_item.sprint_id)))));
+
+
+--
+-- Name: sprint sprint_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY sprint_runtime ON public.sprint TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id())) WITH CHECK ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: status; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.status ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: status status_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY status_runtime_read ON public.status FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: status status_runtime_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY status_runtime_write ON public.status FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: user_account; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_account ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_account user_account_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_account_auth ON public.user_account TO sierx_auth USING (true) WITH CHECK (true);
+
+
+--
+-- Name: user_account user_account_runtime_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_account_runtime_read ON public.user_account FOR SELECT TO sierx_runtime USING (((id = public.sierx_current_user_id()) OR (EXISTS ( SELECT 1
+   FROM public.membership m
+  WHERE ((m.workspace_id = public.sierx_current_workspace_id()) AND (m.user_id = user_account.id))))));
+
+
+--
+-- Name: user_account user_account_runtime_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_account_runtime_update ON public.user_account FOR UPDATE TO sierx_runtime USING ((id = public.sierx_current_user_id())) WITH CHECK ((id = public.sierx_current_user_id()));
+
+
+--
+-- Name: workspace; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.workspace ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: workspace workspace_runtime; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY workspace_runtime ON public.workspace FOR SELECT TO sierx_runtime USING ((id = public.sierx_current_workspace_id()));
 
 
 --

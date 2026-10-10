@@ -1774,8 +1774,9 @@ an endpoint without a task is a gate that cannot pass.
 
 **Steps.** `net/http` + `chi`, no framework (§3.1). Environment variables only,
 no config file; **fail fast and loudly** at startup on any missing or malformed
-value (§14.4): `DATABASE_URL`, `SIERX_AUTH_MODE`, `SIERX_TRUSTED_PROXIES`,
-`SIERX_BASE_URL`, `SIERX_SESSION_KEY`. Structured JSON logs to journald, one line
+value (§14.4): `SIERX_RUNTIME_DATABASE_URL`, `SIERX_AUTH_DATABASE_URL`,
+`SIERX_AUTH_MODE`, `SIERX_TRUSTED_PROXIES`, `SIERX_BASE_URL`,
+`SIERX_SESSION_KEY`. Structured JSON logs to journald, one line
 per request with method, route, status, duration, actor, workspace (§14.3).
 `GET /api/v1/healthz` = liveness plus database reachability. Graceful shutdown.
 Cold start to serving under 1s (§12).
@@ -2524,7 +2525,7 @@ Created incrementally; every target must exist by the phase that needs it. Every
 | `help` | List targets | 0.1 |
 | `bootstrap-check` | Toolchain versions match pins; required inputs present | 0.1 |
 | `gate-notopology` | No real hostnames, addresses, or `.env` values in tracked files | 0.1 |
-| `db-up` / `db-down` / `db-psql` / `db-reset` | Dev database lifecycle | 0.2 |
+| `db-up` / `db-down` / `db-psql` / `db-reset` / `db-roles` | Dev database lifecycle and restricted role provisioning | 0.2 / Phase 2 F1 |
 | `migrate-up` / `migrate-down` / `migrate-status` | Migrations | 0.3 |
 | `migrate-updown-up` | up → down → up clean | 0.3 |
 | `schema-snapshot` | Dump live schema to `docs/schema.sql` | 0.4 |
@@ -2570,7 +2571,10 @@ Real values live in the untracked `.env` (dev) and the host's `0600` env file
 
 | Variable | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | |
+| `DATABASE_URL` | operator tools only | Privileged migration/bootstrap/backup URL; never put in app.env |
+| `SIERX_RUNTIME_DATABASE_URL` | app.env | Non-owner, non-superuser application data role |
+| `SIERX_AUTH_DATABASE_URL` | app.env | Separate role for login, session and MFA operations |
+| `SIERX_MAINTENANCE_DATABASE_URL` | maintenance.env | Separate role limited to partition maintenance; not passed to the app process |
 | `SIERX_AUTH_MODE` | yes | `local` \| `proxy`; explicit, never inferred |
 | `SIERX_TRUSTED_PROXIES` | yes in `proxy` mode | CIDR allowlist; requests from elsewhere rejected |
 | `SIERX_BASE_URL` | yes | |

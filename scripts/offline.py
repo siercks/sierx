@@ -105,7 +105,7 @@ def verify(root, expected, arch=None):
         raise ValueError("Application image differs from accepted release")
     files = data["files"]
     required = {"release.json", "bin/goose", "bin/sierxctl", "LICENSE", "NOTICE",
-                "scripts/offline.py", "scripts/deploy.py", "scripts/db.sh", "scripts/migrate.sh",
+                "scripts/offline.py", "scripts/deploy.py", "scripts/db.sh", "scripts/db-roles.sh", "scripts/migrate.sh",
                 "inventory/application.cdx.json", *("images/" + role + ".tar" for role in ROLES)}
     if not isinstance(files, dict) or not required.issubset(files) or not any(n.startswith("migrations/") and n.endswith(".sql") for n in files):
         raise ValueError("Incomplete bundle inventory")

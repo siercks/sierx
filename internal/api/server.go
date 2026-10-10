@@ -21,6 +21,7 @@ type Server struct {
 	Pool       *pgxpool.Pool
 	DB         *requestDB
 	rawPool    *pgxpool.Pool
+	authPool   *pgxpool.Pool
 	Router     *chi.Mux
 	Logger     *slog.Logger
 	requests   atomic.Uint64
@@ -29,7 +30,11 @@ type Server struct {
 }
 
 func New(pool *pgxpool.Pool, logger *slog.Logger) *Server {
-	s := &Server{Pool: pool, DB: &requestDB{pool: pool}, rawPool: pool, Router: chi.NewRouter(), Logger: logger}
+	return NewWithAuthPool(pool, pool, logger)
+}
+
+func NewWithAuthPool(pool, authPool *pgxpool.Pool, logger *slog.Logger) *Server {
+	s := &Server{Pool: pool, DB: &requestDB{pool: pool}, rawPool: pool, authPool: authPool, Router: chi.NewRouter(), Logger: logger}
 	s.Router.Use(s.requestLog)
 	s.Router.Use(compression)
 	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) { WriteProblem(w, NotFound()) })

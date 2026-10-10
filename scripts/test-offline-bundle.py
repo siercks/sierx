@@ -55,7 +55,12 @@ def main():
         email = "offline@example.test"
         base = "https://localhost:18443"
         database = "postgres://sierx:" + password + "@127.0.0.1:15432/sierx?sslmode=disable"
-        environment = {**os.environ, "DATABASE_URL": database, "SIERX_ENV": "staging",
+        runtime_database = "postgres://sierx_runtime:" + password + "@127.0.0.1:15432/sierx?sslmode=disable"
+        auth_database = "postgres://sierx_auth:" + password + "@127.0.0.1:15432/sierx?sslmode=disable"
+        maintenance_database = "postgres://sierx_maintenance:" + password + "@127.0.0.1:15432/sierx?sslmode=disable"
+        environment = {**os.environ, "DATABASE_URL": database, "SIERX_RUNTIME_DATABASE_URL": runtime_database,
+                       "SIERX_AUTH_DATABASE_URL": auth_database, "SIERX_MAINTENANCE_DATABASE_URL": maintenance_database,
+                       "SIERX_ENV": "staging",
                        "SIERX_BASE_URL": base, "SIERX_LISTEN_ADDR": "127.0.0.1:18081",
                        "SIERX_AUTH_MODE": "local", "SIERX_SESSION_KEY": __import__("base64").b64encode(secrets.token_bytes(32)).decode(),
                        "SIERX_NETWORK_MODE": "offline", "SIERX_TLS_MODE": "provided",
@@ -92,7 +97,7 @@ def main():
             environment["SSL_CERT_FILE"] = str(tls / "server.crt")
             envfile = scratch / "app.env"
             envfile.write_text("\n".join(key + "=" + environment[key] for key in
-                                         ("DATABASE_URL", "SIERX_ENV", "SIERX_BASE_URL", "SIERX_LISTEN_ADDR", "SIERX_AUTH_MODE", "SIERX_SESSION_KEY")) + "\n")
+                                         ("SIERX_RUNTIME_DATABASE_URL", "SIERX_AUTH_DATABASE_URL", "SIERX_ENV", "SIERX_BASE_URL", "SIERX_LISTEN_ADDR", "SIERX_AUTH_MODE", "SIERX_SESSION_KEY")) + "\n")
             envfile.chmod(0o600)
             app = data["images"]["app"]["id"]
             container("create", "--name", "assets", "--pull=never", app)

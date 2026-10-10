@@ -8,7 +8,7 @@ SHELL := /usr/bin/env bash
 test-api: ## API tests; filter with TEST_ARGS='-run TestServerBoot'
 	@bash scripts/test-go.sh ./internal/api/... ./internal/config/... $(TEST_ARGS) -count=1
 
-.PHONY: gen-fields gate-gen prove-gen
+.PHONY: gen-fields gate-gen prove-gen prove-db-privileges prove-rls
 gen-fields: ## Generate client fields from the API registry
 	@go run ./internal/api/projection/cmd/genfields
 gate-gen: ## Assert generated API fields have not drifted
@@ -17,9 +17,10 @@ prove-gen: ## Prove generated field drift is rejected
 	@bash scripts/gate-gen.sh --prove
 
 .PHONY: help bootstrap-check gate-notopology prove-notopology \
-        db-up db-down db-psql db-reset db-pin \
+        db-up db-down db-psql db-reset db-pin db-roles \
         migrate-up migrate-down migrate-status migrate-updown-up \
         schema-snapshot schema-diff test-sql test-partitions \
+        gate-db-privileges gate-rls test-rls \
         sqlc-gen sqlc-diff gate-nodirect prove-nodirect test-store \
         seed seed-determinism rollup-verify \
         gate-license prove-license vendor-verify test-property \
@@ -87,6 +88,9 @@ db-reset: ## DESTROY the dev database and recreate it (refuses unless SIERX_ENV=
 db-pin: ## Resolve the postgres:18 digest and write it into the Quadlet unit (needs registry access)
 	@bash scripts/db.sh pin
 
+db-roles: ## Provision the dedicated runtime, auth and partition-maintenance logins
+	@bash scripts/db-roles.sh
+
 migrate-up: ## Apply pending migrations (goose, plain SQL) (task 0.3)
 	@bash scripts/migrate.sh up
 
@@ -112,6 +116,19 @@ test-sql: ## Database-level invariants raise on every forbidden operation (task 
 test-partitions: ## Partition maintenance is idempotent and next month exists (task 0.6)
 	@bash scripts/migrate.sh up >/dev/null 2>&1
 	@bash scripts/psql.sh -f test/sql/partitions_test.sql
+
+gate-db-privileges: ## Verify app role attributes, ownership, DDL and RLS catalog (Phase 2 F1)
+	@bash scripts/migrate.sh up >/dev/null 2>&1
+	@bash scripts/psql.sh -f test/sql/rls_privileges_test.sql
+prove-db-privileges:
+	@if bash scripts/psql.sh -c 'BEGIN; GRANT TRUNCATE ON item TO sierx_runtime' -f test/sql/rls_privileges_test.sql >/dev/null 2>&1; then echo 'prove-db-privileges: planted TRUNCATE grant was not detected'; exit 1; else echo 'prove-db-privileges: planted runtime TRUNCATE grant rejected'; fi
+
+gate-rls: gate-db-privileges ## Prove direct-SQL tenant isolation and fail-closed context (Phase 2 F1)
+	@bash scripts/psql.sh -f test/sql/rls_test.sql
+prove-rls:
+	@if bash scripts/psql.sh -c 'BEGIN; DROP POLICY workspace_runtime ON workspace' -f test/sql/rls_test.sql >/dev/null 2>&1; then echo 'prove-rls: removed tenant policy was not detected'; exit 1; else echo 'prove-rls: removed tenant policy rejected by direct-SQL proof'; fi
+
+test-rls: gate-rls ## Alias for the Phase 2 RLS isolation proof
 
 sqlc-gen: ## Regenerate internal/store/gen from the migrations and queries (task 0.7)
 	@bash scripts/sqlc.sh gen
@@ -205,6 +222,7 @@ gate-bench: ## Assert the §12 thresholds against the baseline (reference hardwa
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: web-build ## The phase-0 gate: every check that must pass before phase 1
+	@python3 scripts/secret-scan.py --root . --self-test
 	@$(MAKE) --no-print-directory gate-units
 	@bash test/shell/postgres-tools_test.sh
 	@bash scripts/check-postgres-tools.sh
@@ -217,6 +235,7 @@ gate-0: web-build ## The phase-0 gate: every check that must pass before phase 1
 	@bash scripts/schema.sh diff
 	@bash scripts/psql.sh -f test/sql/invariants_test.sql
 	@bash scripts/psql.sh -f test/sql/partitions_test.sql
+	@$(MAKE) --no-print-directory gate-rls
 	@bash scripts/sqlc.sh diff
 	@go vet ./...
 	@bash scripts/test-go.sh ./... -count=1 -timeout 20m

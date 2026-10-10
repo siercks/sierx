@@ -22,19 +22,25 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	pool, err := pgxpool.New(ctx, c.DatabaseURL)
+	pool, err := pgxpool.New(ctx, c.RuntimeDatabaseURL)
 	if err != nil {
-		logger.Error("database pool could not be created; check DATABASE_URL")
+		logger.Error("runtime database pool could not be created; check SIERX_RUNTIME_DATABASE_URL")
 		os.Exit(1)
 	}
 	defer pool.Close()
+	authPool, err := pgxpool.New(ctx, c.AuthDatabaseURL)
+	if err != nil {
+		logger.Error("authentication database pool could not be created; check SIERX_AUTH_DATABASE_URL")
+		os.Exit(1)
+	}
+	defer authPool.Close()
 	listener, err := net.Listen("tcp", c.ListenAddr)
 	if err != nil {
 		logger.Error("server could not listen; check SIERX_LISTEN_ADDR")
 		os.Exit(1)
 	}
 	logger.Info("server ready")
-	server := api.New(pool, logger)
+	server := api.NewWithAuthPool(pool, authPool, logger)
 	server.ConfigureAuth(c)
 	server.ConfigureDocuments()
 	if err := server.Serve(ctx, listener); err != nil {

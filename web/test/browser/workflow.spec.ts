@@ -225,6 +225,46 @@ test('initial list, query and deep link need no client data waterfall', async ({
   expect(response!.request().redirectedFrom()).not.toBeNull();
   await expect(page).toHaveURL(new RegExp('/' + item.key + '$'));
 });
+test('runtime pages make no requests to third-party origins', async ({
+  page,
+  context,
+}) => {
+  let instanceOrigin: string | undefined;
+  const externalRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (!['http:', 'https:'].includes(url.protocol)) return;
+    if (request.isNavigationRequest() && instanceOrigin === undefined)
+      instanceOrigin = url.origin;
+    if (instanceOrigin !== undefined && url.origin !== instanceOrigin)
+      externalRequests.push(`${request.method()} ${url.origin}${url.pathname}`);
+  });
+
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
+  await expect(page).toHaveTitle('Privacy · Sierx');
+  await page.goto('/third-party');
+  await expect(page.getByRole('heading', { name: 'Third-party notices' })).toBeVisible();
+  await expect(page).toHaveTitle('Third-party notices · Sierx');
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expect(page).toHaveTitle('Sign in · Sierx');
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Create item' })).toBeVisible();
+  await expect(page).toHaveTitle('Workspace · Sierx');
+  await page.goto('/?project=SRX');
+  await expect(page).toHaveTitle('Backlog · Sierx');
+  const item = await create(context, 'Private page request observation');
+  await page.goto('/' + item.key);
+  await expect(page.getByText(item.title, { exact: true })).toBeVisible();
+  await expect(page).toHaveTitle(item.key + ' · ' + item.title + ' · Sierx');
+  const commentStatus = await page.evaluate(async (key) =>
+    (await fetch(`/api/v1/comments?item=${encodeURIComponent(key)}`)).status,
+  item.key);
+  expect(commentStatus).toBe(200);
+
+  expect(externalRequests).toEqual([]);
+});
 test('keyboard-only create, transition, reparent, reorder and comment', async ({
   page,
   context,

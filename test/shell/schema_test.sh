@@ -24,6 +24,9 @@ SH
 chmod +x bin/*
 export PATH="$scratch/bin:$PATH"
 export DATABASE_URL=postgres://fixture:fixture@localhost/fixture
+export SIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:fixture@localhost/fixture
+export SIERX_AUTH_DATABASE_URL=postgres://sierx_auth:fixture@localhost/fixture
+export SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:fixture@localhost/fixture
 for mode in failed partial; do
   export MOCK_DUMP_MODE=$mode
   for operation in diff snapshot; do

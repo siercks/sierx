@@ -32,6 +32,36 @@ func TestDocumentEscapingAndTheme(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentPurposeTitlesAreEscaped(t *testing.T) {
+	s := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, tc := range []struct {
+		route string
+		state map[string]any
+		want  string
+	}{
+		{route: "login", want: "Sign in · Sierx"},
+		{route: "list", want: "Workspace · Sierx"},
+		{route: "item", want: "Work item · Sierx"},
+		{route: "privacy", want: "Privacy · Sierx"},
+		{route: "copyright", want: "Copyright · Sierx"},
+		{route: "third-party", want: "Third-party notices · Sierx"},
+		{route: "item", state: map[string]any{"document_title": `<svg onload=alert(1)>`}, want: `&lt;svg onload=alert(1)&gt;`},
+	} {
+		t.Run(tc.route+tc.want, func(t *testing.T) {
+			state := map[string]any{"route": tc.route}
+			for key, value := range tc.state {
+				state[key] = value
+			}
+			w := httptest.NewRecorder()
+			s.renderDocument(w, httptest.NewRequest("GET", "/", nil), state, auth.Identity{Theme: "system"})
+			if !strings.Contains(w.Body.String(), "<title>"+tc.want+"</title>") {
+				t.Fatalf("document title did not match safely escaped purpose title %q", tc.want)
+			}
+		})
+	}
+}
+
 func TestDocumentCanonicalPaths(t *testing.T) {
 	s := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	s.ConfigureAuth(config.Env{AuthMode: "local", SessionKey: strings.Repeat("x", 32)})
@@ -49,6 +79,57 @@ func TestDocumentCanonicalPaths(t *testing.T) {
 		t.Fatal("anonymous document not redirected")
 	}
 }
+
+func TestPublicNoticePagesAreAccessibleAndOperatorConfigured(t *testing.T) {
+	s := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s.ConfigureAuth(config.Env{AuthMode: "local", SessionKey: strings.Repeat("x", 32)})
+	s.ConfigureDocuments()
+
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{path: "/privacy", want: `"configured":false`},
+		{path: "/copyright", want: `"configured":false`},
+		{path: "/third-party", want: `"runtime":[`},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			s.Router.ServeHTTP(w, httptest.NewRequest("GET", tc.path, nil))
+			body := w.Body.String()
+			if w.Code != 200 || !strings.Contains(body, tc.want) {
+				t.Fatalf("public page %s: %d %s", tc.path, w.Code, body)
+			}
+			if !strings.Contains(body, `id="sierx-state"`) || w.Header().Get("Cache-Control") != "private, no-store" {
+				t.Fatalf("public page %s lost its bootstrap or no-store headers", tc.path)
+			}
+			if w.Header().Get("Content-Security-Policy") == "" {
+				t.Fatalf("public page %s did not receive the local-resource policy", tc.path)
+			}
+		})
+	}
+}
+
+func TestPrivacyNoticeConfigurationIsEscapedAndDoesNotInventFacts(t *testing.T) {
+	s := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s.ConfigureAuth(config.Env{
+		AuthMode: "local", SessionKey: strings.Repeat("x", 32),
+		OperatorName: `<img src=x onerror=alert(1)>`, PrivacyContact: `operator@example.test`,
+	})
+	s.ConfigureDocuments()
+	w := httptest.NewRecorder()
+	s.Router.ServeHTTP(w, httptest.NewRequest("GET", "/privacy", nil))
+	body := w.Body.String()
+	if w.Code != 200 || strings.Contains(body, `<img src=x onerror=alert(1)>`) || !strings.Contains(body, `\u003cimg`) {
+		t.Fatal("operator-configured notice content was not safely serialized")
+	}
+	for _, claim := range []string{"No retention data", "30 days", "never shared"} {
+		if strings.Contains(strings.ToLower(body), strings.ToLower(claim)) {
+			t.Fatalf("page invented an operator fact: %q", claim)
+		}
+	}
+}
+
 func TestDocumentAuthorizedInitialState(t *testing.T) {
 	s, cookie, _ := itemFixture(t)
 	s.ConfigureDocuments()

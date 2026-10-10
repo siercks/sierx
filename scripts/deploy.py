@@ -230,6 +230,28 @@ def main(mode):
     if not app_env.is_file() or app_env.stat().st_mode & 0o077:
         raise ValueError("Create the private 0600 app.env before deployment")
     env = dict(line.split("=", 1) for line in app_env.read_text().splitlines() if line and not line.startswith("#") and "=" in line)
+    if "DATABASE_URL" in env or "SIERX_MAINTENANCE_DATABASE_URL" in env:
+        raise ValueError("app.env must not contain privileged operator or maintenance database credentials")
+    runtime = urllib.parse.urlsplit(env.get("SIERX_RUNTIME_DATABASE_URL", ""))
+    authentication = urllib.parse.urlsplit(env.get("SIERX_AUTH_DATABASE_URL", ""))
+    if (runtime.scheme not in {"postgres", "postgresql"} or authentication.scheme not in {"postgres", "postgresql"}
+            or not runtime.hostname or not authentication.hostname or not runtime.path.strip("/")
+            or runtime.hostname != authentication.hostname or (runtime.port or 5432) != (authentication.port or 5432)
+            or runtime.path != authentication.path
+            or runtime.username != "sierx_runtime" or authentication.username != "sierx_auth"
+            or not runtime.password or not authentication.password):
+        raise ValueError("app.env must contain separate runtime and authentication database URLs for the same database")
+    maintenance_file = config / "maintenance.env"
+    if not maintenance_file.is_file() or maintenance_file.stat().st_mode & 0o077:
+        raise ValueError("Create the private 0600 maintenance.env before deployment")
+    maintenance_env = dict(line.split("=", 1) for line in maintenance_file.read_text().splitlines()
+                           if line and not line.startswith("#") and "=" in line)
+    maintenance = urllib.parse.urlsplit(maintenance_env.get("SIERX_MAINTENANCE_DATABASE_URL", ""))
+    if ("DATABASE_URL" in maintenance_env or maintenance.scheme not in {"postgres", "postgresql"}
+            or maintenance.username != "sierx_maintenance" or maintenance.hostname != runtime.hostname
+            or (maintenance.port or 5432) != (runtime.port or 5432) or maintenance.path != runtime.path
+            or not maintenance.password):
+        raise ValueError("maintenance.env must contain the dedicated maintenance URL for the app database")
     if env.get("SIERX_LISTEN_ADDR") != "127.0.0.1:" + port:
         raise ValueError("app.env must bind the application to the selected loopback port")
     if env.get("SIERX_BASE_URL", "").rstrip("/") != required("SIERX_BASE_URL").rstrip("/"):

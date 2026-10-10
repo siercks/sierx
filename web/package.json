@@ -9,13 +9,13 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node design/tools/build-tokens.mjs --strict --check && tsc --noEmit && vite build && node scripts/version-assets.mjs && node scripts/bundle.mjs && node scripts/third-party.mjs && node scripts/offline-assets.mjs",
+    "build": "node design/tools/build-tokens.mjs --strict --check && tsc --noEmit && vite build && node scripts/version-assets.mjs && node scripts/bundle.mjs && node scripts/third-party.mjs && node scripts/offline-assets.mjs --prove",
     "test": "vitest run src",
     "test:browser": "playwright test",
     "routes": "node scripts/routes.mjs",
     "gate:routes": "node scripts/routes.mjs --check",
     "gate:bundle": "node scripts/bundle.mjs",
-    "gate:offline-assets": "node scripts/offline-assets.mjs",
+    "gate:offline-assets": "node scripts/offline-assets.mjs --prove",
     "licenses": "node scripts/licenses.mjs"
   },
   "dependencies": {
