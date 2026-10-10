@@ -151,6 +151,34 @@ make migrate-up
 make migrate-status
 ```
 
+Before the first application start, initialize the protected lifecycle journal
+with the accepted native CLI. Follow [LIFECYCLE-OPERATIONS.md](LIFECYCLE-OPERATIONS.md)
+for custody and recovery. Set `SIERX_OPERATOR_BIN` to that verified executable,
+create private parent directories, and initialize once against the migrated trial
+database. Never initialize a replacement empty journal for an existing instance.
+
+```bash
+install -d -m 700 "$HOME/.local/share/sierx/lifecycle" "$HOME/.local/share/sierx/lifecycle/guard"
+SIERX_LIFECYCLE_JOURNAL="$HOME/.local/share/sierx/lifecycle/journal.jsonl" \
+SIERX_LIFECYCLE_KEY_FILE="$HOME/.local/share/sierx/lifecycle/master.key" \
+SIERX_LIFECYCLE_CHECKPOINT="$HOME/.local/share/sierx/lifecycle/guard/checkpoint.json" \
+  "$SIERX_OPERATOR_BIN" lifecycle init
+```
+
+Add the following container paths to the private `app.env`; the installer mounts
+only this guard directory read-only, with the rootless owner mapped to UID 65532:
+
+```text
+SIERX_LIFECYCLE_CHECKPOINT=/var/lib/sierx/lifecycle/guard/checkpoint.json
+SIERX_LIFECYCLE_GUARD_KEY_FILE=/var/lib/sierx/lifecycle/guard/verification.key
+```
+
+Keep the master key and full journal outside `app.env`. Record independent protected
+recovery custody for the current journal, master and checkpoint. Reuse the instance's
+existing materials during upgrades; the application intentionally refuses access
+without a matching checkpoint. Lifecycle retention scheduling is optional and requires
+a separately reviewed explicit policy (`make deploy-lifecycle-timer`).
+
 Load the private deployment environment into the operator shell, then apply the
 reviewed release:
 
@@ -279,6 +307,11 @@ SIERX_RESTORE_IMAGE (accepted digest), SIERX_RESTORE_APP_ENV (0600 auth config w
 original session key), SIERX_RESTORE_BASE_URL, SIERX_RESTORE_APP_PORT (different from
 the live app) and the private smoke credentials/item above. It launches that exact
 image against the restored scratch database and runs HTTPS login/deep-link checks.
+Supply the current protected lifecycle journal/master/checkpoint to the operator
+restore environment and `SIERX_LIFECYCLE_GUARD_DIR` to the application hook.
+Replay and verify current decisions before restored access; never restore these
+materials from an older database backup. Preserve original owners/ACLs and provision
+the corresponding roles on a separate restore cluster.
 Without the hook conformance explicitly reports application access as NOT CHECKED;
 that is insufficient for cutover. Run both conformance and the immutable-cipher
 check successfully before adding the physical driver to the normal configured list.

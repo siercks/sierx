@@ -81,8 +81,14 @@ Every shipped unit is inventoried in `scripts/deploy.py`:
 | Application/Caddy | `make deploy-apply` |
 | Connected polling | `make deploy-timer` |
 | Partitions | `make deploy-maintenance-timer` |
+| Optional lifecycle retention | `make deploy-lifecycle-timer` with explicit private policy |
 | Backups | `python3 scripts/deploy.py install-backup-timer` |
 | Restore test | `make deploy-restore-timer` |
+
+Lifecycle-enabled releases require initialized protected journal/checkpoint materials
+before application startup. Both artifact and offline fixtures initialize them and
+mount only the guard read-only. Recovery must replay the current journal before
+ordinary access; see [LIFECYCLE-OPERATIONS.md](LIFECYCLE-OPERATIONS.md).
 
 Install timers after manual host acceptance. Connected polling remains optional.
 Restore orchestration runs on the operator host because it needs backup scripts,

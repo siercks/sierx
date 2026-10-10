@@ -155,7 +155,18 @@ def main():
             request("/api/v1/items", {"project": "OFF", "title": "Offline acceptance", "type": "story"})
             smoke_env = {**environment, "SIERX_SMOKE_URL": base, "SIERX_SMOKE_ITEM": "OFF-1", "SIERX_SMOKE_EMAIL": email, "SIERX_SMOKE_PASSWORD": password}
             before = run("python3", "-B", "scripts/release-smoke.py", cwd=root, env=smoke_env)
-            container("restart", "db", "app", "gateway")
+            # Readiness is distinct from a running database container. The app
+            # checks its lifecycle receipt at startup and correctly refuses to
+            # serve if PostgreSQL is still starting after its restart.
+            container("restart", "db")
+            for attempt in range(60):
+                try:
+                    container("exec", "db", "pg_isready", "-q", "-p", "15432", "-U", "sierx", "-d", "sierx")
+                    break
+                except subprocess.CalledProcessError:
+                    if attempt == 59: raise
+                    time.sleep(1)
+            container("restart", "app", "gateway")
             for attempt in range(60):
                 try:
                     after = run("python3", "-B", "scripts/release-smoke.py", cwd=root, env=smoke_env)
@@ -172,6 +183,16 @@ def main():
                                          "checks": offline.ACCEPTANCE_CHECKS}, indent=2) + "\n")
             print("offline acceptance: verified import, HTTPS workflow and full service restart passed without external networking")
             Path(os.environ["SIERX_OFFLINE_REPORT"] + ".private.log").unlink(missing_ok=True)
+        except (ValueError, OSError, subprocess.CalledProcessError):
+            # Keep final service diagnostics private, before disposable cleanup.
+            # Readiness retries alone do not establish the root cause of failure.
+            diagnostic = Path(os.environ["SIERX_OFFLINE_REPORT"] + ".private.log")
+            diagnostic.parent.mkdir(parents=True, exist_ok=True)
+            with os.fdopen(os.open(diagnostic, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600), "a") as stream:
+                for service in ("db", "app", "gateway"):
+                    result = subprocess.run([*podman, "logs", service], text=True, capture_output=True, check=False)
+                    stream.write("\nService: " + service + "\n" + (result.stdout + result.stderr)[-16384:])
+            raise
         finally:
             offline.command = originals
             subprocess.run([*podman, "rm", "-af"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
