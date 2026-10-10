@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/siercks/sierx/internal/sxq"
 )
 
 // One benchmark per §12 scenario. Scenarios whose endpoints do not exist yet
@@ -15,16 +17,11 @@ import (
 // between what §12 promises and what is measurable today is visible in the
 // output rather than inferred from a short list.
 //
-// The database-level scenarios are measurable now, because the queries they
-// exercise are the ones the store already issues. The HTTP-level ones need
-// task 1.x.
+// These benchmarks measure database/store costs. scripts/bench-http.py adds
+// authenticated HTTP p95 and response-byte evidence on an explicit target.
 
 const (
-	// reasonNoAPI is used verbatim in skip messages so `bench-smoke` output can
-	// be grepped for what is still unmeasured.
-	reasonNoAPI     = "skipped: needs the HTTP API (phase 1)"
-	reasonNoProcess = "skipped: needs the sierx process (task 1.1)"
-	reasonNoSXQ     = "skipped: needs the sxq parser (phase 1)"
+	reasonNoProcess = "not measured by this database-only benchmark; record as a separate process/hardware acceptance"
 )
 
 func pool(tb testing.TB) *pgxpool.Pool {
@@ -250,7 +247,34 @@ func BenchmarkRollupRecompute200(b *testing.B) {
 // --- explicitly skipped, by name ------------------------------------------
 
 func BenchmarkSXQQuery10k(b *testing.B) {
-	b.Skipf("%s: %s", ThresholdFor("sxq query over 10k items, indexed fields").Name, reasonNoSXQ)
+	p := pool(b)
+	ws, _, _ := seededWorkspace(b, p)
+	parsed, err := sxq.Parse(`text ~ "rollup cursor"`)
+	if err != nil {
+		b.Fatalf("parse benchmark query: %v", err)
+	}
+	plan, err := sxq.Compile(parsed, sxq.Options{Start: 2, Now: time.Now().UTC(), Custom: map[string][]sxq.CustomField{}})
+	if err != nil {
+		b.Fatalf("compile benchmark query: %v", err)
+	}
+	args := append([]any{pg(ws)}, plan.Args...)
+	b.ResetTimer()
+	for b.Loop() {
+		rows, queryErr := p.Query(context.Background(), `
+			SELECT i.id, i.key, i.title
+			  FROM item i JOIN project p ON p.id=i.project_id
+			 WHERE i.workspace_id=$1 AND i.deleted_at IS NULL AND `+plan.Where+`
+			 LIMIT 100`, args...)
+		if queryErr != nil {
+			b.Fatalf("SXQ query: %v", queryErr)
+		}
+		for rows.Next() {
+		}
+		rows.Close()
+		if queryErr = rows.Err(); queryErr != nil {
+			b.Fatalf("SXQ rows: %v", queryErr)
+		}
+	}
 }
 
 func BenchmarkSteadyStateRSS(b *testing.B) {

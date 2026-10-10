@@ -13,6 +13,9 @@ bundle="$PWD/dist/sierx-offline-$arch"
 caddy=${SIERX_CADDY_IMAGE:-docker.io/library/caddy@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52}
 case ${1:-} in
   build)
+    python3 -B scripts/offline-promotion.py candidate --arch "$arch" \
+      --repository "${SIERX_RELEASE_REPOSITORY:-ghcr.io/siercks/sierx}" \
+      --revision "$(git rev-parse HEAD)"
     python3 -B scripts/offline.py prepare --release dist/release.json \
       --caddy-image "$caddy" --sbom "dist/sbom-$arch.cdx.json" --output "$bundle"
     ;;

@@ -219,6 +219,10 @@ bench-baseline: ## Capture reference-hardware numbers into test/bench/baseline.j
 gate-bench: ## Assert the §12 thresholds against the baseline (reference hardware only)
 	@bash scripts/bench.sh gate
 
+.PHONY: bench-http
+bench-http: ## Record 500-sample authenticated HTTP latency/byte evidence on an explicit target
+	@python3 -B scripts/bench-http.py
+
 # gate-0 is the phase gate. CI runs exactly this target and nothing else
 # (§3.4), so anything that must hold before phase 1 belongs here, in this
 # order: cheap checks first, so a broken toolchain fails in seconds rather
@@ -377,10 +381,12 @@ offline-verify: ## Verify a bundle using independently approved SIERX_OFFLINE_SH
 offline-import: ## Verify and import native offline images; does not start services
 	@python3 -B scripts/offline.py import
 
-.PHONY: release-offline-bundle release-offline-test release-offline-archive
+.PHONY: release-offline-bundle release-offline-test release-offline-archive release-offline-evidence
 release-offline-bundle: ## Connected assembly using dist/release.json and its native SBOM
 	@bash scripts/offline-release.sh build
 release-offline-test: ## Native isolated acceptance; requires sudo for a disposable network namespace
 	@bash scripts/offline-release.sh test
 release-offline-archive: ## Archive only a bundle with matching native acceptance evidence
 	@bash scripts/offline-release.sh archive
+release-offline-evidence: ## Require both native offline bundles to pass before release promotion
+	@python3 -B scripts/offline-promotion.py verify --repository "$(or $(SIERX_RELEASE_REPOSITORY),ghcr.io/siercks/sierx)" --revision "$(shell git rev-parse HEAD)"

@@ -6,6 +6,16 @@ ADR-026 records the owner-approved direction.
 
 ## Promotion
 
+Promotion waits for both native offline bundle acceptance jobs. Each bundle is
+assembled against that architecture's immutable candidate digest after its
+native image test passes. The promotion job verifies both offline reports,
+bundle archives and embedded lock digests against those same candidate
+references before publishing the multi-architecture release index. A failed or
+missing offline result therefore prevents the release tag and manifest from
+being published. The architecture-specific `release.json` inside an offline
+archive intentionally pins its tested child image; the online deployment
+manifest pins the promoted multi-architecture index.
+
 The release workflow runs the source gate, builds native amd64/arm64 candidates
 with the single `deploy/Containerfile.release` recipe, and stages their images.
 Native runners then pull and test those exact digests. Only successful evidence
@@ -31,11 +41,15 @@ make release-test ARCH=amd64
 ```
 
 Repeat on native arm64. Gather `dist/image-ARCH.txt` and
-`dist/acceptance-ARCH.json` for both architectures into the same revision's `dist/`,
-then run `make release-manifest TAG=<full-revision>`. These are the same targets
-used by CI. Native tests acquire the pinned goose tool and PostgreSQL image while
-connected. Cached exact-digest images are reused; an absent image is pulled.
-A subsequent offline delivery branch will package these prerequisites.
+`dist/acceptance-ARCH.json` for both architectures into the same revision's `dist/`.
+On each native runner, run `make release-offline-bundle release-offline-test
+release-offline-archive ARCH=<arch>` and gather both offline reports, lock
+digests and archives into `dist/`. Then run `make release-offline-evidence`
+followed by `make release-manifest TAG=<full-revision>`. The manifest command
+repeats the evidence check before making any registry change. These are the same
+targets used by CI. Native tests acquire the pinned goose tool and PostgreSQL
+image while connected. Cached exact-digest images are reused; an absent image is
+pulled.
 
 The former `scripts/release-image.sh` alternative now delegates native candidate
 construction to the canonical recipe. Its old `SIERX_RELEASE_IMAGE` shortcut

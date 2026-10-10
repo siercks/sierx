@@ -39,16 +39,18 @@ backups never belong in the bundle.
 
 ## Prepare while connected
 
-Use a clean checkout **at the exact promoted release revision**, on the matching
-native architecture. Download the release manifest and matching application SBOM
-from its successful release workflow. The release workflow runs this assembly and
-its isolated acceptance test separately on amd64 and arm64, publishing an
-`offline-delivery-<arch>` artifact only after the test succeeds.
-The same CI steps are available locally as `make release-offline-bundle`,
-`make release-offline-test` and `make release-offline-archive`, using the reviewed
-manifest and native SBOM under `dist/`. Archive creation requires matching passing
-acceptance evidence. The lower-level assembly command also supports another output
-directory:
+The release workflow assembles each offline bundle on its matching native runner
+from the exact architecture-specific candidate digest after the candidate image
+test passes. It runs the isolated acceptance test before releasing the archive;
+the multi-architecture index is promoted only after both architecture-specific
+offline reports pass. Each archive's `release.json` pins its tested native child
+image, while the online deployment manifest pins the promoted multi-architecture
+index. Locally, provide both candidate references and image acceptance reports
+under `dist/`, then run `make release-offline-bundle release-offline-test
+release-offline-archive ARCH=<arch>` on each native architecture. Gather both
+results and run `make release-offline-evidence` before `make release-manifest`.
+The lower-level assembly command also supports another output directory when
+using a reviewed digest-pinned manifest:
 
 ```bash
 python3 -B scripts/offline.py prepare \
