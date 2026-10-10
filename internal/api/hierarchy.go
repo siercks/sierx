@@ -27,7 +27,7 @@ func (s *Server) hierarchy(w http.ResponseWriter, r *http.Request, children bool
 		depth = 1
 	}
 	var path string
-	err := s.Pool.QueryRow(r.Context(), `SELECT path::text FROM item WHERE workspace_id=$1 AND key=$2 AND deleted_at IS NULL`, Identity(r).WorkspaceID, chi.URLParam(r, "key")).Scan(&path)
+	err := s.DB.QueryRow(r.Context(), `SELECT path::text FROM item WHERE workspace_id=$1 AND key=$2 AND deleted_at IS NULL`, Identity(r).WorkspaceID, chi.URLParam(r, "key")).Scan(&path)
 	if err != nil {
 		databaseProblem(w, err)
 		return

@@ -51,7 +51,7 @@ func (s *Server) transitionItem(w http.ResponseWriter, r *http.Request) {
 	var projectID, statusID string
 	var configVersion int32
 	var required []byte
-	err = s.Pool.QueryRow(r.Context(), `SELECT i.project_id::text,t.id::text,ct.version,ct.requires FROM item i JOIN status t ON t.project_id=i.project_id AND t.key=$3 JOIN config_transition ct ON ct.project_id=i.project_id AND ct.from_status_id=i.status_id AND ct.to_status_id=t.id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL AND ct.version=(SELECT max(version) FROM project_config WHERE project_id=i.project_id)`, who.WorkspaceID, key, in.ToStatus).Scan(&projectID, &statusID, &configVersion, &required)
+	err = s.DB.QueryRow(r.Context(), `SELECT i.project_id::text,t.id::text,ct.version,ct.requires FROM item i JOIN status t ON t.project_id=i.project_id AND t.key=$3 JOIN config_transition ct ON ct.project_id=i.project_id AND ct.from_status_id=i.status_id AND ct.to_status_id=t.id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL AND ct.version=(SELECT max(version) FROM project_config WHERE project_id=i.project_id)`, who.WorkspaceID, key, in.ToStatus).Scan(&projectID, &statusID, &configVersion, &required)
 	if errors.Is(err, pgx.ErrNoRows) {
 		invalidChange(w, "to_status is not an allowed transition from the current status.")
 		return
@@ -91,7 +91,7 @@ func (s *Server) transitionItem(w http.ResponseWriter, r *http.Request) {
 	events = append(events, store.FieldChange{Kind: store.EventStatusChanged, Field: "status", Old: current["status"].(map[string]any)["key"], New: in.ToStatus})
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.Update(up, events...); return nil }, store.WithActor(actor), store.WithExpectedVersion(up.ID, version))
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.Update(up, events...); return nil }, store.WithActor(actor), store.WithExpectedVersion(up.ID, version))
 	if err != nil {
 		s.mutationError(w, r, err, in)
 		return

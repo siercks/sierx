@@ -23,7 +23,7 @@ func (s *Server) listComments(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) commentResponse(w http.ResponseWriter, r *http.Request, id uuid.UUID, status int) {
 	var raw []byte
-	err := s.Pool.QueryRow(r.Context(), "SELECT doc FROM ("+commentSelect+" AND c.id=$2) result", Identity(r).WorkspaceID, id.String()).Scan(&raw)
+	err := s.DB.QueryRow(r.Context(), "SELECT doc FROM ("+commentSelect+" AND c.id=$2) result", Identity(r).WorkspaceID, id.String()).Scan(&raw)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -60,7 +60,7 @@ func (s *Server) createComment(w http.ResponseWriter, r *http.Request) {
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
 	id := uuid.NewV7()
-	_, err := store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error {
+	_, err := store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error {
 		m.Comment(store.CommentChange{ID: id, ItemID: item, Action: "create", Body: in.Body})
 		return nil
 	}, store.WithActor(actor), store.WithExpectedVersion(item, version))
@@ -86,7 +86,7 @@ func (s *Server) changeComment(w http.ResponseWriter, r *http.Request) {
 	}
 	who := Identity(r)
 	var itemID, authorID, key, oldBody string
-	err = s.Pool.QueryRow(r.Context(), `SELECT c.item_id::text,c.author_id::text,i.key,c.body FROM comment c JOIN item i ON i.id=c.item_id WHERE c.id=$1 AND i.workspace_id=$2 AND c.deleted_at IS NULL`, id.String(), who.WorkspaceID).Scan(&itemID, &authorID, &key, &oldBody)
+	err = s.DB.QueryRow(r.Context(), `SELECT c.item_id::text,c.author_id::text,i.key,c.body FROM comment c JOIN item i ON i.id=c.item_id WHERE c.id=$1 AND i.workspace_id=$2 AND c.deleted_at IS NULL`, id.String(), who.WorkspaceID).Scan(&itemID, &authorID, &key, &oldBody)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -108,7 +108,7 @@ func (s *Server) changeComment(w http.ResponseWriter, r *http.Request) {
 	item, _ := uuid.Parse(itemID)
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error {
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error {
 		m.Comment(store.CommentChange{ID: id, ItemID: item, Action: action, Body: in.Body, OldBody: &oldBody})
 		return nil
 	}, store.WithActor(actor), store.WithExpectedVersion(item, version))

@@ -19,7 +19,7 @@ import (
 const itemJoins = ` FROM item i JOIN project p ON p.id=i.project_id JOIN status s ON s.id=i.status_id JOIN item_type t ON t.id=i.item_type_id LEFT JOIN item par ON par.id=i.parent_id LEFT JOIN user_account u ON u.id=i.assignee_id JOIN item_rollup r ON r.item_id=i.id `
 
 func (s *Server) customFields(ctx context.Context, workspace string) (map[string]string, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT f.key,f.data_type FROM field_def f JOIN project p ON p.id=f.project_id WHERE p.workspace_id=$1`, workspace)
+	rows, err := s.DB.Query(ctx, `SELECT f.key,f.data_type FROM field_def f JOIN project p ON p.id=f.project_id WHERE p.workspace_id=$1`, workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (s *Server) readItem(ctx context.Context, workspace, key string, fields []s
 	params := append([]any{workspace, key}, args...)
 	var raw []byte
 	var version int32
-	err := s.Pool.QueryRow(ctx, "SELECT "+expression+",i.version"+itemJoins+"WHERE i.workspace_id=$1 AND i.key=$2", params...).Scan(&raw, &version)
+	err := s.DB.QueryRow(ctx, "SELECT "+expression+",i.version"+itemJoins+"WHERE i.workspace_id=$1 AND i.key=$2", params...).Scan(&raw, &version)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -105,7 +105,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 	who := Identity(r)
 	var projectID, typeID, statusID, origin string
 	var version int32
-	err := s.Pool.QueryRow(r.Context(), `SELECT p.id::text,t.id::text,ct.initial_status_id::text,pc.version,w.origin_id::text FROM project p JOIN workspace w ON w.id=p.workspace_id JOIN project_config pc ON pc.project_id=p.id JOIN config_type ct ON ct.project_id=p.id AND ct.version=pc.version JOIN item_type t ON t.id=ct.item_type_id WHERE p.workspace_id=$1 AND p.key_prefix=$2 AND p.archived_at IS NULL AND t.key=$3 AND pc.version=(SELECT max(version) FROM project_config WHERE project_id=p.id)`, who.WorkspaceID, in.Project, in.Type).Scan(&projectID, &typeID, &statusID, &version, &origin)
+	err := s.DB.QueryRow(r.Context(), `SELECT p.id::text,t.id::text,ct.initial_status_id::text,pc.version,w.origin_id::text FROM project p JOIN workspace w ON w.id=p.workspace_id JOIN project_config pc ON pc.project_id=p.id JOIN config_type ct ON ct.project_id=p.id AND ct.version=pc.version JOIN item_type t ON t.id=ct.item_type_id WHERE p.workspace_id=$1 AND p.key_prefix=$2 AND p.archived_at IS NULL AND t.key=$3 AND pc.version=(SELECT max(version) FROM project_config WHERE project_id=p.id)`, who.WorkspaceID, in.Project, in.Type).Scan(&projectID, &typeID, &statusID, &version, &origin)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -124,7 +124,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 	var parent, assignee *uuid.UUID
 	if in.Parent != nil {
 		var idString string
-		err = s.Pool.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND project_id=$2 AND key=$3 AND deleted_at IS NULL`, who.WorkspaceID, projectID, *in.Parent).Scan(&idString)
+		err = s.DB.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND project_id=$2 AND key=$3 AND deleted_at IS NULL`, who.WorkspaceID, projectID, *in.Parent).Scan(&idString)
 		if err != nil {
 			databaseProblem(w, err)
 			return
@@ -136,7 +136,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 		v, _ := uuid.Parse(*in.Assignee)
 		assignee = &v
 	}
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error {
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error {
 		m.Create(store.ItemInsert{ID: id, ProjectID: pid, ItemTypeID: tid, StatusID: sid, ParentID: parent, Title: in.Title, Body: in.Body, AssigneeID: assignee, Points: in.Points, StartDate: in.StartDate, DueDate: in.DueDate, Fields: in.Fields, OriginID: oid, ConfigVersion: &version})
 		return nil
 	}, store.WithActor(actor))
@@ -145,7 +145,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var key string
-	if err = s.Pool.QueryRow(r.Context(), `SELECT key FROM item WHERE id=$1`, id.String()).Scan(&key); err != nil {
+	if err = s.DB.QueryRow(r.Context(), `SELECT key FROM item WHERE id=$1`, id.String()).Scan(&key); err != nil {
 		databaseProblem(w, err)
 		return
 	}
@@ -229,7 +229,7 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var projectID string
-	err = s.Pool.QueryRow(r.Context(), `SELECT project_id::text FROM item WHERE workspace_id=$1 AND key=$2`, who.WorkspaceID, chi.URLParam(r, "key")).Scan(&projectID)
+	err = s.DB.QueryRow(r.Context(), `SELECT project_id::text FROM item WHERE workspace_id=$1 AND key=$2`, who.WorkspaceID, chi.URLParam(r, "key")).Scan(&projectID)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -306,7 +306,7 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.Update(up, events...); return nil }, store.WithActor(actor), store.WithExpectedVersion(id, version))
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.Update(up, events...); return nil }, store.WithActor(actor), store.WithExpectedVersion(id, version))
 	if err != nil {
 		s.mutationError(w, r, err, raw)
 		return
@@ -330,7 +330,7 @@ func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	}
 	who := Identity(r)
 	var idString string
-	err := s.Pool.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND key=$2`, who.WorkspaceID, chi.URLParam(r, "key")).Scan(&idString)
+	err := s.DB.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND key=$2`, who.WorkspaceID, chi.URLParam(r, "key")).Scan(&idString)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -338,7 +338,7 @@ func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	id, _ := uuid.Parse(idString)
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.SoftDelete(id); return nil }, store.WithActor(actor), store.WithExpectedVersion(id, version))
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.SoftDelete(id); return nil }, store.WithActor(actor), store.WithExpectedVersion(id, version))
 	if err != nil {
 		s.mutationError(w, r, err, map[string]any{"deleted": true})
 		return

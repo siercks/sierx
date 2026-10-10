@@ -23,7 +23,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	metric("sierx_http_requests_total", "counter", "Completed HTTP requests including failed requests.", s.requests.Load())
 	metric("sierx_http_requests_in_flight", "gauge", "HTTP requests currently being handled including this scrape.", s.inflight.Load())
 	metric("sierx_http_request_duration_seconds_total", "counter", "Total elapsed time of completed HTTP requests in seconds.", float64(s.durationNS.Load())/1e9)
-	stats := s.Pool.Stat()
+	stats := s.DB.Stat()
 	metric("sierx_database_connections", "gauge", "Total connections in the application database pool.", stats.TotalConns())
 	metric("sierx_database_connections_acquired", "gauge", "Connections currently acquired from the application database pool.", stats.AcquiredConns())
 }

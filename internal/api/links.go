@@ -14,7 +14,7 @@ const linkSelect = `SELECT l.id,jsonb_build_object('id',l.id,'kind',l.kind,'from
 
 func (s *Server) itemID(w http.ResponseWriter, r *http.Request, key string) (uuid.UUID, bool) {
 	var id string
-	err := s.Pool.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND key=$2 AND deleted_at IS NULL`, Identity(r).WorkspaceID, key).Scan(&id)
+	err := s.DB.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND key=$2 AND deleted_at IS NULL`, Identity(r).WorkspaceID, key).Scan(&id)
 	if err != nil {
 		databaseProblem(w, err)
 		return uuid.UUID{}, false
@@ -69,7 +69,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 	who := Identity(r)
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err := store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error {
+	_, err := store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error {
 		m.Link(store.LinkChange{ID: id, FromItemID: from, ToItemID: to, Kind: in.Kind})
 		return nil
 	}, store.WithActor(actor), store.WithExpectedVersion(from, version))
@@ -78,7 +78,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var raw []byte
-	err = s.Pool.QueryRow(r.Context(), "SELECT doc FROM ("+linkSelect+" AND l.id=$2) link", who.WorkspaceID, id.String()).Scan(&raw)
+	err = s.DB.QueryRow(r.Context(), "SELECT doc FROM ("+linkSelect+" AND l.id=$2) link", who.WorkspaceID, id.String()).Scan(&raw)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -100,7 +100,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 	}
 	who := Identity(r)
 	var fromID, toID, fromKey, toKey, kind string
-	err = s.Pool.QueryRow(r.Context(), `SELECT l.from_item_id::text,l.to_item_id::text,f.key,t.key,l.kind FROM item_link l JOIN item f ON f.id=l.from_item_id JOIN item t ON t.id=l.to_item_id WHERE l.id=$1 AND f.workspace_id=$2 AND t.workspace_id=$2`, id.String(), who.WorkspaceID).Scan(&fromID, &toID, &fromKey, &toKey, &kind)
+	err = s.DB.QueryRow(r.Context(), `SELECT l.from_item_id::text,l.to_item_id::text,f.key,t.key,l.kind FROM item_link l JOIN item f ON f.id=l.from_item_id JOIN item t ON t.id=l.to_item_id WHERE l.id=$1 AND f.workspace_id=$2 AND t.workspace_id=$2`, id.String(), who.WorkspaceID).Scan(&fromID, &toID, &fromKey, &toKey, &kind)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -120,7 +120,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 	}
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error {
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error {
 		m.Unlink(store.LinkChange{ID: id, FromItemID: from, ToItemID: to, ActingItemID: acting, Kind: kind})
 		return nil
 	}, store.WithActor(actor), store.WithExpectedVersion(acting, version))
