@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,34 @@ def await_ready(check):
             time.sleep(.5)
 
 
+def require_psql():
+    if not shutil.which("psql"):
+        raise ValueError("Install PostgreSQL 18 clients before native artifact acceptance")
+    if not re.search(r"PostgreSQL\) 18\.", run("psql", "--version")):
+        raise ValueError("Select PostgreSQL 18 psql in PATH before native artifact acceptance")
+
+
+def await_database(db, database):
+    # The entrypoint's temporary initialization server has a local socket but
+    # no TCP listener. Acceptance must reach the final server through the same
+    # mapped TCP endpoint that role provisioning and goose will use.
+    await_ready(lambda: run("podman", "exec", db, "pg_isready", "-h", "127.0.0.1",
+                            "-U", "postgres", "-d", "sierx"))
+    await_ready(lambda: run("psql", database, "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
+                            "-c", "SELECT 1"))
+
+
+def failure_detail(error):
+    if isinstance(error, ValueError):
+        return str(error)
+    if isinstance(error, subprocess.CalledProcessError):
+        program = Path(error.cmd[0]).name if isinstance(error.cmd, (list, tuple)) else "command"
+        if program not in {"podman", "bash", "psql", "goose"}:
+            program = "operator-tool"
+        return f"{program} failed with exit status {error.returncode}"
+    return type(error).__name__
+
+
 def main():
     requested_arch = os.environ.get("ARCH")
     if requested_arch not in {"amd64", "arm64"}:
@@ -58,6 +87,7 @@ def main():
     image = os.environ["SIERX_TEST_IMAGE"]
     if not re.fullmatch(r"[a-f0-9]{40}", revision) or not re.fullmatch(r"[^\s@]+@sha256:[a-f0-9]{64}", image):
         raise ValueError("Use an exact revision and immutable image digest")
+    require_psql()
     print("release-image: checking immutable candidate identity", flush=True)
     ensure_image(image)
     metadata = json.loads(run("podman", "image", "inspect", image))[0]
@@ -82,7 +112,6 @@ def main():
             run("podman", "run", "-d", "--pod", pod, "--name", db,
                 "--tmpfs", "/var/lib/postgresql", "-e", "POSTGRES_PASSWORD=artifact-only-password",
                 "-e", "POSTGRES_DB=sierx", "-e", "POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8", pg_image)
-            await_ready(lambda: run("podman", "exec", db, "pg_isready", "-U", "postgres", "-d", "sierx"))
             infra = json.loads(run("podman", "pod", "inspect", pod))["InfraContainerID"]
             ports = json.loads(run("podman", "inspect", infra))[0]["NetworkSettings"]["Ports"]
             app_port = ports["8080/tcp"][0]["HostPort"]
@@ -93,8 +122,12 @@ def main():
                                 "SIERX_RUNTIME_DATABASE_URL": "postgres://sierx_runtime:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable",
                                 "SIERX_AUTH_DATABASE_URL": "postgres://sierx_auth:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable",
                                 "SIERX_MAINTENANCE_DATABASE_URL": "postgres://sierx_maintenance:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable"}
+            print("release-image: waiting for mapped database TCP readiness", flush=True)
+            await_database(db, admin_database)
+            print("release-image: provisioning database roles", flush=True)
             run("bash", "scripts/db-roles.sh", env=role_environment, cwd=ROOT)
             goose = os.environ["GOOSE"]
+            print("release-image: applying migrations", flush=True)
             run(goose, "-dir", str(ROOT / "migrations"), "postgres",
                 admin_database, "up")
             env = scratch / "app.env"
@@ -191,5 +224,5 @@ if __name__ == "__main__":
         main()
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         # Never publish subprocess arguments/output, which can contain fixture credentials.
-        detail = str(error) if isinstance(error, ValueError) else type(error).__name__
+        detail = failure_detail(error)
         sys.exit("release-image acceptance failed at the last reported step; no acceptance evidence issued: " + detail)

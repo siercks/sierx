@@ -21,7 +21,7 @@ case ${1:-} in
     ;;
   test)
     expected=$(sha256sum "$bundle/bundle.lock.json" | cut -d ' ' -f1)
-    sudo env SIERX_OFFLINE_BUNDLE="$bundle" SIERX_OFFLINE_SHA256="$expected" \
+    sudo env PATH="$PATH" SIERX_OFFLINE_BUNDLE="$bundle" SIERX_OFFLINE_SHA256="$expected" \
       SIERX_OFFLINE_REPORT="$PWD/dist/offline-acceptance-$arch.json" \
       unshare --net -- python3 -B scripts/test-offline-bundle.py
     ;;

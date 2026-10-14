@@ -160,3 +160,14 @@ status because the new matrix reported different check names. Re-enable branch
 protection using names verified from actual check-run API records, or introduce
 a stable aggregate job in a separately reviewed change. Green runs do not prove
 that merge protection is enforcing the intended checks. This remains open.
+
+## Native artifact database readiness
+
+Artifact acceptance requires PostgreSQL 18 clients installed in each independent
+runner job. It first checks the final PostgreSQL TCP listener and then executes a
+read-only query through the mapped host port before role provisioning/migrations.
+A default local-socket pg_isready probe can accept the image entrypoint's temporary
+initialization server and is insufficient. Native/offline jobs explicitly install
+PG18, and the privileged isolated offline test retains the reviewed tool PATH.
+Client absence/version failures are explicit; command failures identify the safe
+program/exit status without credentials. No failed run issues acceptance evidence.
