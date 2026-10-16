@@ -19,30 +19,30 @@
     "licenses": "node scripts/licenses.mjs"
   },
   "dependencies": {
-    "@base-ui/react": "1.8.0",
-    "@tanstack/react-query": "5.104.0",
-    "@tanstack/react-virtual": "3.14.13",
+    "@base-ui/react": "1.9.0",
+    "@tanstack/react-query": "5.104.2",
+    "@tanstack/react-virtual": "3.14.17",
     "lossless-json": "4.3.1",
     "markdown-it": "15.0.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.64.0",
     "@types/culori": "4.0.1",
     "@types/markdown-it": "14.2.0",
-    "@types/node": "26.6.3",
+    "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.1.1",
+    "@vitejs/plugin-react": "6.1.2",
     "culori": "4.0.2",
-    "html-validate": "11.16.1",
+    "html-validate": "11.16.2",
     "linkedom": "0.18.13",
-    "postcss": "8.5.28",
+    "postcss": "8.5.30",
     "rollup-plugin-visualizer": "7.1.1",
     "typescript": "7.0.2",
-    "vite": "8.3.1",
-    "vitest": "5.0.2"
+    "vite": "8.3.4",
+    "vitest": "5.0.4"
   },
   "overrides": {
     "source-map-js": "1.2.2"
