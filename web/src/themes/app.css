@@ -280,6 +280,8 @@ h3 {
 .legal-footer {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
   gap: 0.5rem 1rem;
   color: var(--muted-foreground);
   font-size: var(--sx-text-sm);
@@ -428,6 +430,11 @@ h3 {
   padding: 0.85rem 1.1rem;
   background: var(--card);
   transition: background-color 120ms ease;
+}
+
+/* A proportional key column made each title move with its row's status width. */
+.sx-virtual-list .item-row {
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
 }
 
 .item-row:last-child {
@@ -1345,7 +1352,8 @@ th {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .item-row {
+  .item-row,
+  .sx-virtual-list .item-row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.4rem 0.75rem;
   }

@@ -39,6 +39,108 @@ async function create(
   return response.json();
 }
 test.beforeEach(async ({ context }) => authenticate(context));
+
+test('usability: item titles align across status widths in every appearance', async ({ page, context }) => {
+  const todo = await create(context, 'Aligned title');
+  const doing = await create(context, 'Aligned title');
+  const me = await (await context.request.get('/api/v1/me')).json();
+  expect((await context.request.post(`/api/v1/items/${doing.key}/transition`, {
+    headers: { 'If-Match': `"${doing.version}"` },
+    data: { to_status: 'doing', fields: { assignee: me.id } },
+  })).ok()).toBe(true);
+  await page.goto('/?q=' + encodeURIComponent(`key in ("${todo.key}", "${doing.key}")`));
+  for (const { id } of appearanceThemes) {
+    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+    await page.evaluate(() => document.fonts.ready);
+    const a = page.locator(`.item-title[href="/${todo.key}"]`);
+    const b = page.locator(`.item-title[href="/${doing.key}"]`);
+    await expect(a).toBeVisible();
+    await expect(b).toBeVisible();
+    expect(Math.abs((await a.boundingBox())!.x - (await b.boundingBox())!.x), id).toBeLessThan(1);
+  }
+});
+
+test('usability: footer links are centered and wrap within the viewport', async ({ page, context }) => {
+  const item = await create(context, 'Footer alignment');
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/', '/' + item.key, '/login', '/privacy', '/copyright', '/third-party']) {
+      await page.goto(path);
+      const footer = page.locator('.legal-footer').last();
+      await expect(footer).toBeVisible();
+      const geometry = await footer.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const children = Array.from(element.querySelectorAll('a')).map((a) => a.getBoundingClientRect());
+        return { center: (box.left + box.right) / 2, left: Math.min(...children.map((b) => b.left)), right: Math.max(...children.map((b) => b.right)), viewport: innerWidth };
+      });
+      expect(Math.abs((geometry.left + geometry.right) / 2 - geometry.center), path).toBeLessThan(2);
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
+    }
+  }
+});
+
+test('usability: plain item detail uses workspace width', async ({ page, context }) => {
+  const item = await create(context, 'Full width plain detail');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await context.request.patch('/api/v1/me', { data: { theme: 'plain' } });
+  await page.goto('/' + item.key);
+  const sizes = await page.locator('.item-document').evaluate((element) => {
+    const main = element.parentElement!;
+    const style = getComputedStyle(main);
+    return { document: element.getBoundingClientRect().width, available: main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) };
+  });
+  expect(sizes.document).toBeGreaterThanOrEqual(sizes.available - 2);
+});
+
+test('usability: platinum mobile keeps content inset and controls readable', async ({ page, context }, info) => {
+  const item = await create(context, 'Mobile spacing and a long item title for wrapping');
+  await context.request.patch('/api/v1/me', { data: { theme: 'platinum' } });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const path of ['/', '/' + item.key]) {
+      await page.goto(path);
+      const geometry = await page.locator('.app-main').evaluate((element) => {
+        const main = element.getBoundingClientRect();
+        const content = element.querySelector('.page-heading, .breadcrumbs')!.getBoundingClientRect();
+        return { left: content.left - main.left, right: main.right - content.right, scroll: document.documentElement.scrollWidth, viewport: innerWidth };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(8);
+      expect(geometry.right).toBeGreaterThanOrEqual(8);
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport);
+      await page.screenshot({ path: info.outputPath(`platinum-${width}-${path === '/' ? 'list' : 'detail'}.png`), fullPage: true });
+    }
+    await keyboardActivate(page, 'Edit item');
+    const title = page.getByLabel('Title', { exact: true });
+    await expect(title).toBeVisible();
+    const padding = await title.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { left: parseFloat(style.paddingLeft), top: parseFloat(style.paddingTop), height: element.clientHeight, font: parseFloat(style.fontSize) };
+    });
+    expect(padding.left).toBeGreaterThanOrEqual(8);
+    expect(padding.top).toBeGreaterThanOrEqual(6);
+    expect(padding.height).toBeGreaterThan(padding.font * 1.5);
+    await page.keyboard.press('Escape');
+  }
+});
+
+test('usability: item save closes only on success and returns focus', async ({ page, context }) => {
+  const item = await create(context, 'Save and close');
+  await page.goto('/' + item.key);
+  await keyboardActivate(page, 'Edit item');
+  await page.getByLabel('Title', { exact: true }).fill('Saved without another click');
+  await page.route('**/api/v1/items/' + item.key, (route) => route.request().method() === 'PATCH'
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ title: 'Temporarily unavailable' }) })
+    : route.continue());
+  await keyboardActivate(page, 'Save changes');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Temporarily unavailable');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Saved without another click');
+  await page.unroute('**/api/v1/items/' + item.key);
+  await keyboardActivate(page, 'Save changes');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Saved without another click' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit item', exact: true })).toBeFocused();
+});
 test('login supports keyboard, passwords and expired sessions', async ({
   page,
   context,
@@ -395,7 +497,7 @@ test('two real sessions retain conflicts and deliberately retry', async ({
   await keyboardActivate(other, 'Edit item');
   await other.getByLabel('Title', { exact: true }).fill('Their committed edit');
   await keyboardActivate(other, 'Save changes');
-  await expect(other.getByRole('status')).toContainText('completed');
+  await expect(other.getByRole('dialog')).toBeHidden();
   await keyboardActivate(page, 'Save changes');
   await expect(page.getByRole('alert')).toContainText('Someone else changed');
   await expect(
@@ -410,8 +512,7 @@ test('two real sessions retain conflicts and deliberately retry', async ({
     'My retained draft',
   );
   await keyboardActivate(page, 'Save changes');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(
     page.getByRole('heading', { name: 'My retained draft' }),
   ).toBeVisible();
@@ -585,8 +686,7 @@ test('explicit conflict retry applies only the retained draft', async ({
   await keyboardActivate(page, 'Save changes');
   await expect(page.getByRole('alert')).toContainText('Someone else changed');
   await keyboardActivate(page, 'Retry my changes');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(
     page.getByRole('heading', { name: 'Explicitly accepted draft' }),
   ).toBeVisible();
@@ -635,8 +735,7 @@ test('an expired session preserves the open dialog draft through reauthenticatio
   );
   await authenticate(context);
   await keyboardActivate(page, 'Save changes');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(
     page.getByRole('heading', { name: 'Draft after sign-in' }),
   ).toBeVisible();

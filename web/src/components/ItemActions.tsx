@@ -22,6 +22,7 @@ export function ActionForm({
   optimistic,
   resetOnSuccess = false,
   submitVariant = 'default',
+  onSuccess,
 }: {
   item: Item;
   workspace: string;
@@ -33,6 +34,7 @@ export function ActionForm({
   optimistic?: (data: FormData) => Partial<Item>;
   resetOnSuccess?: boolean;
   submitVariant?: 'default' | 'destructive';
+  onSuccess?: () => void;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const mutation = useItemWrite(workspace, item.key);
@@ -60,6 +62,7 @@ export function ActionForm({
       setDirty(false);
       setVersion(write.version + 1);
       if (resetOnSuccess) form.current?.reset();
+      onSuccess?.();
     } catch (e) {
       if (
         e instanceof APIError &&
@@ -225,18 +228,28 @@ export function ItemActions({
   userID: string;
 }) {
   const [target, setTarget] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaved, setEditSaved] = useState(false);
   const transitions = config.transitions[item.status.key] ?? [];
   const transition =
     transitions.find((t) => t.to_key === target) ?? transitions[0];
   return (
     <div className="toolbar" aria-label="Item actions">
-      <Dialog trigger="Edit item" title={'Edit ' + item.key}>
+      <p className="sr-only" aria-live="polite">{editSaved ? 'Changes saved.' : ''}</p>
+      <Dialog trigger="Edit item" title={'Edit ' + item.key} open={editOpen} onOpenChange={(open) => {
+        setEditOpen(open);
+        if (open) setEditSaved(false);
+      }}>
         <ActionForm
           item={item}
           workspace={workspace}
           path={'/items/' + item.key}
           method="PATCH"
           label="Save changes"
+          onSuccess={() => {
+            setEditOpen(false);
+            setEditSaved(true);
+          }}
           optimistic={(d) => ({
             title: String(d.get('title')),
             body: optional(d, 'body'),

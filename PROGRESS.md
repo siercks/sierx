@@ -1952,3 +1952,49 @@ A controlled six-second PostgreSQL initialization script reproduced an early rol
 Release artifact/offline jobs now explicitly install/select PostgreSQL 18 clients rather than depending on different runner defaults. The root offline test preserves the reviewed client PATH. Failure output now identifies a safe program name/exit status and separate readiness/role/migration stages without publishing arguments or stderr. Acceptance evidence requirements remain intact.
 
 Verification: all 50 Python tooling tests passed, including six new readiness/client/timeout/stale-evidence/privacy cases; the delayed real rootless amd64 artifact passed. Bash syntax passed. Local ShellCheck was unavailable in the cached tool image; the existing hosted workflow-lint job enforces ShellCheck/actionlint. Runtime code is unchanged. New hosted checks and a fresh release run must validate the pushed correction; no new promoted release or server change is claimed.
+
+## 2026-10-18 — Owner-reported usability fixes
+
+Implemented the first follow-up increment from the owner's near-daily trial, based
+on 4e0c216. Backlog titles now keep a fixed starting column across status widths;
+footers center and wrap; successful item edits close with focus return and a live
+confirmation, while failures/conflicts keep the draft. Platinum restores content
+gutters and mobile form padding/text; Plain Text item details override its narrow
+document measure. Regenerated theme metadata. No new dependencies or data/API
+changes. Details-pane field editing and administrator/workflow tooling remain
+separate planned increments.
+
+The five new browser regressions reproduced all five reports against the baseline:
+status-dependent title shift, left-aligned footer, 513px Plain Text detail in
+1236px available space, 1px Platinum mobile content inset, and a successful save
+leaving its dialog open. They pass on the updated build in both engines. Existing
+concurrent-update, explicit retry and expired-session draft checks also pass with
+the intended successful-save close behavior.
+
+Local network-disabled disposable Linux/PostgreSQL/HTTPS fixture output:
+
+```text
+make gate-browser gate-stylelint gate-routes
+Test Files  7 passed (7)
+Tests  41 passed (41)
+[chromium] 46 passed (1.9m)
+[firefox] 46 passed (2.6m)
+--- PASS: TestBrowserAcceptance (271.42s)
+selected-test: required test and subtests passed
+style/focus gates: PASS
+gate-routes: OK
+
+make gate-virtualization
+[chromium] 1 passed
+[firefox] 1 passed (13.3s)
+--- PASS: TestBrowserAcceptance (142.06s)
+selected-test: required test and subtests passed
+```
+
+Production build, generated theme checks, bundle budgets and offline-resource
+checks passed; initial Brotli JS 101496 bytes, CSS 19164 bytes. Alignment coverage
+includes all 23 appearances; narrow-screen checks use 320px/390px viewports and
+synthetic-data screenshots. Physical mobile-device review, hosted/native release
+acceptance and production deployment were not performed for this increment.
+Actual-use evidence is near-daily from October 9, not a claim of seven consecutive
+days as the primary backlog. Phase 2 acceptance remains open.
