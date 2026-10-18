@@ -50,7 +50,9 @@ admin_url=$(url_for_db postgres)
 # that holds data; partitions are covered through their parent.
 TABLES=(workspace user_account membership session project project_config status
         item_type config_status config_type config_transition field_def item
-        item_rollup item_link change_event sprint sprint_item comment saved_view)
+        item_rollup item_link change_event sprint sprint_item comment saved_view
+        operator_account_action operator_data_export operator_data_export_event
+        operator_lifecycle_state operator_lifecycle_hold operator_content_restriction operator_lifecycle_event)
 
 row_counts() {   # row_counts DSN -> "table<TAB>count" per line
   local dsn=$1 t
@@ -156,6 +158,15 @@ run_one() {
   DATABASE_URL=$scratch_dsn bash scripts/sierxctl.sh rollup --verify \
     || die "$d restored copy has wrong rollups"
 
+  if [[ -n ${SIERX_LIFECYCLE_JOURNAL:-} ]]; then
+    scratch_maintenance=$(python3 - "$SIERX_MAINTENANCE_DATABASE_URL" "$SCRATCH" <<'PYRESTORE'
+import sys,urllib.parse
+url=urllib.parse.urlsplit(sys.argv[1]);print(urllib.parse.urlunsplit(url._replace(path='/'+sys.argv[2])))
+PYRESTORE
+)
+    SIERX_MAINTENANCE_DATABASE_URL=$scratch_maintenance bash scripts/sierxctl.sh lifecycle replay || die 'lifecycle recovery replay failed'
+    SIERX_MAINTENANCE_DATABASE_URL=$scratch_maintenance bash scripts/sierxctl.sh lifecycle verify || die 'lifecycle recovery verification failed'
+  fi
   if [[ -n ${SIERX_RESTORE_APP_CHECK:-} ]]; then
     [[ -f $SIERX_RESTORE_APP_CHECK ]] || die 'restore application check script is missing'
     DATABASE_URL=$scratch_dsn bash "$SIERX_RESTORE_APP_CHECK" || die 'application access to restored data failed'

@@ -26,13 +26,41 @@ UNIT_INSTALLERS = {
     "sierx-maintenance.timer": "install-maintenance-timer",
     "sierx-restoretest.service.tmpl": "install-restore-timer",
     "sierx-restoretest.timer": "install-restore-timer",
+    "sierx-lifecycle.service.tmpl":"install-lifecycle-timer",
+    "sierx-lifecycle.timer":"install-lifecycle-timer",
 }
 TIMERS = {
     "install-timer": "sierx-pull",
     "install-backup-timer": "sierx-backup",
     "install-maintenance-timer": "sierx-maintenance",
     "install-restore-timer": "sierx-restoretest",
+    "install-lifecycle-timer":"sierx-lifecycle",
 }
+
+
+def validate_lifecycle_guard(env):
+    import hashlib, hmac
+    directory=pathlib.Path.home()/".local/share/sierx/lifecycle/guard"
+    expected={"SIERX_LIFECYCLE_CHECKPOINT":"/var/lib/sierx/lifecycle/guard/checkpoint.json",
+              "SIERX_LIFECYCLE_GUARD_KEY_FILE":"/var/lib/sierx/lifecycle/guard/verification.key"}
+    if any(env.get(key)!=value for key,value in expected.items()):
+        raise ValueError("app.env must configure the mounted lifecycle checkpoint and verification key")
+    if directory.is_symlink() or not directory.is_dir() or directory.stat().st_mode & 0o077:
+        raise ValueError("Initialize the private lifecycle guard directory before deployment")
+    for name in ("checkpoint.json","verification.key"):
+        path=directory/name
+        if path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o077:
+            raise ValueError("Lifecycle guard files must be private regular files")
+    key=(directory/"verification.key").read_bytes()
+    checkpoint=directory/"checkpoint.json"
+    if len(key)!=32 or checkpoint.stat().st_size>4096:
+        raise ValueError("Lifecycle verification key/checkpoint is invalid")
+    h=json.loads(checkpoint.read_text())
+    if set(h)!={"instance_id","sequence","hash","mac"} or not re.fullmatch(r"[a-f0-9-]{36}",h.get("instance_id","")) or type(h.get("sequence")) is not int or h["sequence"]<0:
+        raise ValueError("Lifecycle checkpoint structure is invalid")
+    body=json.dumps({"instance_id":h["instance_id"],"sequence":h["sequence"],"hash":h["hash"]},separators=(",",":"))
+    if not hmac.compare_digest(h.get("mac",""),hmac.new(key,body.encode(),hashlib.sha256).hexdigest()):
+        raise ValueError("Lifecycle checkpoint authentication failed")
 
 
 def unit_inventory():
@@ -174,7 +202,7 @@ def main(mode):
         if any(c in checkout for c in '"\n\r%\\'):
             raise ValueError("Unsupported character in operator checkout path")
         values = {"SIERX_CHECKOUT": checkout}
-        if mode == "install-restore-timer":
+        if mode in {"install-restore-timer", "install-lifecycle-timer"}:
             binary = pathlib.Path(required("SIERX_OPERATOR_BIN"))
             if (not binary.is_absolute() or not binary.is_file() or not os.access(binary, os.X_OK)
                     or any(c in str(binary) for c in '"\n\r%\\')):
@@ -182,9 +210,15 @@ def main(mode):
             for tool in ("bash", "psql", "flock"):
                 if shutil.which(tool) is None:
                     raise ValueError("Restore host prerequisite missing: " + tool)
-            restore_env = config / "restore.env"
+            restore_env = config / ("lifecycle.env" if mode == "install-lifecycle-timer" else "restore.env")
             if not restore_env.is_file() or restore_env.stat().st_mode & 0o077:
-                raise ValueError("Create the private 0600 restore.env before installing its timer")
+                raise ValueError("Create the private 0600 operator environment before installing its timer")
+            if mode == "install-lifecycle-timer":
+                policy=config/"retention.json"
+                if policy.is_symlink() or not policy.is_file() or policy.stat().st_mode & 0o077:
+                    raise ValueError("Create the explicit private 0600 retention.json before installing its timer")
+                if not json.loads(policy.read_text()).get("enabled"):
+                    raise ValueError("Enable an explicit reviewed policy before installing its timer")
             values["SIERX_OPERATOR_BIN"] = str(binary)
         for filename, content in timer_files(mode, values).items():
             atomic(user_units / filename, content)
@@ -230,6 +264,29 @@ def main(mode):
     if not app_env.is_file() or app_env.stat().st_mode & 0o077:
         raise ValueError("Create the private 0600 app.env before deployment")
     env = dict(line.split("=", 1) for line in app_env.read_text().splitlines() if line and not line.startswith("#") and "=" in line)
+    if "DATABASE_URL" in env or "SIERX_MAINTENANCE_DATABASE_URL" in env:
+        raise ValueError("app.env must not contain privileged operator or maintenance database credentials")
+    validate_lifecycle_guard(env)
+    runtime = urllib.parse.urlsplit(env.get("SIERX_RUNTIME_DATABASE_URL", ""))
+    authentication = urllib.parse.urlsplit(env.get("SIERX_AUTH_DATABASE_URL", ""))
+    if (runtime.scheme not in {"postgres", "postgresql"} or authentication.scheme not in {"postgres", "postgresql"}
+            or not runtime.hostname or not authentication.hostname or not runtime.path.strip("/")
+            or runtime.hostname != authentication.hostname or (runtime.port or 5432) != (authentication.port or 5432)
+            or runtime.path != authentication.path
+            or runtime.username != "sierx_runtime" or authentication.username != "sierx_auth"
+            or not runtime.password or not authentication.password):
+        raise ValueError("app.env must contain separate runtime and authentication database URLs for the same database")
+    maintenance_file = config / "maintenance.env"
+    if not maintenance_file.is_file() or maintenance_file.stat().st_mode & 0o077:
+        raise ValueError("Create the private 0600 maintenance.env before deployment")
+    maintenance_env = dict(line.split("=", 1) for line in maintenance_file.read_text().splitlines()
+                           if line and not line.startswith("#") and "=" in line)
+    maintenance = urllib.parse.urlsplit(maintenance_env.get("SIERX_MAINTENANCE_DATABASE_URL", ""))
+    if ("DATABASE_URL" in maintenance_env or maintenance.scheme not in {"postgres", "postgresql"}
+            or maintenance.username != "sierx_maintenance" or maintenance.hostname != runtime.hostname
+            or (maintenance.port or 5432) != (runtime.port or 5432) or maintenance.path != runtime.path
+            or not maintenance.password):
+        raise ValueError("maintenance.env must contain the dedicated maintenance URL for the app database")
     if env.get("SIERX_LISTEN_ADDR") != "127.0.0.1:" + port:
         raise ValueError("app.env must bind the application to the selected loopback port")
     if env.get("SIERX_BASE_URL", "").rstrip("/") != required("SIERX_BASE_URL").rstrip("/"):

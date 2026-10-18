@@ -40,7 +40,7 @@ func (s *Server) moveItem(w http.ResponseWriter, r *http.Request) {
 	who := Identity(r)
 	key := chi.URLParam(r, "key")
 	var idString, project, path string
-	err := s.Pool.QueryRow(r.Context(), `SELECT i.id::text,p.key_prefix,i.path::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL`, who.WorkspaceID, key).Scan(&idString, &project, &path)
+	err := s.DB.QueryRow(r.Context(), `SELECT i.id::text,p.key_prefix,i.path::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL`, who.WorkspaceID, key).Scan(&idString, &project, &path)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -50,7 +50,7 @@ func (s *Server) moveItem(w http.ResponseWriter, r *http.Request) {
 	parentDepth := 0
 	if parentKey != nil {
 		var parentID, parentProject, parentPath string
-		err = s.Pool.QueryRow(r.Context(), `SELECT i.id::text,p.key_prefix,i.path::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL`, who.WorkspaceID, *parentKey).Scan(&parentID, &parentProject, &parentPath)
+		err = s.DB.QueryRow(r.Context(), `SELECT i.id::text,p.key_prefix,i.path::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND i.deleted_at IS NULL`, who.WorkspaceID, *parentKey).Scan(&parentID, &parentProject, &parentPath)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				invalidChange(w, fmt.Sprintf("Parent item %s was not found. Enter a live item key in project %s.", *parentKey, project))
@@ -72,7 +72,7 @@ func (s *Server) moveItem(w http.ResponseWriter, r *http.Request) {
 		parentDepth = strings.Count(parentPath, ".") + 1
 	}
 	var height int
-	err = s.Pool.QueryRow(r.Context(), `SELECT max(nlevel(path))-nlevel($1::ltree)+1 FROM item WHERE path <@ $1::ltree`, path).Scan(&height)
+	err = s.DB.QueryRow(r.Context(), `SELECT max(nlevel(path))-nlevel($1::ltree)+1 FROM item WHERE path <@ $1::ltree`, path).Scan(&height)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -83,7 +83,7 @@ func (s *Server) moveItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if afterKey != nil {
 		var afterID string
-		err = s.Pool.QueryRow(r.Context(), `SELECT i.id::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND p.key_prefix=$3 AND i.deleted_at IS NULL`, who.WorkspaceID, *afterKey, project).Scan(&afterID)
+		err = s.DB.QueryRow(r.Context(), `SELECT i.id::text FROM item i JOIN project p ON p.id=i.project_id WHERE i.workspace_id=$1 AND i.key=$2 AND p.key_prefix=$3 AND i.deleted_at IS NULL`, who.WorkspaceID, *afterKey, project).Scan(&afterID)
 		if err != nil {
 			invalidChange(w, "rank_after must name another live item in the same project.")
 			return
@@ -97,7 +97,7 @@ func (s *Server) moveItem(w http.ResponseWriter, r *http.Request) {
 	}
 	wid, _ := uuid.Parse(who.WorkspaceID)
 	actor, _ := uuid.Parse(who.ID)
-	_, err = store.New(s.Pool).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.Reparent(move); return nil }, store.WithActor(actor), store.WithExpectedVersion(id, version))
+	_, err = store.New(s.DB).Mutate(r.Context(), wid, func(m *store.Mutation) error { m.Reparent(move); return nil }, store.WithActor(actor), store.WithExpectedVersion(id, version))
 	if errors.Is(err, store.ErrInvalidMove) {
 		invalidChange(w, "The hierarchy changed. Choose a live parent without cycles and within depth 8, then retry.")
 		return

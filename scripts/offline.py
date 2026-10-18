@@ -105,7 +105,7 @@ def verify(root, expected, arch=None):
         raise ValueError("Application image differs from accepted release")
     files = data["files"]
     required = {"release.json", "bin/goose", "bin/sierxctl", "LICENSE", "NOTICE",
-                "scripts/offline.py", "scripts/deploy.py", "scripts/db.sh", "scripts/migrate.sh",
+                "scripts/offline.py", "scripts/deploy.py", "scripts/db.sh", "scripts/db-roles.sh", "scripts/migrate.sh",
                 "inventory/application.cdx.json", *("images/" + role + ".tar" for role in ROLES)}
     if not isinstance(files, dict) or not required.issubset(files) or not any(n.startswith("migrations/") and n.endswith(".sql") for n in files):
         raise ValueError("Incomplete bundle inventory")
@@ -150,7 +150,7 @@ def prepare(release_path, caddy, output, sbom):
     release = json.loads(Path(release_path).read_text())
     if (not isinstance(release, dict) or set(release) != {"image", "revision"}
             or not pinned(release["image"]) or not pinned(caddy)):
-        raise ValueError("Use the promoted release.json and a digest-pinned Caddy image")
+        raise ValueError("Use a digest-pinned Sierx image manifest and Caddy image")
     revision = command("git", "rev-parse", "HEAD", cwd=ROOT)
     if release["revision"] != revision or command("git", "status", "--porcelain", cwd=ROOT):
         raise ValueError("Assemble from a clean committed checkout at the exact release revision")

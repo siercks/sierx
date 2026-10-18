@@ -47,6 +47,13 @@ url_for_db() {   # url_for_db NAME -> DATABASE_URL with its database replaced
   [[ $DATABASE_URL == *\?* ]] && query="?${DATABASE_URL#*\?}"
   printf '%s/%s%s' "${base%/*}" "$1" "$query"
 }
+url_for_db_from() { # URL NAME -> same connection with another database
+  python3 - "$1" "$2" <<'PY'
+import sys, urllib.parse
+url = urllib.parse.urlsplit(sys.argv[1])
+print(urllib.parse.urlunsplit(url._replace(path="/" + sys.argv[2])))
+PY
+}
 admin_url() { url_for_db postgres; }
 
 # A scratch database must be created with the SAME encoding and locale as the
@@ -70,11 +77,16 @@ case ${1:-} in
   diff)
     [[ -f $SNAPSHOT ]] || die "no $SNAPSHOT — run make schema-snapshot first"
     scratch=$(url_for_db "$SCRATCH_DB")
+    runtime=$(url_for_db_from "${SIERX_RUNTIME_DATABASE_URL:?}" "$SCRATCH_DB")
+    authentication=$(url_for_db_from "${SIERX_AUTH_DATABASE_URL:?}" "$SCRATCH_DB")
+    maintenance=$(url_for_db_from "${SIERX_MAINTENANCE_DATABASE_URL:?}" "$SCRATCH_DB")
     psql "$(admin_url)" -X -q -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $SCRATCH_DB" \
                                                   -c "$(create_db_sql "$SCRATCH_DB")"
     dumpfile=$(mktemp)
     trap 'rm -f "$dumpfile"; psql "$(admin_url)" -X -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true' EXIT
-    DATABASE_URL=$scratch bash scripts/migrate.sh up >/dev/null 2>&1 || die "from-scratch migration failed"
+    DATABASE_URL=$scratch SIERX_RUNTIME_DATABASE_URL=$runtime SIERX_AUTH_DATABASE_URL=$authentication \
+      SIERX_MAINTENANCE_DATABASE_URL=$maintenance bash scripts/migrate.sh up >/dev/null 2>&1 \
+      || die "from-scratch migration failed"
     dump "$scratch" > "$dumpfile" || die "pg_dump failed; check the PostgreSQL client version and connection. Schema comparison not run."
     if diff -u "$SNAPSHOT" "$dumpfile"; then
       echo "schema-diff: from-scratch migration matches $SNAPSHOT"

@@ -19,6 +19,10 @@ env = dict(os.environ, SIERX_AUTH_MODE="local", SIERX_BASE_URL=f"http://localhos
 subprocess.run(["bin/sierxctl", "bootstrap"], env=env, check=True, capture_output=True)
 with tempfile.TemporaryDirectory(prefix="sierx-http-") as temporary:
     directory = pathlib.Path(temporary)
+    guard=directory / "guard";guard.mkdir(mode=0o700)
+    env.update(SIERX_LIFECYCLE_JOURNAL=str(directory/"journal.jsonl"),SIERX_LIFECYCLE_KEY_FILE=str(directory/"key"),
+               SIERX_LIFECYCLE_CHECKPOINT=str(guard/"checkpoint.json"),SIERX_LIFECYCLE_GUARD_KEY_FILE=str(guard/"verification.key"))
+    subprocess.run(["bin/sierxctl","lifecycle","init"],env=env,check=True,capture_output=True)
     with (directory / "server.log").open("w+") as log:
         process = subprocess.Popen(["bin/sierx"], env=env, stdout=log, stderr=log)
         def request(method, path, body=None, version=None):

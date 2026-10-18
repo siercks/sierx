@@ -30,7 +30,7 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rows, err := s.Pool.Query(r.Context(), `SELECT seq,jsonb_build_object('seq',seq,'at',at,'item_id',item_id,'actor_id',actor_id,'kind',kind,'field',field) FROM change_event WHERE workspace_id=$1 AND seq>$2 ORDER BY seq LIMIT $3`, Identity(r).WorkspaceID, since, limit)
+	rows, err := s.DB.Query(r.Context(), `SELECT seq,jsonb_build_object('seq',seq,'at',at,'item_id',item_id,'actor_id',actor_id,'kind',kind,'field',field) FROM change_event WHERE workspace_id=$1 AND seq>$2 ORDER BY seq LIMIT $3`, Identity(r).WorkspaceID, since, limit)
 	if err != nil {
 		databaseProblem(w, err)
 		return

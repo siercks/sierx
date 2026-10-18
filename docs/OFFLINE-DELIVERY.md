@@ -39,16 +39,18 @@ backups never belong in the bundle.
 
 ## Prepare while connected
 
-Use a clean checkout **at the exact promoted release revision**, on the matching
-native architecture. Download the release manifest and matching application SBOM
-from its successful release workflow. The release workflow runs this assembly and
-its isolated acceptance test separately on amd64 and arm64, publishing an
-`offline-delivery-<arch>` artifact only after the test succeeds.
-The same CI steps are available locally as `make release-offline-bundle`,
-`make release-offline-test` and `make release-offline-archive`, using the reviewed
-manifest and native SBOM under `dist/`. Archive creation requires matching passing
-acceptance evidence. The lower-level assembly command also supports another output
-directory:
+The release workflow assembles each offline bundle on its matching native runner
+from the exact architecture-specific candidate digest after the candidate image
+test passes. It runs the isolated acceptance test before releasing the archive;
+the multi-architecture index is promoted only after both architecture-specific
+offline reports pass. Each archive's `release.json` pins its tested native child
+image, while the online deployment manifest pins the promoted multi-architecture
+index. Locally, provide both candidate references and image acceptance reports
+under `dist/`, then run `make release-offline-bundle release-offline-test
+release-offline-archive ARCH=<arch>` on each native architecture. Gather both
+results and run `make release-offline-evidence` before `make release-manifest`.
+The lower-level assembly command also supports another output directory when
+using a reviewed digest-pinned manifest:
 
 ```bash
 python3 -B scripts/offline.py prepare \
@@ -103,10 +105,12 @@ export SIERX_OFFLINE_BUNDLE=/opt/sierx/releases/REVIEWED_RELEASE
 export SIERX_OFFLINE_SHA256=APPROVED_LOCK_SHA256
 ```
 
-Create private mode-0600 `~/.config/sierx/app.env` and `deploy.env` using the
-existing deployment documentation. In app.env, use the intended local database
-URL, local authentication, a generated session key, HTTPS origin and loopback
-application address. In deploy.env set:
+Create private mode-0600 `~/.config/sierx/app.env`, `maintenance.env` and
+`deploy.env` using the existing deployment documentation. In app.env, use the
+separate runtime and authentication database URLs, local authentication, a
+generated session key, HTTPS origin and loopback application address. Keep the
+privileged `DATABASE_URL` in the operator shell only. Put only the restricted
+partition-maintenance URL in `maintenance.env`. In deploy.env set:
 
 ```ini
 SIERX_BASE_URL=https://tracker.example.test:8443
@@ -228,3 +232,9 @@ initial branch must not be described as complete production airgap certification
 
 Implementation references: [Podman 4.9 Quadlet](https://docs.podman.io/en/v4.9.3/markdown/podman-systemd.unit.5.html)
 and [Caddy supplied certificates](https://caddyserver.com/docs/caddyfile/directives/tls).
+
+## Lifecycle-aware adoption and recovery
+
+Migration 0014 requires the independently protected current checkpoint and derived verification key before the new application starts. Initialize/copy these through `docs/LIFECYCLE-OPERATIONS.md`; offline bundles intentionally never carry instance journal keys, checkpoints or credentials. The app mounts only the guard directory read-only using the rootless host owner's mapped UID. Keep master journal material in the protected operator environment, outside backup restore trees.
+
+Logical recovery preserves owners and ACLs. Provision original operator/runtime/auth/maintenance roles on the isolated restore cluster; role or permission errors fail the restore rather than accepting a partial result. Supply journal/master/current checkpoint in the operator recovery environment. Replay and verify the restored database before application checks. The application hook uses restored runtime/auth URLs and guard files, with no operator credentials in the container. Exercise a backup predating actual test redaction, a missing/corrupt journal, and session revocation. Never roll back the trusted checkpoint together with the database. Actual encrypted off-machine physical recovery and target-host acceptance remain required private evidence.

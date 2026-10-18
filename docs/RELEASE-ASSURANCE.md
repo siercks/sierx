@@ -6,6 +6,16 @@ ADR-026 records the owner-approved direction.
 
 ## Promotion
 
+Promotion waits for both native offline bundle acceptance jobs. Each bundle is
+assembled against that architecture's immutable candidate digest after its
+native image test passes. The promotion job verifies both offline reports,
+bundle archives and embedded lock digests against those same candidate
+references before publishing the multi-architecture release index. A failed or
+missing offline result therefore prevents the release tag and manifest from
+being published. The architecture-specific `release.json` inside an offline
+archive intentionally pins its tested child image; the online deployment
+manifest pins the promoted multi-architecture index.
+
 The release workflow runs the source gate, builds native amd64/arm64 candidates
 with the single `deploy/Containerfile.release` recipe, and stages their images.
 Native runners then pull and test those exact digests. Only successful evidence
@@ -31,11 +41,15 @@ make release-test ARCH=amd64
 ```
 
 Repeat on native arm64. Gather `dist/image-ARCH.txt` and
-`dist/acceptance-ARCH.json` for both architectures into the same revision's `dist/`,
-then run `make release-manifest TAG=<full-revision>`. These are the same targets
-used by CI. Native tests acquire the pinned goose tool and PostgreSQL image while
-connected. Cached exact-digest images are reused; an absent image is pulled.
-A subsequent offline delivery branch will package these prerequisites.
+`dist/acceptance-ARCH.json` for both architectures into the same revision's `dist/`.
+On each native runner, run `make release-offline-bundle release-offline-test
+release-offline-archive ARCH=<arch>` and gather both offline reports, lock
+digests and archives into `dist/`. Then run `make release-offline-evidence`
+followed by `make release-manifest TAG=<full-revision>`. The manifest command
+repeats the evidence check before making any registry change. These are the same
+targets used by CI. Native tests acquire the pinned goose tool and PostgreSQL
+image while connected. Cached exact-digest images are reused; an absent image is
+pulled.
 
 The former `scripts/release-image.sh` alternative now delegates native candidate
 construction to the canonical recipe. Its old `SIERX_RELEASE_IMAGE` shortcut
@@ -67,8 +81,14 @@ Every shipped unit is inventoried in `scripts/deploy.py`:
 | Application/Caddy | `make deploy-apply` |
 | Connected polling | `make deploy-timer` |
 | Partitions | `make deploy-maintenance-timer` |
+| Optional lifecycle retention | `make deploy-lifecycle-timer` with explicit private policy |
 | Backups | `python3 scripts/deploy.py install-backup-timer` |
 | Restore test | `make deploy-restore-timer` |
+
+Lifecycle-enabled releases require initialized protected journal/checkpoint materials
+before application startup. Both artifact and offline fixtures initialize them and
+mount only the guard read-only. Recovery must replay the current journal before
+ordinary access; see [LIFECYCLE-OPERATIONS.md](LIFECYCLE-OPERATIONS.md).
 
 Install timers after manual host acceptance. Connected polling remains optional.
 Restore orchestration runs on the operator host because it needs backup scripts,
@@ -140,3 +160,14 @@ status because the new matrix reported different check names. Re-enable branch
 protection using names verified from actual check-run API records, or introduce
 a stable aggregate job in a separately reviewed change. Green runs do not prove
 that merge protection is enforcing the intended checks. This remains open.
+
+## Native artifact database readiness
+
+Artifact acceptance requires PostgreSQL 18 clients installed in each independent
+runner job. It first checks the final PostgreSQL TCP listener and then executes a
+read-only query through the mapped host port before role provisioning/migrations.
+A default local-socket pg_isready probe can accept the image entrypoint's temporary
+initialization server and is insufficient. Native/offline jobs explicitly install
+PG18, and the privileged isolated offline test retains the reviewed tool PATH.
+Client absence/version failures are explicit; command failures identify the safe
+program/exit status without credentials. No failed run issues acceptance evidence.

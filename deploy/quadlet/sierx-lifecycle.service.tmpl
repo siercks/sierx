@@ -1,0 +1,9 @@
+[Unit]
+Description=Sierx case-bound lifecycle maintenance
+After=sierx.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@SIERX_CHECKOUT@
+EnvironmentFile=%h/.config/sierx/lifecycle.env
+ExecStart="@SIERX_OPERATOR_BIN@" lifecycle maintain --policy %h/.config/sierx/retention.json

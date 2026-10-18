@@ -53,7 +53,9 @@ case ${1:-} in
     python3 scripts/test-release-image.py
     ;;
   manifest)
-    # No network mutation until exact-digest test evidence has passed validation.
+    # No release index/tag mutation until both exact native images and both
+    # isolated offline bundles have passed their matching acceptance checks.
+    python3 scripts/offline-promotion.py verify --repository "$image" --revision "$revision"
     rm -f dist/release.json
     python3 scripts/release-evidence.py "$image" "$revision"
     podman manifest create "$image:$tag" "$(cat dist/image-amd64.txt)" "$(cat dist/image-arm64.txt)"

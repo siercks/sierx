@@ -89,6 +89,7 @@ type Querier interface {
 	// so they differ between runs by design, and `at`/`created_at` likewise.
 	SeedChecksum(ctx context.Context, workspaceID pgtype.UUID) (SeedChecksumRow, error)
 	SetItemChangeSeq(ctx context.Context, arg SetItemChangeSeqParams) error
+	SetProjectRanks(ctx context.Context, arg SetProjectRanksParams) error
 	SoftDeleteItem(ctx context.Context, arg SoftDeleteItemParams) (SoftDeleteItemRow, error)
 	// The generic field update. version is bumped here and nowhere else (§5.4);
 	// config_version moves only on create/transition/promote (ADR-006), so it is

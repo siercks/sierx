@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -60,7 +59,7 @@ func (s *Service) Login(ctx context.Context, email, password, code string) (stri
 }
 
 func issueSession(ctx context.Context, db interface {
-	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }, id string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -68,8 +67,9 @@ func issueSession(ctx context.Context, db interface {
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	hash := sha256.Sum256([]byte(token))
-	result, err := db.Exec(ctx, `INSERT INTO session(id_hash,user_id,expires_at) SELECT $1,id,now()+interval '12 hours' FROM user_account WHERE id=$2 AND is_active`, hash[:], id)
-	if err == nil && result.RowsAffected() != 1 {
+	var created bool
+	err := db.QueryRow(ctx, `SELECT public.sierx_create_session($1,$2)`, hash[:], id).Scan(&created)
+	if err == nil && !created {
 		return "", ErrCredentials
 	}
 	return token, err

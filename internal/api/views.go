@@ -58,13 +58,13 @@ func (s *Server) createView(w http.ResponseWriter, r *http.Request) {
 	}
 	id := uuid.NewV7().String()
 	who := Identity(r)
-	_, err = s.Pool.Exec(r.Context(), `INSERT INTO saved_view(id,workspace_id,owner_id,name,query,layout,shared) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, who.WorkspaceID, who.ID, in.Name, in.Query, in.Layout, in.Shared)
+	_, err = s.DB.Exec(r.Context(), `INSERT INTO saved_view(id,workspace_id,owner_id,name,query,layout,shared) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, who.WorkspaceID, who.ID, in.Name, in.Query, in.Layout, in.Shared)
 	if err != nil {
 		databaseProblem(w, err)
 		return
 	}
 	var raw []byte
-	err = s.Pool.QueryRow(r.Context(), "SELECT doc FROM ("+viewSelect+" AND id=$3) result", who.WorkspaceID, who.ID, id).Scan(&raw)
+	err = s.DB.QueryRow(r.Context(), "SELECT doc FROM ("+viewSelect+" AND id=$3) result", who.WorkspaceID, who.ID, id).Scan(&raw)
 	if err != nil {
 		databaseProblem(w, err)
 		return

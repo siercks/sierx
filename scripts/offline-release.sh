@@ -13,12 +13,15 @@ bundle="$PWD/dist/sierx-offline-$arch"
 caddy=${SIERX_CADDY_IMAGE:-docker.io/library/caddy@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52}
 case ${1:-} in
   build)
+    python3 -B scripts/offline-promotion.py candidate --arch "$arch" \
+      --repository "${SIERX_RELEASE_REPOSITORY:-ghcr.io/siercks/sierx}" \
+      --revision "$(git rev-parse HEAD)"
     python3 -B scripts/offline.py prepare --release dist/release.json \
       --caddy-image "$caddy" --sbom "dist/sbom-$arch.cdx.json" --output "$bundle"
     ;;
   test)
     expected=$(sha256sum "$bundle/bundle.lock.json" | cut -d ' ' -f1)
-    sudo env SIERX_OFFLINE_BUNDLE="$bundle" SIERX_OFFLINE_SHA256="$expected" \
+    sudo env PATH="$PATH" SIERX_OFFLINE_BUNDLE="$bundle" SIERX_OFFLINE_SHA256="$expected" \
       SIERX_OFFLINE_REPORT="$PWD/dist/offline-acceptance-$arch.json" \
       unshare --net -- python3 -B scripts/test-offline-bundle.py
     ;;

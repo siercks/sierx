@@ -7,6 +7,8 @@ Image=@SIERX_IMAGE@
 Pull=never
 ContainerName=sierx
 Network=host
+UserNS=keep-id:uid=65532,gid=65532
+Volume=%h/.local/share/sierx/lifecycle/guard:/var/lib/sierx/lifecycle/guard:ro,z
 EnvironmentFile=%h/.config/sierx/app.env
 ReadOnly=true
 NoNewPrivileges=true

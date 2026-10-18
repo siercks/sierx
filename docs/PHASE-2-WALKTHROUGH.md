@@ -95,8 +95,10 @@ proxy deployments require a reviewed gateway that strips untrusted identity
 headers and supplies the configured trusted-proxy CIDRs; do not simply toggle the
 app to proxy mode behind the unauthenticated template.
 
-Create `~/.config/sierx/app.env` with permissions **0600**. Supply DATABASE_URL,
-SIERX_SESSION_KEY, SIERX_AUTH_MODE=local, SIERX_BASE_URL and
+Create `~/.config/sierx/app.env` and `operator.env` with permissions **0600**.
+Supply
+SIERX_RUNTIME_DATABASE_URL and SIERX_AUTH_DATABASE_URL using separate
+least-privilege role credentials, SIERX_SESSION_KEY, SIERX_AUTH_MODE=local, SIERX_BASE_URL and
 SIERX_LISTEN_ADDR=127.0.0.1:<chosen app port>. Protect and back up the session key:
 it also protects second-factor state. Keep all host files outside Git.
 The repository default publishes the rootless PostgreSQL container on loopback
@@ -110,9 +112,11 @@ sudo loginctl enable-linger "$USER"
 loginctl show-user "$USER" -p Linger
 install -d -m 700 "$HOME/.config/sierx"
 umask 077
-touch "$HOME/.config/sierx/app.env" "$HOME/.config/sierx/deploy.env"
-chmod 600 "$HOME/.config/sierx/app.env" "$HOME/.config/sierx/deploy.env"
+touch "$HOME/.config/sierx/app.env" "$HOME/.config/sierx/operator.env" "$HOME/.config/sierx/maintenance.env" "$HOME/.config/sierx/deploy.env"
+chmod 600 "$HOME/.config/sierx/app.env" "$HOME/.config/sierx/operator.env" "$HOME/.config/sierx/maintenance.env" "$HOME/.config/sierx/deploy.env"
 ${EDITOR:-nano} "$HOME/.config/sierx/app.env"
+${EDITOR:-nano} "$HOME/.config/sierx/operator.env"
+${EDITOR:-nano} "$HOME/.config/sierx/maintenance.env"
 ${EDITOR:-nano} "$HOME/.config/sierx/deploy.env"
 ```
 
@@ -126,16 +130,54 @@ Create a private `~/.config/sierx/deploy.env` with these required inputs:
 | SIERX_BASE_URL | Real HTTPS origin matching app.env |
 | SIERX_APP_PORT | Unprivileged loopback application port |
 
-After the fresh trial database exists, load `app.env` and apply migrations. This
-does not reset or seed the database:
+Put only the privileged `DATABASE_URL` in operator.env. The current role
+provisioner requires that operator connection to be a PostgreSQL superuser;
+managed database services that do not provide this capability need a reviewed
+role-provisioning procedure before deployment. Do not put `DATABASE_URL` or
+`SIERX_MAINTENANCE_DATABASE_URL` in app.env. Put the latter in
+maintenance.env. Before migration, load the three protected files into the
+operator shell; this gives migration and role setup their inputs while the app
+container still receives only app.env. `make migrate-up` provisions the three
+restricted roles before applying migrations; it does not reset or seed the
+database:
 
 ```bash
 set -a
+. "$HOME/.config/sierx/operator.env"
 . "$HOME/.config/sierx/app.env"
+. "$HOME/.config/sierx/maintenance.env"
 set +a
 make migrate-up
 make migrate-status
 ```
+
+Before the first application start, initialize the protected lifecycle journal
+with the accepted native CLI. Follow [LIFECYCLE-OPERATIONS.md](LIFECYCLE-OPERATIONS.md)
+for custody and recovery. Set `SIERX_OPERATOR_BIN` to that verified executable,
+create private parent directories, and initialize once against the migrated trial
+database. Never initialize a replacement empty journal for an existing instance.
+
+```bash
+install -d -m 700 "$HOME/.local/share/sierx/lifecycle" "$HOME/.local/share/sierx/lifecycle/guard"
+SIERX_LIFECYCLE_JOURNAL="$HOME/.local/share/sierx/lifecycle/journal.jsonl" \
+SIERX_LIFECYCLE_KEY_FILE="$HOME/.local/share/sierx/lifecycle/master.key" \
+SIERX_LIFECYCLE_CHECKPOINT="$HOME/.local/share/sierx/lifecycle/guard/checkpoint.json" \
+  "$SIERX_OPERATOR_BIN" lifecycle init
+```
+
+Add the following container paths to the private `app.env`; the installer mounts
+only this guard directory read-only, with the rootless owner mapped to UID 65532:
+
+```text
+SIERX_LIFECYCLE_CHECKPOINT=/var/lib/sierx/lifecycle/guard/checkpoint.json
+SIERX_LIFECYCLE_GUARD_KEY_FILE=/var/lib/sierx/lifecycle/guard/verification.key
+```
+
+Keep the master key and full journal outside `app.env`. Record independent protected
+recovery custody for the current journal, master and checkpoint. Reuse the instance's
+existing materials during upgrades; the application intentionally refuses access
+without a matching checkpoint. Lifecycle retention scheduling is optional and requires
+a separately reviewed explicit policy (`make deploy-lifecycle-timer`).
 
 Load the private deployment environment into the operator shell, then apply the
 reviewed release:
@@ -165,7 +207,7 @@ read -rsp 'Initial administrator password: ' SIERX_BOOTSTRAP_ADMIN_PASSWORD
 export SIERX_BOOTSTRAP_ADMIN_PASSWORD
 printf '\n'
 podman run --rm --network host \
-  --env-file "$HOME/.config/sierx/app.env" \
+  --env-file "$HOME/.config/sierx/operator.env" \
   -e SIERX_BOOTSTRAP_WORKSPACE_SLUG -e SIERX_BOOTSTRAP_WORKSPACE_NAME \
   -e SIERX_BOOTSTRAP_ADMIN_EMAIL -e SIERX_BOOTSTRAP_ADMIN_NAME \
   -e SIERX_BOOTSTRAP_ADMIN_PASSWORD -e SIERX_BOOTSTRAP_PROJECT_PREFIX \
@@ -177,8 +219,9 @@ unset SIERX_BOOTSTRAP_ADMIN_PASSWORD
 The apply command checks image revision labels, keeps old hashed assets for open
 sessions, writes user Quadlets and verifies HTTPS health. Failure restores previous
 unit/config files; on a first-install failure it stops the candidate services.
-It never migrates or resets a database. Automatic schema migrations are deliberately
-absent; Phase 2 adds none. Test rollback privately before enabling `make deploy-timer`.
+It never migrates or resets a database. Apply schema migrations from the privileged
+operator shell before restarting the app; the app container receives no privileged
+database URL. Test rollback privately before enabling `make deploy-timer`.
 The pull timer checks every five minutes and does nothing for an already accepted
 manifest. For host-only configuration changes, restart the affected unit manually;
 the manifest timer is an application release mechanism.
@@ -264,6 +307,11 @@ SIERX_RESTORE_IMAGE (accepted digest), SIERX_RESTORE_APP_ENV (0600 auth config w
 original session key), SIERX_RESTORE_BASE_URL, SIERX_RESTORE_APP_PORT (different from
 the live app) and the private smoke credentials/item above. It launches that exact
 image against the restored scratch database and runs HTTPS login/deep-link checks.
+Supply the current protected lifecycle journal/master/checkpoint to the operator
+restore environment and `SIERX_LIFECYCLE_GUARD_DIR` to the application hook.
+Replay and verify current decisions before restored access; never restore these
+materials from an older database backup. Preserve original owners/ACLs and provision
+the corresponding roles on a separate restore cluster.
 Without the hook conformance explicitly reports application access as NOT CHECKED;
 that is insufficient for cutover. Run both conformance and the immutable-cipher
 check successfully before adding the physical driver to the normal configured list.

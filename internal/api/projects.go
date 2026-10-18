@@ -115,7 +115,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		requestProblem(w, "Provide a name of 1–200 characters and kind delivery, discovery or portfolio.")
 		return
 	}
-	tx, err := s.Pool.Begin(r.Context())
+	tx, err := s.DB.Begin(r.Context())
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -165,7 +165,7 @@ func (s *Server) getProject(w http.ResponseWriter, r *http.Request) {
 	if !rejectFields(w, r) {
 		return
 	}
-	p, err := scanProject(s.Pool.QueryRow(r.Context(), projectSelect+` WHERE p.workspace_id=$1 AND p.key_prefix=$2`, Identity(r).WorkspaceID, chi.URLParam(r, "key")))
+	p, err := scanProject(s.DB.QueryRow(r.Context(), projectSelect+` WHERE p.workspace_id=$1 AND p.key_prefix=$2`, Identity(r).WorkspaceID, chi.URLParam(r, "key")))
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -233,7 +233,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 			ownerID = &value
 		}
 	}
-	tx, err := s.Pool.Begin(r.Context())
+	tx, err := s.DB.Begin(r.Context())
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -332,13 +332,13 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		err = s.Pool.QueryRow(r.Context(), `SELECT id::text FROM project WHERE workspace_id=$1 AND ($2='' OR key_prefix ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%') ORDER BY id DESC LIMIT 1`, who.WorkspaceID, search).Scan(&c.Upper)
+		err = s.DB.QueryRow(r.Context(), `SELECT id::text FROM project WHERE workspace_id=$1 AND ($2='' OR key_prefix ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%') ORDER BY id DESC LIMIT 1`, who.WorkspaceID, search).Scan(&c.Upper)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			databaseProblem(w, err)
 			return
 		}
 	}
-	rows, err := s.Pool.Query(r.Context(), `SELECT p.id::text,p.key_prefix,p.name,p.kind,p.archived_at,p.version,p.updated_at,u.id::text,u.display_name FROM project p LEFT JOIN user_account u ON u.id=p.owner_id WHERE p.workspace_id=$1 AND p.id>$2::uuid AND p.id<=$3::uuid AND ($4 OR p.archived_at IS NULL) AND ($5='' OR p.key_prefix ILIKE '%'||$5||'%' OR p.name ILIKE '%'||$5||'%') ORDER BY p.id LIMIT $6`, who.WorkspaceID, c.After, c.Upper, archived == "true", search, limit+1)
+	rows, err := s.DB.Query(r.Context(), `SELECT p.id::text,p.key_prefix,p.name,p.kind,p.archived_at,p.version,p.updated_at,u.id::text,u.display_name FROM project p LEFT JOIN user_account u ON u.id=p.owner_id WHERE p.workspace_id=$1 AND p.id>$2::uuid AND p.id<=$3::uuid AND ($4 OR p.archived_at IS NULL) AND ($5='' OR p.key_prefix ILIKE '%'||$5||'%' OR p.name ILIKE '%'||$5||'%') ORDER BY p.id LIMIT $6`, who.WorkspaceID, c.After, c.Upper, archived == "true", search, limit+1)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -398,13 +398,13 @@ func (s *Server) listMembers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		err = s.Pool.QueryRow(r.Context(), `SELECT m.user_id::text FROM membership m JOIN user_account u ON u.id=m.user_id WHERE m.workspace_id=$1 AND u.is_active AND u.display_name ILIKE $2 ORDER BY m.user_id DESC LIMIT 1`, who.WorkspaceID, "%"+search+"%").Scan(&c.Upper)
+		err = s.DB.QueryRow(r.Context(), `SELECT m.user_id::text FROM membership m JOIN user_account u ON u.id=m.user_id WHERE m.workspace_id=$1 AND u.is_active AND u.display_name ILIKE $2 ORDER BY m.user_id DESC LIMIT 1`, who.WorkspaceID, "%"+search+"%").Scan(&c.Upper)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			databaseProblem(w, err)
 			return
 		}
 	}
-	rows, err := s.Pool.Query(r.Context(), `SELECT m.user_id::text,u.display_name FROM membership m JOIN user_account u ON u.id=m.user_id WHERE m.workspace_id=$1 AND m.user_id>$2::uuid AND m.user_id<=$3::uuid AND u.is_active AND u.display_name ILIKE $4 ORDER BY m.user_id LIMIT $5`, who.WorkspaceID, c.After, c.Upper, "%"+search+"%", limit+1)
+	rows, err := s.DB.Query(r.Context(), `SELECT m.user_id::text,u.display_name FROM membership m JOIN user_account u ON u.id=m.user_id WHERE m.workspace_id=$1 AND m.user_id>$2::uuid AND m.user_id<=$3::uuid AND u.is_active AND u.display_name ILIKE $4 ORDER BY m.user_id LIMIT $5`, who.WorkspaceID, c.After, c.Upper, "%"+search+"%", limit+1)
 	if err != nil {
 		databaseProblem(w, err)
 		return

@@ -21,7 +21,7 @@ func (s *Server) itemHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	// History remains accessible after soft deletion.
 	var id string
-	err = s.Pool.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND key=$2`, Identity(r).WorkspaceID, chi.URLParam(r, "key")).Scan(&id)
+	err = s.DB.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 AND key=$2`, Identity(r).WorkspaceID, chi.URLParam(r, "key")).Scan(&id)
 	if err != nil {
 		databaseProblem(w, err)
 		return
@@ -34,7 +34,7 @@ func (s *Server) itemHistory(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		err = s.Pool.QueryRow(r.Context(), `SELECT coalesce(max(seq),0)::text FROM change_event WHERE workspace_id=$1 AND item_id=$2`, Identity(r).WorkspaceID, id).Scan(&c.Upper)
+		err = s.DB.QueryRow(r.Context(), `SELECT coalesce(max(seq),0)::text FROM change_event WHERE workspace_id=$1 AND item_id=$2`, Identity(r).WorkspaceID, id).Scan(&c.Upper)
 		if err != nil {
 			databaseProblem(w, err)
 			return
@@ -50,7 +50,7 @@ func (s *Server) itemHistory(w http.ResponseWriter, r *http.Request) {
 		requestProblem(w, "Invalid history cursor.")
 		return
 	}
-	rows, err := s.Pool.Query(r.Context(), historySQL, Identity(r).WorkspaceID, id, upper, after, limit+1)
+	rows, err := s.DB.Query(r.Context(), historySQL, Identity(r).WorkspaceID, id, upper, after, limit+1)
 	if err != nil {
 		databaseProblem(w, err)
 		return

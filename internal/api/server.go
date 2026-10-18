@@ -15,8 +15,14 @@ import (
 )
 
 type Server struct {
-	auth       *authState
+	auth           *authState
+	CheckLifecycle func(context.Context) error
+	// Pool is retained for controlled setup and test-fixture access. Runtime
+	// endpoint queries must use DB, which refuses queries without request scope.
 	Pool       *pgxpool.Pool
+	DB         *requestDB
+	rawPool    *pgxpool.Pool
+	authPool   *pgxpool.Pool
 	Router     *chi.Mux
 	Logger     *slog.Logger
 	requests   atomic.Uint64
@@ -25,7 +31,11 @@ type Server struct {
 }
 
 func New(pool *pgxpool.Pool, logger *slog.Logger) *Server {
-	s := &Server{Pool: pool, Router: chi.NewRouter(), Logger: logger}
+	return NewWithAuthPool(pool, pool, logger)
+}
+
+func NewWithAuthPool(pool, authPool *pgxpool.Pool, logger *slog.Logger) *Server {
+	s := &Server{Pool: pool, DB: &requestDB{pool: pool}, rawPool: pool, authPool: authPool, Router: chi.NewRouter(), Logger: logger}
 	s.Router.Use(s.requestLog)
 	s.Router.Use(compression)
 	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) { WriteProblem(w, NotFound()) })
@@ -38,7 +48,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 	defer cancel()
 	state, status := "reachable", http.StatusOK
-	if err := s.Pool.Ping(ctx); err != nil {
+	if err := s.DB.Ping(ctx); err != nil {
 		state, status = "unavailable", http.StatusServiceUnavailable
 	}
 	w.Header().Set("Content-Type", "application/json")

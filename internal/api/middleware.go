@@ -38,6 +38,15 @@ func (s *Server) requestLog(next http.Handler) http.Handler {
 			}
 			s.Logger.Info("request", "method", r.Method, "route", route, "status", status, "duration_ms", time.Since(start).Milliseconds(), "actor", identity.actor, "workspace", identity.workspace)
 		}()
+		if s.CheckLifecycle != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), time.Second)
+			err := s.CheckLifecycle(ctx)
+			cancel()
+			if err != nil {
+				http.Error(ww, "Service unavailable pending operator recovery verification.", http.StatusServiceUnavailable)
+				return
+			}
+		}
 		next.ServeHTTP(ww, r)
 	})
 }

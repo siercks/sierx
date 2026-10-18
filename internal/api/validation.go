@@ -18,7 +18,7 @@ func (s *Server) memberExists(ctx context.Context, workspace, id string) bool {
 		return false
 	}
 	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM membership m JOIN user_account u ON u.id=m.user_id WHERE m.workspace_id=$1 AND m.user_id=$2 AND u.is_active)`, workspace, id).Scan(&exists)
+	err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM membership m JOIN user_account u ON u.id=m.user_id WHERE m.workspace_id=$1 AND m.user_id=$2 AND u.is_active)`, workspace, id).Scan(&exists)
 	return err == nil && exists
 }
 
@@ -45,7 +45,7 @@ func (s *Server) validateInput(ctx context.Context, workspace, projectID string,
 	if len(in.Fields) == 0 {
 		return nil
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT key,data_type,options FROM field_def WHERE project_id=$1`, projectID)
+	rows, err := s.DB.Query(ctx, `SELECT key,data_type,options FROM field_def WHERE project_id=$1`, projectID)
 	if err != nil {
 		return fmt.Errorf("project field definitions could not be read; try again")
 	}

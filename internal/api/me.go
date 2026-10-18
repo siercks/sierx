@@ -51,7 +51,7 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	who := Identity(r)
-	err := s.Pool.QueryRow(r.Context(), `UPDATE user_account SET theme=CASE WHEN $2 THEN $3 ELSE theme END,display_name=CASE WHEN $4 THEN $5 ELSE display_name END,reduced_motion=CASE WHEN $6 THEN $7 ELSE reduced_motion END WHERE id=$1 RETURNING theme,display_name,reduced_motion`, who.ID, setTheme, theme, setName, name, setMotion, motion).Scan(&who.Theme, &who.DisplayName, &who.ReducedMotion)
+	err := s.DB.QueryRow(r.Context(), `UPDATE user_account SET theme=CASE WHEN $2 THEN $3 ELSE theme END,display_name=CASE WHEN $4 THEN $5 ELSE display_name END,reduced_motion=CASE WHEN $6 THEN $7 ELSE reduced_motion END WHERE id=$1 RETURNING theme,display_name,reduced_motion`, who.ID, setTheme, theme, setName, name, setMotion, motion).Scan(&who.Theme, &who.DisplayName, &who.ReducedMotion)
 	if err != nil {
 		databaseProblem(w, err)
 		return

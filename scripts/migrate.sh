@@ -59,10 +59,11 @@ assert_applied() {
 }
 
 case ${1:-} in
-  up)        goose up ;;
+	up)        bash scripts/db-roles.sh; goose up ;;
   down)      goose down ;;
   status)    goose status ;;
-  updown-up) echo "== up";      goose up;        assert_applied
+	updown-up) bash scripts/db-roles.sh
+	           echo "== up";      goose up;        assert_applied
              echo "== down-to 0"; goose down-to 0; assert_zero
              echo "== up again"; goose up;        assert_applied ;;
   *)         echo "usage: $0 up|down|status|updown-up" >&2; exit 2 ;;

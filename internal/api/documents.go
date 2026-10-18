@@ -58,9 +58,12 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec := httptest.NewRecorder()
-	var authorized *http.Request
-	s.requireAuth(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) { authorized = request })).ServeHTTP(rec, r)
-	if authorized == nil {
+	authorized := false
+	s.requireAuth(http.HandlerFunc(func(out http.ResponseWriter, request *http.Request) {
+		authorized = true
+		handler(out, request)
+	})).ServeHTTP(rec, r)
+	if !authorized {
 		if rec.Code == http.StatusUnauthorized && s.auth.cfg.AuthMode == "local" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
@@ -72,7 +75,11 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(rec.Body.Bytes())
 		return
 	}
-	handler(w, authorized)
+	for k, values := range rec.Header() {
+		w.Header()[k] = values
+	}
+	w.WriteHeader(rec.Code)
+	_, _ = w.Write(rec.Body.Bytes())
 }
 
 func (s *Server) bootstrapPrivacy(w http.ResponseWriter, r *http.Request) {
@@ -156,14 +163,14 @@ func captureAPI(r *http.Request, path string, handler http.HandlerFunc, key stri
 
 func (s *Server) bootstrapList(w http.ResponseWriter, r *http.Request) {
 	var sequence int64
-	if err := s.Pool.QueryRow(r.Context(), `SELECT value FROM seq_counter WHERE workspace_id=$1`, Identity(r).WorkspaceID).Scan(&sequence); err != nil {
+	if err := s.DB.QueryRow(r.Context(), `SELECT value FROM seq_counter WHERE workspace_id=$1`, Identity(r).WorkspaceID).Scan(&sequence); err != nil {
 		databaseProblem(w, err)
 		return
 	}
 	project := r.URL.Query().Get("project")
 	if project != "" {
 		var exists bool
-		if err := s.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM project WHERE workspace_id=$1 AND key_prefix=$2 AND archived_at IS NULL)`, Identity(r).WorkspaceID, project).Scan(&exists); err != nil {
+		if err := s.DB.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM project WHERE workspace_id=$1 AND key_prefix=$2 AND archived_at IS NULL)`, Identity(r).WorkspaceID, project).Scan(&exists); err != nil {
 			databaseProblem(w, err)
 			return
 		}
@@ -190,7 +197,7 @@ func (s *Server) bootstrapList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) bootstrapItem(w http.ResponseWriter, r *http.Request) {
 	var sequence int64
-	if err := s.Pool.QueryRow(r.Context(), `SELECT value FROM seq_counter WHERE workspace_id=$1`, Identity(r).WorkspaceID).Scan(&sequence); err != nil {
+	if err := s.DB.QueryRow(r.Context(), `SELECT value FROM seq_counter WHERE workspace_id=$1`, Identity(r).WorkspaceID).Scan(&sequence); err != nil {
 		databaseProblem(w, err)
 		return
 	}

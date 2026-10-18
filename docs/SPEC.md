@@ -390,7 +390,7 @@ CREATE TABLE seq_counter (
 );
 ```
 
-Monthly range partitions, created by a scheduled job one month ahead. **No retention or pruning policy** — pruning destroys the audit trail, the activity feed, the forecast inputs, and the history views. Partition, don't prune.
+Monthly range partitions, created by a scheduled job one month ahead. **No ordinary event pruning.** Retain event metadata and partitions. ADR-028 permits reviewed operator value redaction/correction and explicit retention of already deleted content while preserving stable identifiers, counters and replay evidence. Soft deletion alone is not erasure.
 
 ### 4.8 Sprints, comments, views
 
@@ -905,7 +905,7 @@ Do not install Prometheus and Grafana on a Pi. That restraint is a requirement, 
 
 ### 14.4 Configuration
 
-Environment variables only, no config file. Required: `DATABASE_URL`, `SIERX_AUTH_MODE`, `SIERX_TRUSTED_PROXIES`, `SIERX_BASE_URL`, `SIERX_SESSION_KEY`. Fail fast and loudly on a missing or malformed value at startup.
+Environment variables only, no config file. The application requires `SIERX_RUNTIME_DATABASE_URL` and `SIERX_AUTH_DATABASE_URL` for separate least-privilege runtime and authentication roles, plus `SIERX_AUTH_MODE`, `SIERX_TRUSTED_PROXIES`, `SIERX_BASE_URL`, and `SIERX_SESSION_KEY`. `DATABASE_URL` is reserved for privileged operator tooling and must not be passed to the application container. Fail fast and loudly on a missing or malformed value at startup.
 
 ---
 

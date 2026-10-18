@@ -104,9 +104,7 @@ UPDATE item SET change_seq = sqlc.arg(change_seq) WHERE id = sqlc.arg(id);
 -- the live rows alone collides with a deleted item's rank — and a restored
 -- item has to keep a rank that is still unique. Found by the property tests
 -- (task 0.10), which soft-delete and then create.
-SELECT id, rank FROM item
-WHERE project_id = $1
-ORDER BY rank;
+SELECT id::uuid AS id, rank::text AS rank FROM sierx_project_reserved_ranks WHERE project_id=$1 ORDER BY rank;
 
 -- name: UpdateItemRank :exec
 UPDATE item SET rank = sqlc.arg(rank), version = version + 1, updated_at = now()
@@ -117,3 +115,6 @@ WHERE id = sqlc.arg(id);
 SELECT id, path::text AS path, parent_id FROM item
 WHERE path @> ANY (sqlc.arg(paths)::ltree[]);
 
+
+-- name: SetProjectRanks :exec
+SELECT sierx_set_project_ranks(sqlc.arg(project_id)::uuid, sqlc.arg(old_ranks)::text[], sqlc.arg(new_ranks)::text[]);

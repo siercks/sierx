@@ -26,6 +26,9 @@ createdb -h 127.0.0.1 -U postgres -O sierx -T template0 --encoding=UTF8 --locale
 
 # Only public fixture values, consistent with the hosted CI job.
 export DATABASE_URL=postgres://sierx:sierx@localhost:5432/sierx
+export SIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:runtime@localhost:5432/sierx
+export SIERX_AUTH_DATABASE_URL=postgres://sierx_auth:authentication@localhost:5432/sierx
+export SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:maintenance@localhost:5432/sierx
 export SIERX_ENV=dev SIERX_AUTH_MODE=local SIERX_BASE_URL=http://localhost:8080
 export SIERX_SESSION_KEY=ci-only-not-a-secret-000000000000000000000000
 export SIERX_TRUSTED_PROXIES= SIERX_BACKUP_DRIVERS=pgdump

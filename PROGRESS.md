@@ -1924,3 +1924,31 @@ practices. No database/RLS, release-promotion, rootless-host, recovery, or seven
 acceptance claim is made by this candidate. No test suites were run. The frontend build
 could not complete because the local `node_modules` tree is missing Windows-native
 TypeScript and Rolldown optional packages. This does not establish a passing build.
+
+## 2026-10-10 — Remaining Phase 2 implementation candidate
+
+Implemented ADR-028 lifecycle controls: independently protected authenticated encrypted operator journal/checkpoint, holds, independent reversible takedowns, bounded permanent item/comment/view/history handling, membership replacement, account anonymization, workspace exports, explicit retention policy/optional maintenance timer, and replay before restored application access. Migration 0014 preserves scoped rank reservations and blocks unsafe moves around restricted descendants. App startup and requests fail closed on receipt/checkpoint mismatch; ordinary roles cannot write operator records. Logical backup/restore now preserves ownership and ACLs.
+
+Added native process cold-start/RSS collection and improved scoped 10k query plans with set-based read policies and page-first projection hydration. Retained write predicates and real isolation acceptance. Fixed an asynchronous dialog-close assertion in the theme browser test without relaxing focus acceptance. Branch CI/security checks now also run on codex branches.
+
+Verification already executed: real CLI/HTTP/SQL lifecycle and restored-backup replay acceptance; migration down/up, schema/sqlc consistency; lifecycle and CLI unit checks; frontend build/unit/budget checks; all 44 Python tooling checks. A complete gate passed before the final query optimization. The current complete rerun and exact native artifact/offline acceptance are being collected; no current packaged or host acceptance is claimed by this entry.
+
+Implementation is a candidate, not Phase 2 exit. Operator notice/policy facts, protected journal recovery custody, chosen-hardware measurements, actual Rocky/SELinux/rootless reboot and encrypted off-machine recovery, compatible two-release behavior, manual browser/accessibility review, real backlog use and owner sign-off remain required. No seven-day evidence is pre-filled and no server changes were performed.
+### Verification follow-up — 2026-10-10
+
+Implementation commit `c6809e58cf4cfa0b9063106418a186dbb3f80cb4` passed hosted native amd64/arm64 gate-2 (run 38065684196) and workflow lint/frontend/Go vulnerability checks (run 38065684197). The full local network-disabled gate-2 passed, including 41 Chromium + 41 Firefox workflows and the separate 10k scrolling check in each browser. All 44 Python tooling tests passed.
+
+The local native amd64 image passed packaged bootstrap, writes, deep links, graceful stop and restart persistence. Its offline bundle passed verified empty-store import, migrations/bootstrap, provided-certificate HTTPS smoke and all-service restart persistence in a fresh root network namespace containing only loopback. The restart fixture initially failed after simultaneous DB/app restart; it now waits for PostgreSQL readiness before restarting the guarded app and retains final service diagnostics privately on failure. The deployment/recovery walkthrough now includes guard initialization, current-journal custody and replay. These follow-up changes affect the test harness and documentation; they do not change runtime code.
+
+The isolated WSL 10k collector took 500 samples per scenario: p95 board 58.150 ms, detail/history 5.819 ms, indexed query 55.245 ms, depth-six rollup 1.939 ms, 50 changes 3.250 ms/7,216 bytes, FTS 200.132 ms. Five fresh starts max 43.819 ms; 3,000 steady-state RSS samples max 23,584,768 bytes after a fixed 10-second conditioning period. Conditioning separately observed 149,553,152 bytes. These are development fixture measurements, not chosen deployment/reference hardware acceptance or a claim that transient process memory stays below the steady-state limit.
+
+No server inspection/deployment/recovery was performed: strict SSH trust is absent, and the owner chose to verify the host key later. Server adoption/recovery, real operator facts, manual review, seven days of primary-backlog work and final owner acceptance remain pending. No Phase 2 exit is recorded.
+## 2026-10-13 — Release artifact database readiness correction
+
+Owner-reported release run 38491835029 passed both source gates, security, build/stage and native arm64 artifact acceptance, but amd64 failed in disposable database preparation. Its generic CalledProcessError hid the specific command; missing evidence was the consequence and promotion correctly remained blocked.
+
+A controlled six-second PostgreSQL initialization script reproduced an early role-provisioning failure against the cached c4ab1c9 amd64 candidate: the default socket readiness check accepted the entrypoint's temporary server while the mapped TCP connection was closed. The patched fixture requires TCP readiness inside the container and a successful read-only SQL query through the exact mapped endpoint before roles/migrations. The same delayed fixture then passed all packaged acceptance checks. The original GitHub log does not expose its raw error, so this is a reproduced matching boundary failure; confirmation on the hosted runner requires a fresh release run.
+
+Release artifact/offline jobs now explicitly install/select PostgreSQL 18 clients rather than depending on different runner defaults. The root offline test preserves the reviewed client PATH. Failure output now identifies a safe program name/exit status and separate readiness/role/migration stages without publishing arguments or stderr. Acceptance evidence requirements remain intact.
+
+Verification: all 50 Python tooling tests passed, including six new readiness/client/timeout/stale-evidence/privacy cases; the delayed real rootless amd64 artifact passed. Bash syntax passed. Local ShellCheck was unavailable in the cached tool image; the existing hosted workflow-lint job enforces ShellCheck/actionlint. Runtime code is unchanged. New hosted checks and a fresh release run must validate the pushed correction; no new promoted release or server change is claimed.

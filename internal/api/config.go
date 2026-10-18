@@ -33,7 +33,7 @@ func (s *Server) projectConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body []byte
-	if err := s.Pool.QueryRow(r.Context(), resolvedConfigSQL, Identity(r).WorkspaceID, chi.URLParam(r, "key")).Scan(&body); err != nil {
+	if err := s.DB.QueryRow(r.Context(), resolvedConfigSQL, Identity(r).WorkspaceID, chi.URLParam(r, "key")).Scan(&body); err != nil {
 		databaseProblem(w, err)
 		return
 	}

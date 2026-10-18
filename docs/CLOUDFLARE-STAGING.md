@@ -134,12 +134,19 @@ not itself a backup. Back up the session key as well as the database.
 Protected app.env inputs include:
 
 ```ini
-DATABASE_URL=postgres://REPLACE_USER:REPLACE_PASSWORD@127.0.0.1:55433/sierx_stage?sslmode=disable
+SIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:REPLACE_PASSWORD@127.0.0.1:55433/sierx_stage?sslmode=disable
+SIERX_AUTH_DATABASE_URL=postgres://sierx_auth:REPLACE_PASSWORD@127.0.0.1:55433/sierx_stage?sslmode=disable
 SIERX_AUTH_MODE=local
 SIERX_BASE_URL=https://tracker.example.test
 SIERX_LISTEN_ADDR=127.0.0.1:18081
 SIERX_SESSION_KEY=REPLACE_WITH_PRIVATE_GENERATED_KEY
 ```
+
+Keep the privileged `DATABASE_URL` in the operator's protected shell or
+`operator.env`, not app.env. Set `SIERX_MAINTENANCE_DATABASE_URL`
+in the separate mode-0600 `~/.config/sierx/maintenance.env` file for the
+partition service. Provision the `sierx_runtime`, `sierx_auth`, and
+`sierx_maintenance` roles before applying migrations.
 
 Do not use these placeholder credentials. Protected deploy.env inputs include:
 

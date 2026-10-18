@@ -31,6 +31,10 @@ export function historyValue(
   value: unknown,
   statuses: Config['statuses'],
 ): string {
+  const operator = record(value);
+  if (operator?.redacted === true) return 'Removed by operator';
+  if (typeof operator?.operator_correction === 'string')
+    return `Operator correction: ${operator.operator_correction}`;
   if (event.kind === 'status_changed' && typeof value === 'string')
     return statuses.find((status) => status.key === value)?.name ?? value;
   if (event.field === 'comment') {

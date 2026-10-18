@@ -20,7 +20,7 @@ import (
 
 func TestServerBoot(t *testing.T) {
 	t.Run("configuration", func(t *testing.T) {
-		valid := map[string]string{"DATABASE_URL": "postgres://test:test@localhost/test", "SIERX_AUTH_MODE": "local", "SIERX_BASE_URL": "http://localhost:8080", "SIERX_SESSION_KEY": strings.Repeat("s", 32)}
+		valid := map[string]string{"SIERX_RUNTIME_DATABASE_URL": "postgres://sierx_runtime:test@localhost/test", "SIERX_AUTH_DATABASE_URL": "postgres://sierx_auth:test@localhost/test", "SIERX_AUTH_MODE": "local", "SIERX_BASE_URL": "http://localhost:8080", "SIERX_SESSION_KEY": strings.Repeat("s", 32)}
 		for key := range valid {
 			t.Run("missing_"+key, func(t *testing.T) {
 				_, err := config.Load(func(k string) string {
@@ -34,7 +34,7 @@ func TestServerBoot(t *testing.T) {
 				}
 			})
 		}
-		for key, value := range map[string]string{"DATABASE_URL": "postgres://secret:secret@bad/%zz", "SIERX_AUTH_MODE": "guess", "SIERX_BASE_URL": "ftp://localhost", "SIERX_SESSION_KEY": "secret", "SIERX_LISTEN_ADDR": "localhost:99999"} {
+		for key, value := range map[string]string{"SIERX_RUNTIME_DATABASE_URL": "postgres://secret:secret@bad/%zz", "SIERX_AUTH_DATABASE_URL": "postgres://secret:secret@bad/%zz", "SIERX_AUTH_MODE": "guess", "SIERX_BASE_URL": "ftp://localhost", "SIERX_SESSION_KEY": "secret", "SIERX_LISTEN_ADDR": "localhost:99999"} {
 			t.Run("malformed_"+key, func(t *testing.T) {
 				_, err := config.Load(func(k string) string {
 					if k == key {

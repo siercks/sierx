@@ -18,7 +18,7 @@ func (s *Server) queryOptions(r *http.Request, q *sxq.Query, at time.Time, start
 	if project := r.URL.Query().Get("project"); project != "" && r.URL.Path != "/api/v1/views" {
 		projects = []string{project}
 	}
-	rows, err := s.Pool.Query(r.Context(), `SELECT f.key,f.data_type,p.id::text FROM field_def f JOIN project p ON p.id=f.project_id WHERE p.workspace_id=$1 AND ($2::text[] IS NULL OR p.key_prefix=ANY($2)) ORDER BY p.id,f.key`, Identity(r).WorkspaceID, projects)
+	rows, err := s.DB.Query(r.Context(), `SELECT f.key,f.data_type,p.id::text FROM field_def f JOIN project p ON p.id=f.project_id WHERE p.workspace_id=$1 AND ($2::text[] IS NULL OR p.key_prefix=ANY($2)) ORDER BY p.id,f.key`, Identity(r).WorkspaceID, projects)
 	if err != nil {
 		return options, err
 	}
@@ -74,7 +74,7 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		err = s.Pool.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 ORDER BY id DESC LIMIT 1`, Identity(r).WorkspaceID).Scan(&c.Upper)
+		err = s.DB.QueryRow(r.Context(), `SELECT id::text FROM item WHERE workspace_id=$1 ORDER BY id DESC LIMIT 1`, Identity(r).WorkspaceID).Scan(&c.Upper)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			databaseProblem(w, err)
 			return
@@ -138,8 +138,13 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	if plan.Desc {
 		direction = " DESC"
 	}
-	query := "SELECT " + expression + ",i.id::text,to_jsonb(" + plan.OrderExpr + ")" + itemJoins + `WHERE i.workspace_id=$1 AND $2::uuid IS NOT NULL AND i.id<=$3::uuid AND ($4='' OR p.key_prefix=$4) AND i.deleted_at IS NULL AND ` + plan.Where + " AND " + predicate + " ORDER BY " + plan.OrderExpr + direction + " NULLS LAST,i.id ASC LIMIT $5"
-	rows, err := s.Pool.Query(r.Context(), query, args...)
+	filterSQL := plan.Where + " " + predicate + " " + plan.OrderExpr
+	selection := "SELECT i.id," + plan.OrderExpr + " AS sort_value" + itemFilterJoins(filterSQL) +
+		`WHERE i.workspace_id=$1 AND $2::uuid IS NOT NULL AND i.id<=$3::uuid AND ($4='' OR p.key_prefix=$4) AND i.deleted_at IS NULL AND ` +
+		plan.Where + " AND " + predicate + " ORDER BY " + plan.OrderExpr + direction + " NULLS LAST,i.id ASC LIMIT $5"
+	query := "WITH selected_page AS MATERIALIZED (" + selection + ") SELECT hydrated.doc,page.id::text,to_jsonb(page.sort_value) FROM selected_page page JOIN LATERAL (SELECT " +
+		expression + " AS doc" + itemJoins + "WHERE i.id=page.id OFFSET 0) hydrated ON true ORDER BY page.sort_value" + direction + " NULLS LAST,page.id ASC"
+	rows, err := s.DB.Query(r.Context(), query, args...)
 	if err != nil {
 		databaseProblem(w, err)
 		return

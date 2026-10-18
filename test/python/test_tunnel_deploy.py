@@ -1,3 +1,4 @@
+from lifecycle_fixture import configure_lifecycle
 """Deployment boundaries for a local tunnel origin and reviewed artifacts."""
 import contextlib
 import importlib.util
@@ -67,7 +68,9 @@ class GatewayTests(unittest.TestCase):
                 for directory in (config, units, state):
                     directory.mkdir(parents=True, exist_ok=True)
                 app = config / "app.env"
-                app.write_text("SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test\nSIERX_AUTH_MODE=local\n")
+                app.write_text("SIERX_LISTEN_ADDR=127.0.0.1:8080\nSIERX_BASE_URL=https://example.test\nSIERX_AUTH_MODE=local\nSIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:fixture@localhost/sierx\nSIERX_AUTH_DATABASE_URL=postgres://sierx_auth:fixture@localhost/sierx\n")
+                configure_lifecycle(home, config/"app.env")
+                (config / "maintenance.env").write_text("SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:fixture@localhost/sierx\n")
                 release = {"image": "example.test/sierx@sha256:" + "a" * 64, "revision": "b" * 40}
                 (state / "current.json").write_text(json.dumps(release))
                 values = {"SIERX_IMAGE": release["image"], "SIERX_CADDY_IMAGE": "example.test/caddy@sha256:" + "c" * 64}
@@ -78,7 +81,7 @@ class GatewayTests(unittest.TestCase):
                 real_stat = Path.stat
                 def private_stat(path, *args, **kwargs):
                     result = real_stat(path, *args, **kwargs)
-                    if path == app:
+                    if path in (app, config / "maintenance.env"):
                         fields = list(result); fields[0] = 0o100600
                         return os.stat_result(fields)
                     return result

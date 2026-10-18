@@ -26,7 +26,7 @@ func (s *Server) projectedPage(w http.ResponseWriter, r *http.Request, base stri
 	if token := r.URL.Query().Get("cursor"); token != "" {
 		c, err = DecodeCursor(token, s.auth.cfg.SessionKey, c.Scope)
 	} else {
-		err = s.Pool.QueryRow(r.Context(), "SELECT id::text FROM ("+base+") page ORDER BY id DESC LIMIT 1", args...).Scan(&c.Upper)
+		err = s.DB.QueryRow(r.Context(), "SELECT id::text FROM ("+base+") page ORDER BY id DESC LIMIT 1", args...).Scan(&c.Upper)
 		if errors.Is(err, pgx.ErrNoRows) {
 			err = nil
 		}
@@ -41,7 +41,7 @@ func (s *Server) projectedPage(w http.ResponseWriter, r *http.Request, base stri
 	}
 	n := len(args) + 1
 	query := fmt.Sprintf("SELECT id::text,doc FROM (%s) page WHERE id>$%d::uuid AND id<=$%d::uuid ORDER BY id LIMIT $%d", base, n, n+1, n+2)
-	rows, err := s.Pool.Query(r.Context(), query, append(args, c.After, c.Upper, limit+1)...)
+	rows, err := s.DB.Query(r.Context(), query, append(args, c.After, c.Upper, limit+1)...)
 	if err != nil {
 		databaseProblem(w, err)
 		return

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,34 @@ def await_ready(check):
             time.sleep(.5)
 
 
+def require_psql():
+    if not shutil.which("psql"):
+        raise ValueError("Install PostgreSQL 18 clients before native artifact acceptance")
+    if not re.search(r"PostgreSQL\) 18\.", run("psql", "--version")):
+        raise ValueError("Select PostgreSQL 18 psql in PATH before native artifact acceptance")
+
+
+def await_database(db, database):
+    # The entrypoint's temporary initialization server has a local socket but
+    # no TCP listener. Acceptance must reach the final server through the same
+    # mapped TCP endpoint that role provisioning and goose will use.
+    await_ready(lambda: run("podman", "exec", db, "pg_isready", "-h", "127.0.0.1",
+                            "-U", "postgres", "-d", "sierx"))
+    await_ready(lambda: run("psql", database, "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
+                            "-c", "SELECT 1"))
+
+
+def failure_detail(error):
+    if isinstance(error, ValueError):
+        return str(error)
+    if isinstance(error, subprocess.CalledProcessError):
+        program = Path(error.cmd[0]).name if isinstance(error.cmd, (list, tuple)) else "command"
+        if program not in {"podman", "bash", "psql", "goose"}:
+            program = "operator-tool"
+        return f"{program} failed with exit status {error.returncode}"
+    return type(error).__name__
+
+
 def main():
     requested_arch = os.environ.get("ARCH")
     if requested_arch not in {"amd64", "arm64"}:
@@ -58,6 +87,7 @@ def main():
     image = os.environ["SIERX_TEST_IMAGE"]
     if not re.fullmatch(r"[a-f0-9]{40}", revision) or not re.fullmatch(r"[^\s@]+@sha256:[a-f0-9]{64}", image):
         raise ValueError("Use an exact revision and immutable image digest")
+    require_psql()
     print("release-image: checking immutable candidate identity", flush=True)
     ensure_image(image)
     metadata = json.loads(run("podman", "image", "inspect", image))[0]
@@ -76,23 +106,36 @@ def main():
         created = False
         try:
             print("release-image: preparing disposable database and migrations", flush=True)
-            run("podman", "pod", "create", "--name", pod, "-p", "127.0.0.1::8080", "-p", "127.0.0.1::5432")
+            mapping=[] if os.geteuid()==0 else ["--userns=keep-id:uid=65532,gid=65532"]
+            run("podman", "pod", "create", *mapping, "--name", pod, "-p", "127.0.0.1::8080", "-p", "127.0.0.1::5432")
             created = True
             run("podman", "run", "-d", "--pod", pod, "--name", db,
                 "--tmpfs", "/var/lib/postgresql", "-e", "POSTGRES_PASSWORD=artifact-only-password",
                 "-e", "POSTGRES_DB=sierx", "-e", "POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8", pg_image)
-            await_ready(lambda: run("podman", "exec", db, "pg_isready", "-U", "postgres", "-d", "sierx"))
             infra = json.loads(run("podman", "pod", "inspect", pod))["InfraContainerID"]
             ports = json.loads(run("podman", "inspect", infra))[0]["NetworkSettings"]["Ports"]
             app_port = ports["8080/tcp"][0]["HostPort"]
             pg_port = ports["5432/tcp"][0]["HostPort"]
             origin = "http://127.0.0.1:" + app_port
+            admin_database = "postgres://postgres:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable"
+            role_environment = {**os.environ, "DATABASE_URL": admin_database,
+                                "SIERX_RUNTIME_DATABASE_URL": "postgres://sierx_runtime:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable",
+                                "SIERX_AUTH_DATABASE_URL": "postgres://sierx_auth:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable",
+                                "SIERX_MAINTENANCE_DATABASE_URL": "postgres://sierx_maintenance:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable"}
+            print("release-image: waiting for mapped database TCP readiness", flush=True)
+            await_database(db, admin_database)
+            print("release-image: provisioning database roles", flush=True)
+            run("bash", "scripts/db-roles.sh", env=role_environment, cwd=ROOT)
             goose = os.environ["GOOSE"]
+            print("release-image: applying migrations", flush=True)
             run(goose, "-dir", str(ROOT / "migrations"), "postgres",
-                "postgres://postgres:artifact-only-password@127.0.0.1:" + pg_port + "/sierx?sslmode=disable", "up")
+                admin_database, "up")
             env = scratch / "app.env"
             env.write_text("\n".join([
-                "DATABASE_URL=postgres://postgres:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "SIERX_RUNTIME_DATABASE_URL=postgres://sierx_runtime:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "SIERX_AUTH_DATABASE_URL=postgres://sierx_auth:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "SIERX_LIFECYCLE_CHECKPOINT=/var/lib/sierx/lifecycle/guard/checkpoint.json",
+                "SIERX_LIFECYCLE_GUARD_KEY_FILE=/var/lib/sierx/lifecycle/guard/verification.key",
                 "SIERX_AUTH_MODE=local", "SIERX_BASE_URL=" + origin,
                 "SIERX_LISTEN_ADDR=0.0.0.0:8080", "SIERX_SESSION_KEY=artifact-only-session-key-0000000000000000",
                 "SIERX_BOOTSTRAP_WORKSPACE_SLUG=artifact", "SIERX_BOOTSTRAP_WORKSPACE_NAME=Artifact",
@@ -102,9 +145,20 @@ def main():
             env.chmod(0o600)
             options = ["--pod", pod, "--read-only", "--security-opt", "no-new-privileges", "--env-file", str(env)]
             print("release-image: executing shipped bootstrap, application and maintenance commands", flush=True)
-            run("podman", "run", "--rm", *options, "--entrypoint", "/usr/local/bin/sierxctl", image, "bootstrap")
-            run("podman", "run", "-d", "--name", app, *options, image)
-            run("podman", "exec", app, "/usr/local/bin/sierxctl", "partitions", "ensure", "--months-ahead", "1")
+            run("podman", "run", "--rm", "--env", "DATABASE_URL=postgres://postgres:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable", *options, "--entrypoint", "/usr/local/bin/sierxctl", image, "bootstrap")
+            lifecycle_dir=scratch/"lifecycle";guard=lifecycle_dir/"guard"
+            guard.mkdir(parents=True,mode=0o700);lifecycle_dir.chmod(0o700)
+            if os.geteuid()==0:
+                os.chown(lifecycle_dir,65532,65532);os.chown(guard,65532,65532)
+            run("podman","run","--rm",*options,
+                "--volume",str(lifecycle_dir)+":/var/lib/sierx/lifecycle:rw,z",
+                "--env","SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable",
+                "--env","SIERX_LIFECYCLE_JOURNAL=/var/lib/sierx/lifecycle/journal.jsonl",
+                "--env","SIERX_LIFECYCLE_KEY_FILE=/var/lib/sierx/lifecycle/master.key",
+                "--entrypoint","/usr/local/bin/sierxctl",image,"lifecycle","init")
+            run("podman", "run", "-d", "--name", app, *options,
+                "--volume",str(guard)+":/var/lib/sierx/lifecycle/guard:ro,z",image)
+            run("podman", "exec", "--env", "SIERX_MAINTENANCE_DATABASE_URL=postgres://sierx_maintenance:artifact-only-password@127.0.0.1:5432/sierx?sslmode=disable", app, "/usr/local/bin/sierxctl", "partitions", "ensure", "--months-ahead", "1")
             # A shell-free runtime must not acquire operator tooling accidentally.
             for shell in ("/bin/sh", "/bin/bash"):
                 result = subprocess.run(["podman", "exec", app, shell, "-c", "true"], capture_output=True)
@@ -170,5 +224,5 @@ if __name__ == "__main__":
         main()
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         # Never publish subprocess arguments/output, which can contain fixture credentials.
-        detail = str(error) if isinstance(error, ValueError) else type(error).__name__
+        detail = failure_detail(error)
         sys.exit("release-image acceptance failed at the last reported step; no acceptance evidence issued: " + detail)
