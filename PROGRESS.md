@@ -1998,3 +1998,52 @@ synthetic-data screenshots. Physical mobile-device review, hosted/native release
 acceptance and production deployment were not performed for this increment.
 Actual-use evidence is near-daily from October 9, not a claim of seven consecutive
 days as the primary backlog. Phase 2 acceptance remains open.
+
+## 2026-10-18 — Remaining owner priority changes
+
+Implemented focused Assignee/Start date/Due date editors using the existing
+item-version and mutation paths, with active-workspace member search and date
+clearing. Added selected-text Markdown formatting, keyboard shortcuts and a
+lazy safe preview to create/edit descriptions and comments; successful comment
+submission resets its controlled draft. Project creation is directly accessible
+beside project navigation and reuses the existing form.
+
+Added administrator `/settings`, workspace-name versioning and scoped update
+policy (migration 0015), plus additive per-project item-workflow snapshots:
+custom statuses, display order, visual outgoing-flow cards, allowed transitions
+and requirements, per-type initial statuses and explicit reviewed save. Existing
+definitions/history are retained. Stale and concurrent writes are rejected;
+only one save from a common base version can publish. See ADR-029 and
+`docs/WORKSPACE-SETTINGS.md` for scope, API ownership and use. No Kanban surface,
+YAML reconcile service, cross-project moves or new dependencies were added.
+
+Successful status changes now close with stable keyboard focus even when their
+destination has no outgoing transition. Visual review also found a shared Button
+class collision: the default size unintentionally applied the primary variant
+class to outline buttons, hiding labels. Variant/size classes are separated;
+real computed text/background contrast is checked across all 23 appearances.
+
+Final network-disabled `make ci-local` validation passed the complete gate-2,
+including gate-0, gate-1, 50 Chromium and 50 Firefox workflow checks and the
+separate real 10k scrolling/focus check in both engines. API tests
+cover tenant/admin boundaries, roster minimization, optimistic conflicts,
+immutable definitions, rejected drafts, initial statuses, required fields,
+history/config retention and two concurrent workflow saves. Golden route coverage,
+generated schema/types/routes, migration reversibility, RLS/privilege checks,
+offline resources and bundle limits remain enforced. Current initial Brotli JS
+102702 bytes, CSS 19236 bytes; 43 frontend unit tests pass.
+
+```text
+gate-0: GREEN
+gate-1: GREEN (automated; human walkthrough remains required)
+[chromium workflow] 50 passed (2.1m)
+[firefox workflow] 50 passed (2.9m)
+--- PASS: TestBrowserAcceptance (302.42s)
+[chromium 10k] 1 passed (8.1s)
+[firefox 10k] 1 passed (12.6s)
+--- PASS: TestBrowserAcceptance (122.33s)
+gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
+```
+
+No GitHub push, native release promotion or production deployment was performed.
+Owner/manual/host recovery acceptance and Phase 2 exit remain separate.

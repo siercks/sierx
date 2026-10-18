@@ -8,10 +8,11 @@ import './themes/app.css';
 const Login = React.lazy(() => import('./routes/Login'));
 const Item = React.lazy(() => import('./routes/Item'));
 const Legal = React.lazy(() => import('./routes/Legal'));
+const Settings = React.lazy(() => import('./routes/Settings'));
 const path = location.pathname;
 const legalRoute = routes.find((route) => route.path === path && (route.id === 'privacy' || route.id === 'copyright' || route.id === 'third-party'));
 const Route =
-  path === routes[0].path ? List : path === '/login' ? Login : legalRoute ? Legal : Item;
+  path === routes[0].path ? List : path === '/login' ? Login : path === '/settings' ? Settings : legalRoute ? Legal : Item;
 class Boundary extends React.Component<
   { children: React.ReactNode },
   { error: string }

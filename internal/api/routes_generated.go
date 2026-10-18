@@ -10,6 +10,7 @@ func (s *Server) documentRoutes() map[string]http.HandlerFunc {
 		"/privacy": s.bootstrapPrivacy,
 		"/copyright": s.bootstrapCopyright,
 		"/third-party": s.bootstrapThirdParty,
+		"/settings": s.bootstrapSettings,
 		"/:key": s.bootstrapItem,
 	}
 }

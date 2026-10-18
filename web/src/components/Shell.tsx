@@ -96,9 +96,10 @@ export function Shell({
             <span>Sierx</span>
           </a>
           <span className="header-divider" aria-hidden="true" />
-          <a className="sx-tab workspace-link" href="/" aria-current="page">
+          <a className="sx-tab workspace-link" href="/" aria-current={location.pathname === '/' ? 'page' : undefined}>
             Workspace
           </a>
+          {me.role === 'admin' && <a className="sx-tab" href="/settings" aria-current={location.pathname === '/settings' ? 'page' : undefined}>Settings</a>}
         </div>
         <div className="header-tools">
           <label className="preference-field">

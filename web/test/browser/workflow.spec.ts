@@ -141,6 +141,120 @@ test('usability: item save closes only on success and returns focus', async ({ p
   await expect(page.getByRole('heading', { name: 'Saved without another click' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit item', exact: true })).toBeFocused();
 });
+test('priorities: Details edits change only assignee or the selected date', async ({ page, context }) => {
+  const item = await create(context, 'Quick field edits', 'story', { body: 'Keep this description' });
+  const me = await (await context.request.get('/api/v1/me')).json();
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Edit assignee', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(me.id);
+  await page.getByRole('button', { name: 'Save assignee', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  for (const [label, field, value] of [['Start date', 'start_date', '2026-11-01'], ['Due date', 'due_date', '2026-11-08']]) {
+    await page.getByRole('button', { name: `Edit ${label.toLowerCase()}`, exact: true }).click();
+    await page.getByLabel(label, { exact: true }).fill(value);
+    await page.getByRole('button', { name: `Save ${label.toLowerCase()}`, exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    const saved = await (await context.request.get('/api/v1/items/' + item.key)).json();
+    expect(saved[field]).toBe(value); expect(saved.body).toBe('Keep this description'); expect(saved.title).toBe(item.title);
+  }
+  await page.getByRole('button', { name: 'Edit due date', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear date', exact: true }).click();
+  await page.getByRole('button', { name: 'Save due date', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  const saved = await (await context.request.get('/api/v1/items/' + item.key)).json();
+  expect(saved.assignee.id).toBe(me.id); expect(saved.start_date).toBe('2026-11-01'); expect(saved.due_date).toBeNull();
+  await audit(page);
+});
+
+test('priorities: Markdown toolbar and preview preserve source and clear submitted comments', async ({ page, context }) => {
+  const item = await create(context, 'Markdown editing');
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Edit item', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const description = dialog.getByLabel('Description', { exact: true });
+  await description.fill('Selected words');
+  await description.selectText();
+  await dialog.getByRole('button', { name: 'Bold', exact: true }).click();
+  await expect(description).toHaveValue('**Selected words**');
+  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Description preview' }).locator('strong')).toHaveText('Selected words');
+  await audit(page);
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.description-card strong')).toHaveText('Selected words');
+  const comment = page.getByLabel('New comment', { exact: true });
+  await comment.fill('Comment draft');
+  await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+  await expect(comment).toHaveValue('');
+  await expect(page.locator('.comment-body')).toContainText('Comment draft');
+});
+
+test('priorities: project creation and admin settings publish a usable custom workflow', async ({ page, context }, info) => {
+  const prefix = 'UX' + randomUUID().slice(0, 6).toUpperCase();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create project', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Project name', { exact: true }).fill('Custom workflow project ' + prefix);
+  await dialog.getByLabel('Key prefix', { exact: true }).fill(prefix);
+  await audit(page);
+  await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Create project', exact: true })).toBeFocused();
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(prefix);
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Workspace settings', exact: true })).toBeVisible();
+  await page.getByLabel('Workspace name', { exact: true }).fill('Team workspace');
+  await page.getByRole('button', { name: 'Save workspace', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Workspace details saved');
+  await page.reload();
+  await expect(page.getByLabel('Workspace name', { exact: true })).toHaveValue('Team workspace');
+  await page.getByRole('combobox', { name: 'Workflow project', exact: true }).selectOption(prefix);
+  await page.getByRole('button', { name: 'Add suggested statuses', exact: true }).click();
+  await page.getByLabel('Allow To Do → Planned', { exact: true }).check();
+  await page.getByLabel(`I reviewed this flow and its required fields for ${prefix}.`, { exact: true }).check();
+  await audit(page);
+  await page.screenshot({ path: info.outputPath('workspace-workflow-settings.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Save workflow', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Workflow version 2');
+  const config = await (await context.request.get(`/api/v1/projects/${prefix}/config`)).json();
+  expect(config.statuses.map((status: { name: string }) => status.name)).toEqual(expect.arrayContaining(['Unassigned', 'To Do', 'On Hold', 'Planned', 'In Progress', 'Blocked', 'Completed']));
+  const result = await context.request.post('/api/v1/items', { data: { project: prefix, type: 'story', title: 'Uses custom flow' } });
+  expect(result.ok()).toBe(true);
+  const item = await result.json();
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Change status', exact: true }).click();
+  await page.getByRole('combobox', { name: 'New status', exact: true }).selectOption('planned');
+  await page.getByRole('dialog').getByRole('button', { name: 'Change status', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edit item', exact: true })).toBeFocused();
+  await expect(page.locator('.item-heading .badge')).toContainText('Planned');
+});
+
+test('priorities: default-size settings buttons have readable labels in every appearance', async ({ page }) => {
+  await page.goto('/settings');
+  await page.getByRole('combobox', { name: 'Workflow project', exact: true }).selectOption('SRX');
+  await page.getByLabel('I reviewed this flow and its required fields for SRX.', { exact: true }).check();
+  await page.evaluate(() => { document.documentElement.dataset.motion = 'reduce'; });
+  for (const { id } of appearanceThemes) {
+    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+    for (const name of ['Save workspace', 'Add status', 'Add suggested statuses', 'Save workflow']) {
+      const colors = await page.getByRole('button', { name, exact: true }).evaluate((element) => {
+        const style = getComputedStyle(element);
+        let ancestor: Element | null = element;
+        let background = style.backgroundColor;
+        while (ancestor) {
+          background = getComputedStyle(ancestor).backgroundColor;
+          const components = background.match(/[\d.]+/g)?.map(Number) ?? [];
+          if (components.length < 4 || components[3] !== 0) break;
+          ancestor = ancestor.parentElement;
+        }
+        return { text: style.color, background };
+      });
+      expect(contrastRatio(colors.text, colors.background), `${id}: ${name}`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
 test('login supports keyboard, passwords and expired sessions', async ({
   page,
   context,
@@ -264,6 +378,7 @@ for (const [index, theme] of themeIDs.entries()) {
     );
     await keyboardActivate(page, 'Create item');
     await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('dialog').getByRole('combobox', { name: 'Project', exact: true }).selectOption('SRX');
     await expect(
       page.getByRole('combobox', { name: 'Type', exact: true }),
     ).toBeVisible();
@@ -390,11 +505,12 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
   });
   await page.goto('/');
   await keyboardActivate(page, 'Create item');
+  await page.getByRole('dialog').getByRole('combobox', { name: 'Project', exact: true }).selectOption('SRX');
   await page.getByRole('combobox', { name: 'Type', exact: true }).focus();
   await page.keyboard.press('s');
   await page.keyboard.press('Tab');
   await page.keyboard.type('Keyboard acceptance story');
-  await page.keyboard.press('Tab');
+  await page.getByLabel('Description', { exact: true }).focus();
   await page.keyboard.type('**Safe** description');
   await keyboardActivate(page, 'Create item');
   await expect(
@@ -408,15 +524,14 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
     page.getByRole('combobox', { name: 'Assign to', exact: true }),
   ).toHaveValue(me.id);
   await keyboardActivate(page, 'Change status');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await keyboardActivate(page, 'Move or reorder');
   await page.getByLabel('Parent item key').fill(parent.key);
   await page.getByLabel('Place after item key').fill(sibling.key);
   await keyboardActivate(page, 'Move item');
   await expect(page.getByRole('status')).toContainText('completed');
   await page.keyboard.press('Escape');
-  await page.getByLabel('New comment').focus();
+  await page.getByLabel('New comment', { exact: true }).focus();
   await page.keyboard.type('Keyboard-only comment');
   await keyboardActivate(page, 'Add comment');
   await expect(
@@ -536,7 +651,7 @@ test('deleted item has a dated banner and no mutation controls', async ({
   await expect(
     page.getByRole('button', { name: 'Edit item', exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByLabel('New comment')).toHaveCount(0);
+  await expect(page.getByLabel('New comment', { exact: true })).toHaveCount(0);
   await audit(page);
 });
 test('query errors, copied URLs, reload and history navigation', async ({

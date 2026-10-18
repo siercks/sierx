@@ -195,6 +195,12 @@ func (s *Server) bootstrapList(w http.ResponseWriter, r *http.Request) {
 	s.renderDocument(w, r, state, Identity(r))
 }
 
+func (s *Server) bootstrapSettings(w http.ResponseWriter, r *http.Request) {
+ if Identity(r).Role != "admin" { WriteProblem(w, Forbidden()); return }
+ s.renderDocument(w,r,map[string]any{"route":"settings","document_title":"Workspace settings · Sierx","me":Identity(r),"auth_mode":s.auth.cfg.AuthMode,
+ "workspace":captureAPI(r,"/api/v1/workspace",s.workspaceSettings,""),"projects":captureAPI(r,"/api/v1/projects?limit=100",s.listProjects,"")},Identity(r))
+}
+
 func (s *Server) bootstrapItem(w http.ResponseWriter, r *http.Request) {
 	var sequence int64
 	if err := s.DB.QueryRow(r.Context(), `SELECT value FROM seq_counter WHERE workspace_id=$1`, Identity(r).WorkspaceID).Scan(&sequence); err != nil {

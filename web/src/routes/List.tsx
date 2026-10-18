@@ -20,6 +20,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ProjectNavigation } from '../components/ProjectNavigation';
 const ProjectManagement = lazy(() => import('../components/ProjectManagement').then((module) => ({ default: module.ProjectManagement })));
+const ProjectCreation = lazy(() => import('../components/ProjectManagement').then((module) => ({ default: module.ProjectCreation })));
 type State = {
   me: Me;
   auth_mode: string;
@@ -121,6 +122,8 @@ export function Rows({ items }: { items: Item[] }) {
   );
 }
 export default function List() {
+  const [creating, setCreating] = useState(false);
+  const [creationLoaded, setCreationLoaded] = useState(false);
   const state = useState(() => bootstrap<State>())[0];
   const [query, setQuery] = useState(state.query);
   const [project, setProject] = useState(state.project ?? '');
@@ -218,7 +221,8 @@ export default function List() {
           selectedProject={selected}
         />
       </section>
-      <ProjectNavigation workspace={state.me.workspace_id} me={state.me} projectPage={state.projects} selected={selected} onNavigate={navigateProject} onManage={() => setManaging(true)} />
+      <ProjectNavigation workspace={state.me.workspace_id} me={state.me} projectPage={state.projects} selected={selected} onNavigate={navigateProject} onManage={() => setManaging(true)} onCreate={() => { setCreationLoaded(true); setCreating(true); }} />
+      {creationLoaded && state.me.role === 'admin' && <Suspense fallback={<p role="status">Loading project creation…</p>}><ProjectCreation workspace={state.me.workspace_id} open={creating} onOpenChange={setCreating} onSaved={projectSaved} /></Suspense>}
       {managing && state.me.role === 'admin' && <Suspense fallback={<p role="status">Loading project management…</p>}><ProjectManagement project={selected ?? undefined} workspace={state.me.workspace_id} onSaved={projectSaved} onDismiss={() => setManaging(false)} /></Suspense>}
       <form action="/" method="get" className="search-panel">
         {project && <input type="hidden" name="project" value={project} />}

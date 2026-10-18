@@ -1466,7 +1466,9 @@ CREATE TABLE public.workspace (
     slug text NOT NULL,
     name text NOT NULL,
     origin_id uuid NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    CONSTRAINT workspace_version_check CHECK ((version > 0))
 );
 
 ALTER TABLE ONLY public.workspace FORCE ROW LEVEL SECURITY;
@@ -3157,6 +3159,13 @@ CREATE POLICY workspace_maintenance ON public.workspace FOR SELECT TO sierx_main
 --
 
 CREATE POLICY workspace_runtime ON public.workspace FOR SELECT TO sierx_runtime USING ((id = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: workspace workspace_runtime_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY workspace_runtime_update ON public.workspace FOR UPDATE TO sierx_runtime USING (((id = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text))) WITH CHECK (((id = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
 
 
 --

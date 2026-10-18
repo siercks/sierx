@@ -723,6 +723,39 @@ h3 {
   font-weight: 550;
 }
 
+.detail-list dd:has(button) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.check-label input {
+  width: 1.5rem;
+  min-height: 1.5rem;
+  flex: 0 0 1.5rem;
+}
+
+.workflow-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.app-main > .card {
+  margin-block: 1rem;
+}
+
 .custom-detail {
   border-top: 1px solid var(--border);
   margin-top: 0.8rem;

@@ -322,4 +322,5 @@ type Workspace struct {
 	Name      string
 	OriginID  pgtype.UUID
 	CreatedAt pgtype.Timestamptz
+	Version   int32
 }

@@ -10,6 +10,8 @@ import {
 import { Dialog } from './ui/dialog';
 import { CustomFields, customValues } from './Fields';
 import { Button } from './ui/button';
+import { MarkdownEditor } from './MarkdownEditor';
+import { MemberPicker } from './MemberPicker';
 
 export function ActionForm({
   item,
@@ -80,6 +82,10 @@ export function ActionForm({
     <form
       className="workflow-form"
       ref={form}
+      onInputCapture={() => {
+        if (!dirty) setVersion(item.version);
+        setDirty(true); setSuccess(false);
+      }}
       onChangeCapture={() => {
         if (!dirty) setVersion(item.version);
         setDirty(true);
@@ -230,15 +236,18 @@ export function ItemActions({
   const [target, setTarget] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [editSaved, setEditSaved] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [statusSaved, setStatusSaved] = useState(false);
+  const [assignee, setAssignee] = useState(item.assignee?.id ?? '');
   const transitions = config.transitions[item.status.key] ?? [];
   const transition =
     transitions.find((t) => t.to_key === target) ?? transitions[0];
   return (
     <div className="toolbar" aria-label="Item actions">
-      <p className="sr-only" aria-live="polite">{editSaved ? 'Changes saved.' : ''}</p>
+      <p className="sr-only" aria-live="polite">{editSaved ? 'Changes saved.' : statusSaved ? 'Status changed.' : ''}</p>
       <Dialog trigger="Edit item" title={'Edit ' + item.key} open={editOpen} onOpenChange={(open) => {
         setEditOpen(open);
-        if (open) setEditSaved(false);
+        if (open) { setEditSaved(false); setStatusSaved(false); setAssignee(item.assignee?.id ?? ''); }
       }}>
         <ActionForm
           item={item}
@@ -275,10 +284,7 @@ export function ItemActions({
               maxLength={500}
             />
           </label>
-          <label className="workflow-field workflow-field-full">
-            Description
-            <textarea className="sx-control" name="body" defaultValue={item.body ?? ''} />
-          </label>
+          <MarkdownEditor label="Description" name="body" defaultValue={item.body ?? ''} />
           <div className="workflow-field-grid">
           <label className="workflow-field">
             Points
@@ -291,10 +297,7 @@ export function ItemActions({
               defaultValue={item.points ?? ''}
             />
           </label>
-          <label className="workflow-field">
-            Assignee account ID
-            <input className="sx-control" name="assignee" defaultValue={item.assignee?.id ?? ''} />
-          </label>
+          <MemberPicker workspace={workspace} label="Assignee" name="assignee" value={assignee} selected={item.assignee} onChange={setAssignee} />
           <label className="workflow-field">
             Start date
             <input
@@ -317,13 +320,13 @@ export function ItemActions({
           <CustomFields definitions={config.fields} values={item.fields} />
         </ActionForm>
       </Dialog>
-      {!!transitions.length && (
-        <Dialog trigger="Change status" title="Change status">
+        <Dialog trigger={transitions.length ? 'Change status' : undefined} title="Change status" open={statusOpen} onOpenChange={(open) => { setStatusOpen(open); if (open) { setStatusSaved(false); setEditSaved(false); } }} finalFocus={() => document.querySelector<HTMLButtonElement>('button[aria-label="Edit item"]')}>
           <ActionForm
             item={item}
             workspace={workspace}
             path={'/items/' + item.key + '/transition'}
             label="Change status"
+            onSuccess={() => { setStatusOpen(false); setStatusSaved(true); }}
             body={(d) => {
               const fields: Record<string, unknown> = {};
               for (const field of transition?.requires ?? []) {
@@ -407,7 +410,6 @@ export function ItemActions({
             />
           </ActionForm>
         </Dialog>
-      )}
       <Dialog trigger="Move or reorder" title="Move or reorder item">
         <ActionForm
           item={item}

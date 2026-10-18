@@ -42,6 +42,7 @@ export type Project = {
 };
 export type Member = { id: string; display_name: string };
 export type Config = {
+  version: number;
   types: { key: string; name: string; initial_status: string }[];
   statuses: { key: string; name: string; category: string }[];
   transitions: Record<string, { to_key: string; requires: string[] }[]>;
@@ -55,7 +56,10 @@ export type Problem = {
   submitted?: unknown;
   current_project?: Project;
   submitted_project?: Partial<Project>;
+  current_workspace?: Workspace;
+  current_config?: Config;
 };
+export type Workspace = { id: string; slug: string; name: string; version: number };
 export class APIError extends Error {
   constructor(public problem: Problem) {
     super(problem.detail || problem.title || 'Request failed. Try again.');

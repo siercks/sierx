@@ -1167,3 +1167,34 @@ Ordinary event metadata and partitions are retained. Reviewed case-bound value r
 Record exact bounded intents in an encrypted chain outside database backups before committing their effects. Independently preserve the current authenticated checkpoint. A restored database must be an exact prefix, replay and verify before access. The app holds only a derived verification key and checks its receipt against the checkpoint on startup and each request. Recovery fails closed on missing, stale, wrong-instance or corrupt evidence. The app does not receive the journal master key.
 
 Logical backup recovery preserves original owners/ACLs and rejects errors rather than granting restored security-definer functions to PUBLIC. Original roles must exist on the recovery cluster. Native performance collection separately measures repeated process readiness and warmed RSS; actual reference hardware thresholds remain human acceptance evidence. See `docs/LIFECYCLE-OPERATIONS.md` and `docs/PERFORMANCE-ACCEPTANCE.md`.
+
+## ADR-029 — Administrator settings and bounded visual item workflows
+
+Date: 2026-10-18. Status: implementation under the owner's instruction to continue
+through the requested priority changes; this does not approve Phase 2 exit.
+
+Bring a bounded workflow editor forward from the later configuration tooling.
+Administrators can edit the workspace display name, create peer projects and
+publish per-project item-workflow snapshots: additive custom statuses, display
+order, allowed transitions/required fields and per-type initial statuses. The
+interface visualizes outgoing transitions and provides keyboard controls.
+Workspace identifiers, item keys and historical configuration stay stable.
+Existing immutable status definitions are retained; renaming/removal requiring
+item migration is outside this additive editor. New versions reuse those IDs,
+so existing items can take newly configured transitions without rewriting history.
+No YAML reconcile service, Kanban surface or cross-project item moves are added.
+
+Unassigned is offered as the requested optional status label; assignment remains
+an independent field. On Hold/Blocked are ordinary active statuses when selected
+from the suggestions, and Completed is a done status. Suggestions do not modify
+an existing project until the administrator explicitly reviews and saves its
+flow. Old Done and In Review definitions remain usable. Workflow writes require
+the current numeric config version, serialize on the project, and reject stale
+or invalid submissions. Workspace naming has its own optimistic version and
+tenant/admin database policy.
+
+Authenticated members can search only their workspace's active display names
+and IDs for item assignment. Emails and authentication data remain excluded.
+Direct field edits use the existing item mutation/version/authorization paths.
+Formatting controls store Markdown and lazy-load the existing safe renderer
+only for preview; there is no remote editor, font or asset dependency.

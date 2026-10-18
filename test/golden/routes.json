@@ -35,5 +35,8 @@
  "GET /api/v1/views":"api/views-list.json",
  "POST /api/v1/views":"api/views-create.json",
  "GET /api/v1/changes":"api/changes.json",
- "GET /api/v1/metrics":"api/metrics.json"
+ "GET /api/v1/metrics":"api/metrics.json",
+ "GET /api/v1/workspace":"api/workspace-settings.json",
+ "PATCH /api/v1/workspace":"api/workspace-update.json",
+ "PUT /api/v1/projects/{key}/config":"api/workflow-update.json"
 }
