@@ -76,6 +76,36 @@ func TestBrowserAcceptance(t *testing.T) {
 	cmd.Dir = "../../web"
 	cmd.Env = append(os.Environ(), "SIERX_TEST_URL="+tls.URL, "SIERX_TEST_SESSION="+token)
 	if os.Getenv("SIERX_BROWSER_SCALE") != "1" {
+		// Pagination fixtures must not push SRX outside the original workflow's
+		// first project page or leak data between browser-engine runs.
+		navigationSessions := map[string]string{}
+		for _, engine := range []string{"chromium", "firefox", "webkit"} {
+			email := "navigation-" + engine + "@browser.example.test"
+			hash, err := auth.HashPassword("browser-test-password-12345")
+			if err != nil {
+				t.Fatal(err)
+			}
+			workspaceID, userID := uuid.NewV7().String(), uuid.NewV7().String()
+			_, err = pool.Exec(context.Background(), `WITH w AS (
+ INSERT INTO workspace(id,slug,name,origin_id) VALUES($1::uuid,$2,'Navigation acceptance',$1::uuid)
+), u AS (
+ INSERT INTO user_account(id,email,display_name,password_hash) VALUES($3::uuid,$4,'Navigation tester',$5)
+)
+ INSERT INTO membership(workspace_id,user_id,role) VALUES($1::uuid,$3::uuid,'admin')`, workspaceID, "navigation-"+engine, userID, email, hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			session, err := s.auth.service.Login(context.Background(), email, "browser-test-password-12345", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			navigationSessions[engine] = session
+		}
+		navigationData, err := json.Marshal(navigationSessions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd.Env = append(cmd.Env, "SIERX_TEST_NAV_SESSIONS="+string(navigationData))
 		// Separate users keep one-use TOTP/recovery codes independent per engine.
 		credentials := map[string]any{}
 		for _, engine := range []string{"chromium", "firefox", "webkit"} {

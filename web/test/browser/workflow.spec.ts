@@ -40,6 +40,202 @@ async function create(
 }
 test.beforeEach(async ({ context }) => authenticate(context));
 
+async function navigationProjects(context: BrowserContext, count: number) {
+  const navigationSessions = JSON.parse(process.env.SIERX_TEST_NAV_SESSIONS ?? '{}') as Record<string, string>;
+  const token = navigationSessions[test.info().project.name];
+  if (!token) throw new Error('The dedicated navigation workspace is required.');
+  await context.clearCookies();
+  await context.addCookies([{ name: '__Host-sierx_session', value: token, url: url!, secure: true, httpOnly: true, sameSite: 'Lax' }]);
+  const group = 'NV' + randomUUID().slice(0, 4).toUpperCase();
+  const projects: { key_prefix: string; name: string; title: string }[] = [];
+  for (let index = 0; index < count; index++) {
+    const prefix = group + index.toString(36).padStart(2, '0').toUpperCase();
+    const name = `${group} navigation ${index}`;
+    const response = await context.request.post('/api/v1/projects', { data: { key_prefix: prefix, name, kind: index % 2 ? 'discovery' : 'delivery' } });
+    expect(response.status()).toBe(201);
+    const title = `${group} item ${index}`;
+    const item = await context.request.post('/api/v1/items', { data: { project: prefix, type: 'story', title } });
+    expect(item.status()).toBe(201);
+    projects.push({ key_prefix: prefix, name, title });
+  }
+  return { group, projects };
+}
+
+test('project navigation bounds retained contexts and restores warm back-forward views', async ({ page, context }, info) => {
+  const { group, projects } = await navigationProjects(context, 6);
+  const itemRequests: string[] = [];
+  page.on('request', (request) => { const target = new URL(request.url()); if (target.pathname === '/api/v1/items') itemRequests.push(target.searchParams.get('project') ?? ''); });
+  await page.goto('/?project=' + projects[0].key_prefix);
+  const nav = page.getByRole('navigation', { name: 'Project navigation' });
+  async function choose(index: number) {
+    await nav.getByRole('searchbox', { name: 'Find a project' }).fill(group);
+    await expect(nav.locator(`option[value="${projects[index].key_prefix}"]`)).toHaveCount(1);
+    await nav.getByRole('combobox', { name: 'Project', exact: true }).selectOption(projects[index].key_prefix);
+    await expect(page.getByRole('link', { name: projects[index].title, exact: true })).toBeVisible();
+  }
+  for (let index = 1; index < projects.length; index++) {
+    const before = itemRequests.length;
+    await choose(index);
+    expect(itemRequests.slice(before)).toEqual([projects[index].key_prefix]);
+  }
+  const warmStart = itemRequests.length;
+  const samples: number[] = [];
+  await page.evaluate(() => {
+    const timings = { samples: [] as number[], stop: () => {} };
+    const changed = (event: Event) => {
+      const select = event.target;
+      if (!(select instanceof HTMLSelectElement) || !select.closest('nav[aria-label="Project navigation"]')) return;
+      const prefix = select.value;
+      const start = performance.now();
+      const frame = () => {
+        const link = document.querySelector<HTMLAnchorElement>(`a.item-title[href^="/${prefix}-"]`);
+        if (link && link.getBoundingClientRect().height > 0) timings.samples.push(performance.now() - start);
+        else requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    };
+    document.addEventListener('change', changed);
+    timings.stop = () => document.removeEventListener('change', changed);
+    (window as unknown as { navigationTimings: typeof timings }).navigationTimings = timings;
+  });
+  for (let sample = 0; sample < 20; sample++) {
+    const start = performance.now();
+    await choose(sample % 2 ? 5 : 4);
+    samples.push(performance.now() - start);
+    await expect.poll(() => page.evaluate(() => (window as unknown as { navigationTimings: { samples: number[] } }).navigationTimings.samples.length)).toBe(sample + 1);
+  }
+  expect(itemRequests.length).toBe(warmStart);
+  const frames = await page.evaluate(() => {
+    const timings = (window as unknown as { navigationTimings: { samples: number[]; stop: () => void } }).navigationTimings;
+    timings.stop();
+    return timings.samples;
+  });
+  expect(frames).toHaveLength(20);
+  // Revisiting the oldest context requires one page again; the whole navigation
+  // history must not keep every previously visited list indefinitely.
+  const freshTitle = group + ' created while the oldest context was evicted';
+  expect((await context.request.post('/api/v1/items', { data: { project: projects[0].key_prefix, type: 'story', title: freshTitle } })).status()).toBe(201);
+  await choose(0);
+  await expect(page.getByRole('link', { name: freshTitle, exact: true })).toBeVisible();
+  expect(itemRequests.slice(warmStart)).toEqual([projects[0].key_prefix]);
+  await page.goBack();
+  await expect(page.getByRole('link', { name: projects[5].title, exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('link', { name: projects[0].title, exact: true })).toBeVisible();
+  expect(itemRequests.slice(warmStart)).toEqual([projects[0].key_prefix]);
+  const sorted = [...samples].sort((a, b) => a - b);
+  const orderedFrames = [...frames].sort((a,b) => a-b);
+  await info.attach('warm-navigation-observation', { body: JSON.stringify({ samples: samples.length, p50Ms: sorted[Math.ceil(sorted.length * 0.5) - 1], p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1], maxMs: sorted.at(-1), includesAutomationOverhead: true, browserChangeToRenderFrame: { samples: frames.length, p50Ms: orderedFrames[9], p95Ms: orderedFrames[18], maxMs: orderedFrames.at(-1), excludesControllerAndProjectSearchOverhead: true, measuresRenderFrameNotPhysicalDisplayPaint: true }, platform: process.platform, architecture: process.arch, warmItemRequests: 0, evictedContextRefetches: 1 }), contentType: 'application/json' });
+});
+
+test('project navigation ignores obsolete responses during rapid switching', async ({ page, context }) => {
+  const { group, projects } = await navigationProjects(context, 3);
+  await page.goto('/?project=' + projects[0].key_prefix);
+  let release!: () => void;
+  let arrived!: () => void;
+  let finished!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  const intercepted = new Promise<void>((resolve) => { arrived = resolve; });
+  const settled = new Promise<void>((resolve) => { finished = resolve; });
+  await page.route('**/api/v1/items?*', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('project') !== projects[1].key_prefix) { await route.continue(); return; }
+    try { const response = await route.fetch(); arrived(); await blocked; await route.fulfill({ response }); }
+    catch { /* An obsolete fetch may be cancelled before its response is delivered. */ }
+    finally { finished(); }
+  });
+  const nav = page.getByRole('navigation', { name: 'Project navigation' });
+  for (const index of [1, 2]) {
+    await nav.getByRole('searchbox', { name: 'Find a project' }).fill(group);
+    await nav.getByRole('combobox', { name: 'Project', exact: true }).selectOption(projects[index].key_prefix);
+    if (index === 1) { await intercepted; await expect(page.getByRole('status').filter({ hasText: 'Loading items' })).toBeVisible(); }
+  }
+  await expect(page.getByRole('link', { name: projects[2].title, exact: true })).toBeVisible();
+  release();
+  await settled;
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(projects[2].key_prefix);
+  await expect(page.getByRole('link', { name: projects[1].title, exact: true })).toHaveCount(0);
+  await page.unroute('**/api/v1/items?*');
+});
+
+test('a project beyond the first page bootstraps directly and remains reachable through pagination', async ({ page, context }) => {
+  test.setTimeout(120000);
+  const { projects } = await navigationProjects(context, 102);
+  const initial = await (await context.request.get('/api/v1/projects?limit=100')).json();
+  const first = new Set(initial.data.map((project: { key_prefix: string }) => project.key_prefix));
+  const outside = projects.filter((project) => !first.has(project.key_prefix));
+  expect(outside.length).toBeGreaterThanOrEqual(2);
+  const target = outside[0];
+  const requests: string[] = [];
+  await page.route('**/api/v1/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/items' || path.startsWith('/api/v1/projects')) { requests.push(path); return route.abort(); }
+    return route.continue();
+  });
+  await page.goto('/?project=' + target.key_prefix);
+  await expect(page.getByRole('heading', { name: target.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: target.title, exact: true })).toBeVisible();
+  expect(requests).toEqual([]);
+  await page.unroute('**/api/v1/**');
+  const nav = page.getByRole('navigation', { name: 'Project navigation' });
+  for (let pageNumber = 0; pageNumber < 5 && await nav.locator(`option[value="${outside[1].key_prefix}"]`).count() === 0; pageNumber++) {
+    const response = page.waitForResponse((entry) => new URL(entry.url()).pathname === '/api/v1/projects');
+    await nav.getByRole('button', { name: 'More', exact: true }).click();
+    expect((await response).ok()).toBe(true);
+  }
+  await expect(nav.locator(`option[value="${outside[1].key_prefix}"]`)).toHaveCount(1);
+});
+
+test('650ms response latency preserves a failed edit draft and shows pending feedback on retry', async ({ page, context }, info) => {
+  const item = await create(context, 'Slow connection edit');
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Edit item', exact: true }).click();
+  const title = 'Retained slow-link draft ' + randomUUID().slice(0, 8);
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  let attempts = 0;
+  await page.route('**/api/v1/items/' + item.key, async (route) => {
+    if (route.request().method() !== 'PATCH') { await route.continue(); return; }
+    attempts++;
+    const response = attempts === 1 ? null : await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    if (response) await route.fulfill({ response });
+    else await route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ status: 503, title: 'Temporary test outage', detail: 'Test connection interrupted. Your draft is retained.' }) });
+  });
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('alert')).toContainText('Test connection interrupted');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
+  const started = performance.now();
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  const elapsedMs = performance.now() - started;
+  expect(elapsedMs).toBeGreaterThanOrEqual(650);
+  expect(attempts).toBe(2);
+  await info.attach('slow-link-observation', { body: JSON.stringify({ imposedResponseDelayMs: 650, successElapsedMs: elapsedMs, attempts, includesNetworkAndAutomation: true }), contentType: 'application/json' });
+});
+
+test('project creation and metadata editing refresh the selected dashboard', async ({ page }) => {
+  const prefix='PM'+randomUUID().slice(0,6).toUpperCase();
+  await page.goto('/');
+  await page.getByRole('button',{name:'Create project',exact:true}).click();
+  let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Project name',{exact:true}).fill('Acceptance project '+prefix);
+  await dialog.getByLabel('Key prefix',{exact:true}).fill(prefix);
+  await dialog.getByRole('button',{name:'Create project',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole('button',{name:'Manage projects',exact:true}).click();
+  await page.getByRole('button',{name:'Edit project',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Project name',{exact:true}).fill('Edited acceptance project '+prefix);
+  await dialog.getByRole('button',{name:'Save project',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading',{name:'Edited acceptance project '+prefix,exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Edited acceptance project '+prefix,exact:true})).toBeVisible();
+});
+
 test('usability: item titles align across status widths in every appearance', async ({ page, context }) => {
   const todo = await create(context, 'Aligned title');
   const doing = await create(context, 'Aligned title');

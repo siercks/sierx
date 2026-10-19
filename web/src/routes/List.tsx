@@ -125,6 +125,8 @@ export default function List() {
   const [creating, setCreating] = useState(false);
   const [creationLoaded, setCreationLoaded] = useState(false);
   const state = useState(() => bootstrap<State>())[0];
+  const bootstrapAvailable = useRef(true);
+  useEffect(() => { bootstrapAvailable.current = false; }, []);
   const [query, setQuery] = useState(state.query);
   const [project, setProject] = useState(state.project ?? '');
   const [managing, setManaging] = useState(false);
@@ -136,7 +138,7 @@ export default function List() {
     queryKey: [state.me.workspace_id, 'project', project],
     queryFn: ({ signal }) => request<Project>(`/projects/${encodeURIComponent(project)}`, { signal }),
     enabled: !!project,
-    initialData: state.selected_project?.key_prefix === project ? state.selected_project : undefined,
+    initialData: bootstrapAvailable.current && state.selected_project?.key_prefix === project ? state.selected_project : undefined,
   });
   const result = useInfiniteQuery({
     queryKey: listKey(state.me.workspace_id, query, project),
@@ -147,7 +149,7 @@ export default function List() {
         { signal },
       ),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    initialData: !initialMatches || initialProblem
+    initialData: !bootstrapAvailable.current || !initialMatches || initialProblem
       ? undefined
       : { pages: [state.items as Page<Item>], pageParams: [null] },
     enabled: !initialProblem,
