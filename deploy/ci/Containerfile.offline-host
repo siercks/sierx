@@ -35,5 +35,7 @@ RUN if command -v apt-get >/dev/null; then \
       apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends linux-image-virtual initramfs-tools && \
       rm -rf /var/lib/apt/lists/*; \
     else dnf install -y kernel-core kernel-modules dracut && \
-      version=$(basename /lib/modules/*) && dracut --force --no-hostonly --kver "$version" && dnf clean all; fi
+      version=$(basename /lib/modules/*) && \
+      install -m 0644 "/lib/modules/$version/vmlinuz" "/boot/vmlinuz-$version" && \
+      dracut --force --no-hostonly --kver "$version" && dnf clean all; fi
 ENTRYPOINT ["/usr/lib/systemd/systemd"]

@@ -12,6 +12,7 @@ import shutil
 import ssl
 import tarfile
 import threading
+from offline_host_inputs import isolated_storage, require_empty_storage
 
 
 def main(bundle, lock, env, run):
@@ -75,16 +76,16 @@ def main(bundle, lock, env, run):
     server.socket=tls.wrap_socket(server.socket,server_side=True)
     thread=threading.Thread(target=server.serve_forever,daemon=True)
     thread.start()
-    storage=home/'acquisition-storage.conf'
-    storage.write_text('[storage]\ndriver="vfs"\ngraphroot="'+str(home/'acquisition-store')+'"\nrunroot="/run/user/1001/acquisition-store"\n')
+    storage,runroot=home/'acquisition-store',Path(env['XDG_RUNTIME_DIR'])/'acquisition-store'
     certs=home/'acquisition-trust'
     certs.mkdir()
     shutil.copyfile(Path(env['SSL_CERT_FILE']),certs/'ca.crt')
     auth=home/'acquisition-auth.json'
     auth.write_text('{"auths":{}}')
-    isolated={**env,'CONTAINERS_STORAGE_CONF':str(storage)}
+    isolated=isolated_storage(storage,runroot,env)
     def acquire(*args):return run(*args,env=isolated)
     try:
+        require_empty_storage(json.loads(acquire('podman','info','--format','json')),storage,runroot)
         if json.loads(acquire('podman','images','--format','json')):
             raise ValueError('Synthetic acquisition store was not empty')
         source='localhost:19444/sierx@'+digest

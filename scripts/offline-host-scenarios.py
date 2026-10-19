@@ -14,6 +14,7 @@ import threading
 import urllib.request
 import re
 from offline_host_evidence import DATA_TABLES
+from offline_host_inputs import isolated_storage, require_empty_storage
 
 
 HOME = Path(os.environ['HOME'])
@@ -76,9 +77,10 @@ def delivery_failures(bundle, options, env, run, log):
     finally:
         parked.rename(certificate)
     # A separate empty image store exercises actual no-pull plan rejection.
-    storage = HOME/'empty-storage.conf'
-    storage.write_text('[storage]\ndriver="vfs"\ngraphroot="'+str(HOME/'empty-store')+'"\nrunroot="/run/user/1001/empty-store"\n')
-    installer(bundle,'plan',options['bundle_sha256'],{**env,'CONTAINERS_STORAGE_CONF':str(storage)},log)
+    storage,runroot = HOME/'empty-store',Path(env['XDG_RUNTIME_DIR'])/'empty-store'
+    isolated=isolated_storage(storage,runroot,env)
+    require_empty_storage(json.loads(run('podman','info','--format','json',env=isolated)),storage,runroot)
+    installer(bundle,'plan',options['bundle_sha256'],isolated,log)
     if service_snapshot(run) != before:
         raise ValueError('Rejected delivery changed the accepted revision or running services')
     return ['missing-image','altered-archive','wrong-architecture','wrong-digest','missing-certificate','empty-image-store']
