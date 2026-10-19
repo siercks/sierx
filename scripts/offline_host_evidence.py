@@ -19,7 +19,8 @@ BROWSER_CHECKS = ['login', 'create-edit-project', 'create-edit-item', 'transitio
                   'query-reload', 'cold-bootstrap', 'canonical-deep-link']
 ISOLATION = {'network':'loopback-only', 'system_manager':'private-vm', 'user_manager':'real-systemd',
              'rootless':True, 'fresh_image_store':True, 'network_devices':0,
-             'browser_driver_policy':'seccomp-deny-io-uring','storage_driver':'overlay'}
+             'browser_driver_policy':'seccomp-deny-io-uring','storage_driver':'overlay',
+             'rootless_network':'slirp4netns'}
 
 
 def validate_browser(report):

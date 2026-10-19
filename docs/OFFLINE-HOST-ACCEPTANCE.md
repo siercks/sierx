@@ -19,6 +19,12 @@ empty-store and acquisition controls additionally check their actual separate
 graph/runtime paths and zero-image inventory; a configuration file alone is
 not proof that Podman selected it.
 
+The disposable OS supplies setuid UID/GID mapping helpers so their required
+privileges survive OCI export and ext4 population. Its database explicitly uses
+slirp4netns for local port mapping without a physical network device; the guest
+checks the running container's selected backend. These are test-OS prerequisites,
+separate from the operator's real host/SELinux acceptance.
+
 ## Reproducer
 
 Use a clean committed Linux checkout matching the native architecture. Install

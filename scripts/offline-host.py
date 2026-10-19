@@ -103,7 +103,8 @@ def setup(root, args):
     containers = home / '.config/containers'
     containers.mkdir(parents=True)
     (containers / 'storage.conf').write_text('[storage]\ndriver="overlay"\n')
-    (containers / 'containers.conf').write_text('[engine]\ncgroup_manager="systemd"\nevents_logger="file"\n')
+    (containers / 'containers.conf').write_text('[engine]\ncgroup_manager="systemd"\nevents_logger="file"\n'
+        '[containers]\nnetns="slirp4netns"\n')
     for path in (home / '.config', containers, *containers.iterdir()):
         os.chown(path, 1001, 1001)
     for name in ('machine-id',):

@@ -127,6 +127,8 @@ def main():
     phase('rootless-database')
     operation('db-up')
     await_database()
+    database_container=json.loads(run('podman','inspect','sierx-postgres'))[0]
+    require(database_container['HostConfig']['NetworkMode']=='slirp4netns', 'Database requires the explicit no-NIC rootless network backend')
     phase('migration-bootstrap')
     operation('migrate-up')
     operation('bootstrap')

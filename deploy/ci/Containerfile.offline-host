@@ -38,4 +38,7 @@ RUN if command -v apt-get >/dev/null; then \
       version=$(basename /lib/modules/*) && \
       install -m 0644 "/lib/modules/$version/vmlinuz" "/boot/vmlinuz-$version" && \
       dracut --force --no-hostonly --kver "$version" && dnf clean all; fi
+# Keep the normal UID/GID mapping-helper privilege mechanism portable across
+# rootless OCI export and ext4 population, which do not retain file capabilities.
+RUN chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
 ENTRYPOINT ["/usr/lib/systemd/systemd"]
