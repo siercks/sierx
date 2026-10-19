@@ -138,7 +138,9 @@ class NetworkObserverTests(unittest.TestCase):
         lines,controls=evidence()
         for ending in (' = -1 ENETUNREACH (Network is unreachable)',' <unfinished ...>'):
             call='999<sierx> 100.000000 connect(9, '+address('198.51.100.99',443)+', 16)'+ending
-            with self.subTest(ending=ending),self.assertRaises(ValueError):observer.summarize(lines+[call],controls)
+            with self.subTest(ending=ending),self.assertRaises(ValueError) as caught:observer.summarize(lines+[call],controls)
+            self.assertIn('app/tcp=1',str(caught.exception))
+            self.assertNotIn('198.51.100.99',str(caught.exception))
 
     def test_failed_loopback_dns_lookup_is_not_treated_as_internal_traffic(self):
         lines,controls=evidence()

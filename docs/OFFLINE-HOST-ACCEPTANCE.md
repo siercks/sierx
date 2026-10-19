@@ -12,6 +12,11 @@ operations run as the synthetic UID 1001. Guest root only prepares fault copies,
 checks namespace/identity evidence and observes processes. Connected OS/browser
 preparation happens before isolation, in the preparer's Podman store.
 
+KVM runs have a 1,900-second workload limit. A host without nested virtualization
+uses native-architecture TCG with a bounded 4,500-second workload limit and an
+1,800-second initial image-import limit. The workflow remains capped at 90
+minutes. These functional checks make no native-speed/performance claim.
+
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64
 software virtualization. The guest verifies the actual selected driver. The

@@ -161,7 +161,8 @@ async function networkControl(browser, engine) {
     await context.close();
     const path = join(process.env.HOME, 'network-controls.json');
     const entries = JSON.parse(readFileSync(path));
-    entries.push({ name: engine + '-tcp', start, end: Date.now() / 1000 });
+    // Date.now() truncates milliseconds; strace timestamps retain microseconds.
+    entries.push({ name: engine + '-tcp', start, end: (Date.now()+1) / 1000 });
     writeFileSync(path, JSON.stringify(entries));
   }
 }
@@ -188,7 +189,7 @@ async function driverControl() {
   assert(failed, 'Forbidden driver fetch unexpectedly succeeded');
   const path = join(process.env.HOME, 'network-controls.json');
   const entries = JSON.parse(readFileSync(path));
-  entries.push({ name: 'driver-node-fetch', start, end: Date.now() / 1000 });
+  entries.push({ name: 'driver-node-fetch', start, end: (Date.now()+1) / 1000 });
   writeFileSync(path, JSON.stringify(entries));
 }
 

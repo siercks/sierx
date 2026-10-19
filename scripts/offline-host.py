@@ -160,7 +160,7 @@ Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 Environment=PATH=/usr/lib/postgresql/18/bin:/usr/pgsql-18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=+/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py --manager-proof
 ExecStart=+/usr/sbin/sierx-trace-installer
-TimeoutStartSec=1800
+TimeoutStartSec=4400
 StandardOutput=journal+console
 StandardError=journal
 ''')
@@ -171,7 +171,7 @@ After=basic.target
 ''')
     options = {'bundle_sha256': args.expected_sha256, 'previous_sha256': args.previous_sha256,
                'soak_seconds': args.soak_seconds, 'suite_sha256': args.suite_sha256,
-               'closeout':not args.development}
+               'closeout':not args.development,'virtual_cpu':args.virtual_cpu}
     (home / 'options.json').write_text(json.dumps(options))
     os.chown(home / 'options.json', 1001, 1001)
 
@@ -246,6 +246,7 @@ def main(args):
         raise ValueError('Closeout acceptance requires a distinct retained approved bundle and evidence')
     verify_rootfs(args.rootfs, args.rootfs_sha256)
     mode = acceleration(args.acceleration)
+    args.virtual_cpu=mode
     report.parent.mkdir(parents=True, exist_ok=True)
     private = report.with_suffix('.private.log')
     os.umask(0o077)
@@ -309,7 +310,7 @@ def main(args):
             with private.open('wb') as log:
                 process = subprocess.Popen(command, stdout=log, stderr=log, start_new_session=True)
                 print('offline-host: boot ' + arch + '/' + mode + ' with native overlay storage',flush=True)
-                deadline = time.monotonic() + 1900
+                deadline = time.monotonic() + (4500 if mode=='tcg' else 1900)
                 startup_deadline = time.monotonic() + (180 if mode == 'kvm' else 600)
                 last_phase = None
                 finished = None

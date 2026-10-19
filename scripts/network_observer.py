@@ -5,6 +5,7 @@ An unsuccessful connect/send is still an attempt. Unreadable destinations fail
 closed rather than being reported as zero traffic.
 """
 from dataclasses import dataclass
+from collections import Counter
 import ipaddress
 import math
 from pathlib import Path
@@ -297,7 +298,12 @@ def summarize(lines, controls, internal_addresses=(), trace_errors=''):
                    and CONTROLS[entry['name']] == (attempt.process,attempt.address,attempt.port,attempt.protocol)]
         if len(matches) == 1: counts[matches[0]] += 1
         else: external.append(attempt)
-    if external: raise ValueError('Unapproved connection or DNS attempt observed')
+    if external:
+        # Publish only fixed process/protocol classes and counts, never an
+        # address, payload, work title or credential from the private trace.
+        counts=Counter((attempt.process,attempt.protocol) for attempt in external)
+        summary=', '.join(role+'/'+protocol+'='+str(count) for (role,protocol),count in sorted(counts.items()))
+        raise ValueError('Unapproved connection or DNS attempt observed ('+summary+')')
     if any(count == 0 for count in counts.values()): raise ValueError('A planted external attempt escaped observation')
     return {'result':'passed','observer':'strace-network-v1','processes':sorted(PROCESSES),
             'external_attempts':0,'negative_controls':counts,'attempts_examined':len(attempts),

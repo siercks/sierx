@@ -66,7 +66,8 @@ def phase(name):
 def run(*args, env=None):
     with LOG.open('ab') as log:
         result = subprocess.run(list(map(str, args)), stdout=subprocess.PIPE, stderr=log,
-                                env=env or ENV, cwd=BUNDLE, timeout=600)
+                                env=env or ENV, cwd=BUNDLE,
+                                timeout=1800 if PHASE=='import' and OPTIONS['virtual_cpu']=='tcg' else 600)
         log.write(result.stdout)
     if result.returncode:
         raise RuntimeError('Fixture command failed in ' + PHASE)
