@@ -1,0 +1,166 @@
+"""An observer must detect blocked attempts and cannot be fooled by payload text."""
+from pathlib import Path
+import sys
+import unittest
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts'))
+import network_observer as observer
+
+
+def address(ip,port):
+    if ':' in ip:return '{sa_family=AF_INET6, sin6_port=htons(%d), inet_pton(AF_INET6, "%s", &sin6_addr), sin6_scope_id=0}'%(port,ip)
+    return '{sa_family=AF_INET, sin_port=htons(%d), sin_addr=inet_addr("%s")}'%(port,ip)
+
+
+def evidence():
+    programs={'installer':'python3','app':'sierx','gateway':'caddy','database':'postgres','chromium':'chrome-headless-shell','firefox':'firefox'}
+    lines=[f'{index+1}<runner> 1.000000 execve("/usr/bin/{program}", ["fixture"], 0x0 /* vars */) = 0' for index,program in enumerate(programs.values())]
+    controls=[]
+    for index,(name,(role,ip,port,protocol)) in enumerate(observer.CONTROLS.items()):
+        start=10+index
+        controls.append({'name':name,'start':start,'end':start+0.5})
+        program=programs[role]
+        prefix=f'{100+index}<{program}> {start+0.1:.6f} '
+        family='AF_INET6' if ':' in ip else 'AF_INET'
+        lines.append(prefix+f'socket({family}, SOCK_DGRAM, IPPROTO_UDP) = 3' if protocol=='udp' else prefix+f'socket({family}, SOCK_STREAM, IPPROTO_TCP) = 3')
+        call=f'sendto(3, "query", 5, 0, {address(ip,port)}, 16)' if protocol=='udp' else f'connect(3, {address(ip,port)}, 16)'
+        lines.append(prefix+call+' = -1 ENETUNREACH (Network is unreachable)')
+    return lines,controls
+
+
+class NetworkObserverTests(unittest.TestCase):
+    def test_container_child_pid_translation_preserves_the_browser_role(self):
+        lines=['60<runner> 1.000000 execve("/opt/firefox", ["firefox"], 0x0) = 0',
+               '60<firefox> 1.000001 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 2<firefox> /* 61 in strace\'s PID NS */',
+               '61<Socket Thread> 1.000002 connect(3<TCP:[2]>, '+address('198.51.100.17',18181)+', 16) = -1 ENETUNREACH']
+        attempts,_=observer.parse(lines)
+        self.assertEqual(attempts[0].process,'firefox')
+
+    def test_received_socket_identity_retains_the_exact_observed_peer(self):
+        lines=['10<postgres> 1.000000 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 3<TCP:[1]>',
+               '10<postgres> 1.000001 accept4(3<TCP:[1]>, '+address('198.51.100.99',1234)+', [128 => 16], 0) = 10<TCP:[123]>',
+               '20<postgres> 1.000002 sendto(7<TCP:[123]>, "reply", 5, 0, NULL, 0) = 5']
+        attempts,_=observer.parse(lines)
+        self.assertEqual(attempts[0].address,'198.51.100.99')
+        self.assertEqual(attempts[0].port,1234)
+
+    def test_an_untraced_child_or_reused_socket_inode_cannot_hide_traffic(self):
+        with self.assertRaises(ValueError):observer.parse(['20<node> 1.000000 clone(child_stack=NULL, flags=CLONE_UNTRACED|SIGCHLD) = 21'])
+        lines=['10<node> 1.000000 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 3<TCP:[123]>',
+               '10<node> 1.000001 connect(3<TCP:[123]>, '+address('127.0.0.1',443)+', 16) = 0',
+               '10<node> 1.000002 close(3<TCP:[123]>) = 0',
+               '10<node> 1.000003 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 3<TCP:[123]>',
+               '10<node> 1.000004 sendto(3<TCP:[123]>, "payload", 7, 0, NULL, 0) = -1 ENOTCONN']
+        with self.assertRaises(ValueError):observer.parse(lines)
+
+    def test_browser_thread_names_keep_their_executed_process_identity(self):
+        lines=['30<runner> 1.000000 execve("/opt/playwright/firefox/firefox", ["firefox"], 0x0) = 0',
+               '30<firefox> 1.000001 clone(child_stack=NULL, flags=CLONE_VM|CLONE_FILES|CLONE_THREAD) = 31',
+               '31<Socket Thread> 1.000002 connect(3<TCP:[2]>, '+address('198.51.100.17',18181)+', 16) = -1 ENETUNREACH']
+        attempts,executed=observer.parse(lines)
+        self.assertEqual(executed,{'firefox'})
+        self.assertEqual(attempts[0].process,'firefox')
+
+    def test_accepted_database_socket_is_inherited_before_a_child_reply(self):
+        lines=['10<postgres> 1.000000 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 3<TCP:[1]>',
+               '10<postgres> 1.000001 accept4(3<TCP:[1]>, <unfinished ...>',
+               '10<postgres> 1.000002 <... accept4 resumed>'+address('198.51.100.99',1234)+', [128 => 16], SOCK_CLOEXEC) = 10<TCP:[2]>',
+               '10<postgres> 1.000003 clone(child_stack=NULL, flags=SIGCHLD <unfinished ...>',
+               '11<postgres> 1.000004 sendto(10<TCP:[2]>, "reply", 5, 0, NULL, 0) = 5',
+               '10<postgres> 1.000005 <... clone resumed>) = 11',
+               '10<postgres> 1.000006 close(10<TCP:[2]>) = 0',
+               '11<postgres> 1.000007 sendto(10<TCP:[2]>, "reply", 5, 0, NULL, 0) = 5']
+        attempts,_=observer.parse(lines)
+        self.assertEqual([entry.address for entry in attempts],['198.51.100.99']*2)
+
+    def test_thread_tables_and_duplicated_descriptors_keep_the_destination(self):
+        lines=['20<python3> 1.000000 socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) = 3',
+               '20<python3> 1.000001 clone(child_stack=NULL, flags=CLONE_VM|CLONE_FILES|CLONE_THREAD) = 21',
+               '21<python3> 1.000002 dup3(3, 8, O_CLOEXEC) = 8',
+               '21<python3> 1.000003 connect(8, '+address('198.51.100.99',53)+', 16) = 0',
+               '20<python3> 1.000004 sendmsg(8<UDP:[2]>, {msg_name=NULL, msg_namelen=0, msg_iov=[]}, 0) = 0']
+        attempts,_=observer.parse(lines)
+        self.assertEqual(len(attempts),2)
+        self.assertTrue(all(entry.address=='198.51.100.99' and entry.protocol=='udp' for entry in attempts))
+
+    def test_ipv4_mapped_ipv6_is_not_a_different_allowed_destination(self):
+        attempts,_=observer.parse(['20<sierx> 1.000000 connect(3<TCPv6:[2]>, '+address('::ffff:198.51.100.99',443)+', 28) = -1 ENETUNREACH'])
+        self.assertEqual(attempts[0].address,'198.51.100.99')
+
+    def test_unobservable_async_io_and_unspecified_sends_fail_closed(self):
+        for line in ('20<node> 1.000000 io_uring_setup(256, {flags=0}) = 3',
+                     '20<node> 1.000000 io_uring_enter(3, 1, 1, 0, NULL, 0) = -1 EINTR',
+                     '20<node> 1.000000 sendto(3, "payload", 7, 0, {sa_family=AF_UNSPEC}, 16) = 7'):
+            with self.subTest(line=line),self.assertRaises(ValueError):observer.parse([line])
+
+    def test_resumed_exec_retains_canonical_startup_coverage(self):
+        lines=['42<runner> 1.000000 execve("/usr/local/bin/sierx", ["sierx"], 0x0 /* vars */ <unfinished ...>',
+               '42<sierx> 1.000001 <... execve resumed>) = 0']
+        _,executed=observer.parse(lines)
+        self.assertEqual(executed,{'app'})
+        with self.assertRaises(ValueError):observer.parse(lines[1:])
+
+    def test_each_real_component_and_dns_udp_ipv6_control_must_be_seen(self):
+        lines,controls=evidence()
+        report=observer.summarize(lines,controls)
+        self.assertEqual(report['external_attempts'],0)
+        self.assertTrue(all(value==1 for value in report['negative_controls'].values()))
+        for index,entry in enumerate(controls):
+            with self.subTest(control=entry['name']),self.assertRaises(ValueError):
+                observer.summarize(lines,[value for value in controls if value!=entry])
+
+    def test_failed_and_unfinished_connects_are_still_external_attempts(self):
+        lines,controls=evidence()
+        for ending in (' = -1 ENETUNREACH (Network is unreachable)',' <unfinished ...>'):
+            call='999<sierx> 100.000000 connect(9, '+address('198.51.100.99',443)+', 16)'+ending
+            with self.subTest(ending=ending),self.assertRaises(ValueError):observer.summarize(lines+[call],controls)
+
+    def test_failed_loopback_dns_lookup_is_not_treated_as_internal_traffic(self):
+        lines,controls=evidence()
+        call='999<node> 100.000000 connect(9<UDP:[1]>, '+address('127.0.0.1',53)+', 16) = -1 ECONNREFUSED'
+        with self.assertRaises(ValueError):observer.summarize(lines+[call],controls)
+
+    def test_broad_or_wrong_control_windows_do_not_excuse_egress(self):
+        lines,controls=evidence()
+        for change in ({'start':0,'end':1000},{'start':float('nan')},{'start':100,'end':101}):
+            modified=[{**entry,**change} if entry['name']=='app-tcp' else entry for entry in controls]
+            with self.subTest(change=change),self.assertRaises(ValueError):observer.summarize(lines,modified)
+
+    def test_canonical_process_exec_and_complete_trace_are_required(self):
+        lines,controls=evidence()
+        with self.assertRaises(ValueError):observer.summarize(lines[1:],controls)
+        for error in ('strace: Process 42 detached','strace: ptrace failed: Permission denied'):
+            with self.subTest(error=error),self.assertRaises(ValueError):observer.summarize(lines,controls,trace_errors=error)
+
+    def test_payload_that_looks_like_an_address_is_not_a_destination(self):
+        line='42<node> 1.000000 sendto(3<UDP:[127.0.0.1:1->127.0.0.1:2]>, "sin_addr=inet_addr(\\\"198.51.100.99\\\")", 39, 0, '+address('127.0.0.1',2)+', 16) = 39'
+        attempts,_=observer.parse([line])
+        self.assertEqual([value.address for value in attempts],['127.0.0.1'])
+
+    def test_connected_sends_and_batched_datagrams_retain_the_actual_destination(self):
+        destination=address('198.51.100.99',53)
+        lines=['42<python3> 1.000000 socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) = 3',
+               '42<python3> 1.000001 connect(3, '+destination+', 16) = 0',
+               '42<python3> 1.000002 sendmsg(3, {msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base="payload", iov_len=7}], msg_iovlen=1}, 0) = 7',
+               '42<python3> 1.000003 sendmmsg(3, [{msg_hdr={msg_name='+destination+', msg_namelen=16, msg_iov=[], msg_iovlen=0}, msg_len=0}], 1, 0) = -1 ENETUNREACH (Network is unreachable)']
+        attempts,_=observer.parse(lines)
+        self.assertEqual(len(attempts),3)
+        self.assertTrue(all(value.address=='198.51.100.99' and value.protocol=='udp' for value in attempts))
+
+    def test_opaque_addresses_reused_fds_and_missing_entries_fail_closed(self):
+        for call in ('42<sierx> 1.000000 connect(3, 0x123, 16) = -1 EFAULT (Bad address)',
+                     '42<sierx> 1.000000 <... connect resumed>) = 0',
+                     'unclassified connect(3, '+address('198.51.100.99',443)+', 16) = 0'):
+            with self.subTest(call=call),self.assertRaises(ValueError):observer.parse([call])
+        lines=['42<sierx> 1.000000 socket(AF_UNIX, SOCK_STREAM, 0) = 3',
+               '42<sierx> 1.000001 close(3) = 0',
+               '42<sierx> 1.000002 sendmsg(3, {msg_name=NULL, msg_iov=[]}, 0) = 0']
+        with self.assertRaises(ValueError):observer.parse(lines)
+
+    def test_internal_address_allowlist_cannot_hide_public_or_control_destinations(self):
+        lines,controls=evidence()
+        for value in ('198.51.100.11','8.8.8.8','2001:db8::16'):
+            with self.subTest(value=value),self.assertRaises(ValueError):observer.summarize(lines,controls,[value])
+
+
+if __name__=='__main__':unittest.main()

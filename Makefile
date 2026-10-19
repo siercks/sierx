@@ -392,6 +392,30 @@ release-offline-archive: ## Archive only a bundle with matching native acceptanc
 release-offline-evidence: ## Require both native offline bundles to pass before release promotion
 	@python3 -B scripts/offline-promotion.py verify --repository "$(or $(SIERX_RELEASE_REPOSITORY),ghcr.io/siercks/sierx)" --revision "$(shell git rev-parse HEAD)"
 
+.PHONY: offline-candidate-prepare offline-previous-prepare offline-host-prepare gate-offline-host prove-offline-host
+offline-candidate-prepare: ## Assemble an exact local native candidate without registry publication
+	@bash scripts/offline-host-release.sh local
+offline-previous-prepare: ## Acquire and verify the explicitly retained approved native release
+	@bash scripts/offline-host-release.sh previous
+offline-host-prepare: ## Connected acquisition of a disposable test OS and browsers
+	@bash scripts/offline-host-release.sh prepare
+gate-offline-host: ## Real rootless installer, delivered browsers and observed offline runtime in a no-NIC VM
+	@bash scripts/offline-host-release.sh test
+prove-offline-host: ## Reject stale/incomplete reports, opaque traffic and altered delivery fixtures
+	@python3 -B -m unittest discover -s test/python -p test_offline_host.py
+	@python3 -B -m unittest discover -s test/python -p test_network_observer.py
+	@python3 -B -m unittest discover -s test/python -p test_offline_host_inputs.py
+
+.PHONY: offline-host-scope offline-host-aggregate offline-host-evidence offline-current-unpack
+offline-current-unpack: ## Verify and unpack this run's native offline candidate
+	@python3 -B scripts/offline-current.py
+offline-host-scope: ## Decide relevance without silently skipping native coverage failures
+	@python3 -B scripts/offline-host-evidence.py scope
+offline-host-aggregate: ## Stable CI check requiring every applicable native profile report
+	@python3 -B scripts/offline-host-evidence.py aggregate
+offline-host-evidence: ## Validate complete reports and receipts for both architectures and Rocky amd64
+	@python3 -B scripts/offline-host-evidence.py verify
+
 .PHONY: test-lifecycle
 test-lifecycle: ## Real case-bound lifecycle and pre-redaction backup replay in new scratch databases
 	@go build -o bin/sierxctl ./cmd/sierxctl

@@ -1,0 +1,39 @@
+# Connected preparation only. This test OS is never a shipped application image.
+ARG HOST_IMAGE
+ARG NODE_IMAGE
+FROM ${NODE_IMAGE} AS node
+FROM ${HOST_IMAGE}
+USER root
+COPY --from=node /usr/local/bin/ /usr/local/bin/
+COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
+RUN if command -v apt-get >/dev/null; then \
+      apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        systemd dbus podman uidmap slirp4netns iproute2 procps python3 curl ca-certificates \
+        openssl strace gnupg lsb-release && \
+      install -d /usr/share/postgresql-common/pgdg && \
+      curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+      echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+      apt-get update && apt-get install -y --no-install-recommends postgresql-client-18; \
+    else \
+      dnf install -y systemd dbus-daemon podman shadow-utils slirp4netns iproute procps-ng \
+        python3 curl-minimal ca-certificates openssl strace \
+        alsa-lib atk at-spi2-atk at-spi2-core cups-libs libdrm gtk3 libX11 libXcomposite \
+        libXdamage libXext libXfixes libXrandr libxcb libxkbcommon mesa-libgbm nss nspr \
+        pango cairo dbus-libs libXt liberation-fonts && \
+      dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-10-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm" && \
+      dnf install -y postgresql18; \
+    fi
+WORKDIR /opt/acceptance
+COPY package.json package-lock.json ./
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN npm ci && if command -v apt-get >/dev/null; then \
+      node node_modules/playwright/cli.js install --with-deps chromium firefox; \
+    else node node_modules/playwright/cli.js install chromium firefox; fi && \
+    rm -rf /root/.npm /root/.cache /var/cache/dnf /var/lib/apt/lists/*
+RUN if command -v apt-get >/dev/null; then apt-get update && apt-get install -y --no-install-recommends libnss3-tools && rm -rf /var/lib/apt/lists/*; else dnf install -y nss-tools && dnf clean all; fi
+RUN if command -v apt-get >/dev/null; then \
+      apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends linux-image-virtual initramfs-tools && \
+      rm -rf /var/lib/apt/lists/*; \
+    else dnf install -y kernel-core kernel-modules dracut && \
+      version=$(basename /lib/modules/*) && dracut --force --no-hostonly --kver "$version" && dnf clean all; fi
+ENTRYPOINT ["/usr/lib/systemd/systemd"]

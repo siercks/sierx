@@ -11,9 +11,11 @@ import unittest
 import hashlib
 import urllib.request
 import shutil
+import sys
 from unittest import mock
 
 ROOT = Path(__file__).parents[2]
+sys.path.insert(0,str(ROOT/'scripts'))
 
 
 def load(name):
@@ -136,6 +138,12 @@ class VerificationTests(unittest.TestCase):
 
 class AssemblyTests(unittest.TestCase):
     def test_native_assembly_preserves_release_and_exports_ids_then_rejects_tampering(self):
+        self.assembly(False)
+
+    def test_local_candidate_is_loaded_without_registry_pull_or_fallback(self):
+        self.assembly(True)
+
+    def assembly(self, local):
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)
             release = {"image": "example.test/sierx@sha256:" + "a" * 64, "revision": "b" * 40}
@@ -158,8 +166,11 @@ class AssemblyTests(unittest.TestCase):
                 if args[:2] == ("podman", "cp"): Path(args[-1]).write_bytes(b"cli")
                 return ""
             goose = b"verified migration tool"
-            with mock.patch.object(offline, "native_arch", return_value="amd64"), mock.patch.object(offline, "command", side_effect=command), mock.patch.object(offline.subprocess, "check_output", side_effect=lambda args, **kw: blobs[args[-1]]), mock.patch.object(urllib.request, "urlopen", side_effect=[io.BytesIO(goose), io.BytesIO(b"MIT fixture")]), mock.patch.dict(offline.GOOSE, {"amd64": ("x86_64", hashlib.sha256(goose).hexdigest())}), contextlib.redirect_stdout(io.StringIO()):
-                offline.prepare(parent / "release.json", "example.test/caddy@sha256:" + "e" * 64, parent / "bundle", parent / "sbom.json")
+            with mock.patch('local_candidate.identity',return_value={'arch':'amd64','revision':release['revision'],'manifest':'sha256:'+'a'*64,'id':'sha256:'+'d'*64}), mock.patch.object(offline, "native_arch", return_value="amd64"), mock.patch.object(offline, "command", side_effect=command), mock.patch.object(offline.subprocess, "check_output", side_effect=lambda args, **kw: blobs[args[-1]]), mock.patch.object(urllib.request, "urlopen", side_effect=[io.BytesIO(goose), io.BytesIO(b"MIT fixture")]), mock.patch.dict(offline.GOOSE, {"amd64": ("x86_64", hashlib.sha256(goose).hexdigest())}), contextlib.redirect_stdout(io.StringIO()):
+                offline.prepare(parent / "release.json", "example.test/caddy@sha256:" + "e" * 64, parent / "bundle", parent / "sbom.json",parent/'candidate.tar' if local else None)
+            app_pulls=[args for args in calls if args[:2]==('podman','pull') and args[-1]==release['image']]
+            self.assertEqual(len(app_pulls),0 if local else 1)
+            self.assertEqual(sum(args[:2]==('podman','load') for args in calls),1 if local else 0)
             root = parent / "bundle"
             expected = offline.digest(root / "bundle.lock.json")
             data = offline.verify(root, expected, "amd64")

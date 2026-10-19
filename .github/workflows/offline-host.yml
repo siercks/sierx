@@ -1,0 +1,121 @@
+# Local candidates on PRs; exact staged artifacts before release promotion.
+name: offline-delivery
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      staged:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        run: make offline-host-scope
+        env:
+          SIERX_STAGED: ${{ inputs.staged && 'true' || 'false' }}
+
+  host:
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
+    name: host (${{ matrix.profile }}, ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            profile: ubuntu24
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            profile: ubuntu24
+            arch: arm64
+          - runner: ubuntu-24.04
+            profile: rocky10
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PROFILE: ${{ matrix.profile }}
+      ARCH: ${{ matrix.arch }}
+      SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: ${{ !inputs.staged }}
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        if: ${{ !inputs.staged }}
+        with:
+          node-version-file: .nvmrc
+      - name: Install disposable VM preparation prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman python3 curl qemu-system-x86 qemu-system-arm e2fsprogs
+      - name: Build native local candidate without package publication
+        if: ${{ !inputs.staged }}
+        run: make release-binaries release-image sbom offline-candidate-prepare
+        env:
+          SBOM_OUT: dist/sbom-${{ matrix.arch }}.cdx.json
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        if: ${{ inputs.staged }}
+        with:
+          name: offline-delivery-${{ matrix.arch }}
+          path: dist
+      - name: Verify staged candidate before host acceptance
+        if: ${{ inputs.staged }}
+        run: make offline-current-unpack
+      - name: Acquire the explicitly retained approved release
+        run: make offline-previous-prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Prepare OS, browser and observer dependencies before isolation
+        run: make offline-host-prepare
+      - name: Exercise real rootless services in a booted VM with no network device
+        run: make gate-offline-host
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: host-evidence-${{ matrix.profile }}-${{ matrix.arch }}
+          path: |
+            dist/host-input-${{ matrix.profile }}-${{ matrix.arch }}.json
+            dist/host-acceptance-${{ matrix.profile }}-${{ matrix.arch }}.json
+          if-no-files-found: error
+
+  aggregate:
+    name: Offline delivery
+    if: always()
+    needs: [scope, host]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        if: needs.scope.outputs.required == 'true'
+        with:
+          pattern: host-evidence-*
+          path: dist
+          merge-multiple: true
+      - run: make offline-host-aggregate
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          HOST_REQUIRED: ${{ needs.scope.outputs.required }}
+          HOST_RESULT: ${{ needs.host.result }}

@@ -2047,3 +2047,45 @@ gate-2: GREEN (automated; deployment, restore and human acceptance remain separa
 
 No GitHub push, native release promotion or production deployment was performed.
 Owner/manual/host recovery acceptance and Phase 2 exit remain separate.
+
+## 2026-10-18 — navigation follow-up and closeout engineering
+
+The requested usability changes were subsequently released/deployed at `6dac24f`
+with migration 15. Native baseline release/offline run 39144952489 passed. The
+testbed deployment and server-local recovery rehearsal are recorded separately;
+this does not establish off-machine recovery or owner phase-exit sign-off.
+
+- [x] `67b1d98` fixes stale HTML bootstrap reuse after project-list cache eviction.
+  Real browser regressions cover pagination beyond 100 projects, obsolete
+  responses, warm/back-forward navigation, bounded retained lists, browser-frame
+  timing, and a 650 ms failed-save/retry that preserves the draft.
+- [x] A focused project creation/metadata-edit case passes in both engines.
+  It verifies the selected dashboard and reload after editing.
+- [ ] Expanded rootless host/delivery closeout: implementation and rejection
+  proofs are in progress. Require the actual matching candidate/profile reports
+  described in `docs/OFFLINE-HOST-ACCEPTANCE.md`; development VM probes and unit
+  fixtures do not close native/profile acceptance.
+
+Development source evidence for the navigation increment:
+
+```text
+[chromium workflow] 54 passed (2.4m)
+[firefox workflow] 54 passed (3.2m)
+--- PASS: TestBrowserAcceptance (339.20s)
+style/focus gates: PASS
+gate-routes: OK
+[chromium project metadata] 1 passed (3.5s)
+[firefox project metadata] 1 passed (4.3s)
+--- PASS: TestBrowserAcceptance (11.10s)
+```
+
+These results preserve the distinction between source browser checks, delivered
+artifact/host checks, and remaining operator/manual acceptance. The October 18
+closeout coding work has not changed the live deployment.
+
+Closeout harness development checks at this increment: all 90 Python tests
+passed; pinned actionlint and ShellCheck accepted the workflow/wrappers. The
+isolated Ubuntu amd64 probe passed real import, database/bootstrap, plan/apply,
+no-op/restart checks and both engines' delivered editing/query/deep-link
+workflows. Its Firefox control-window lifecycle failure was corrected; a full
+matching-candidate run is still required before checking the closeout box above.

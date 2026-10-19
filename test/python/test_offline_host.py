@@ -1,0 +1,154 @@
+"""Reject stale evidence and hostile OS archives before launching a guest."""
+import copy
+import hashlib
+import importlib.util
+import io
+import json
+from pathlib import Path
+import sys
+import tarfile
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import offline_host_evidence as evidence
+from offline_host_fixture import full_host_report
+
+spec = importlib.util.spec_from_file_location('host_fixture', ROOT / 'scripts/offline-host.py')
+host = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(host)
+
+
+class EvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.bundle = {'arch':'amd64', 'release':{'revision':'a'*40, 'image':'example.test/sierx@sha256:'+'b'*64}}
+        self.report = {**self.bundle, 'schema':evidence.SCHEMA, 'suite':evidence.SUITE, 'suite_sha256':'c'*64,
+                       'bundle_sha256':'d'*64, 'result':'passed', 'profile':'ubuntu-24.04',
+                       'checks':evidence.CHECKS, 'isolation':evidence.ISOLATION}
+        self.report['coverage']='development'
+        self.report['host_versions']={'kernel':'6.8.0-fixture','systemd':'systemd 255','podman':'podman version 4.9.3','selinux':'disabled'}
+        self.report['browser'] = {'result':'passed', 'playwright':'1.63.0', 'browsers':[
+            {'engine':engine, 'version':'1.0', 'checks':evidence.BROWSER_CHECKS, 'external_requests':0,
+             'tls':'leaf-spki-pin' if engine=='chromium' else 'fixture-ca-nss',
+             'service_workers':0, 'observer_controls':['document','fetch','image','websocket']}
+            for engine in ('chromium','firefox')]}
+        self.report['browser']['driver']={'node':'v24.22.0','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True}
+
+    def test_complete_report_is_bound_to_exact_fixture_and_native_candidate(self):
+        evidence.validate(self.report, self.bundle, 'd'*64, 'c'*64)
+        for field, value in (('schema', 0), ('suite','old'), ('suite_sha256','e'*64), ('arch','arm64'),
+                             ('release',{}), ('bundle_sha256','e'*64), ('result','failed'),
+                             ('checks',evidence.CHECKS[:-1]), ('profile','ubuntu-22.04')):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                evidence.validate({**self.report,field:value}, self.bundle, 'd'*64, 'c'*64)
+
+    def test_mocked_manager_host_network_or_privileged_runtime_cannot_pass(self):
+        for key, value in (('network','host'), ('rootless',False), ('fresh_image_store',False),
+                           ('user_manager','mock'), ('system_manager','host')):
+            report = copy.deepcopy(self.report)
+            report['isolation'][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                evidence.validate(report,self.bundle,'d'*64,'c'*64)
+
+    def test_browser_coverage_and_controls_are_required(self):
+        for field,value in (('browsers',[]),('result','failed'),('playwright','')):
+            report=copy.deepcopy(self.report)
+            report['browser'][field]=value
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                evidence.validate(report,self.bundle,'d'*64,'c'*64)
+        for field,value in (('checks',[]),('external_requests',1),('observer_controls',[]),('service_workers',1)):
+            report=copy.deepcopy(self.report)
+            report['browser']['browsers'][1][field]=value
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                evidence.validate(report,self.bundle,'d'*64,'c'*64)
+
+    def test_complete_closeout_requires_every_real_scenario_and_observer(self):
+        previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
+        evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        for name in report['scenarios']:
+            broken=copy.deepcopy(report)
+            del broken['scenarios'][name]
+            with self.subTest(name=name),self.assertRaises(ValueError):
+                evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
+        for name in ('network','rootfs_sha256','kernel_sha256'):
+            broken=copy.deepcopy(report)
+            del broken[name]
+            with self.subTest(name=name),self.assertRaises(ValueError):
+                evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
+        for scenario,key,value in (('two_release','previous',self.bundle['release']),
+                ('two_release','schema_after',16),('failed_health','candidate_started',False),
+                ('runtime','elapsed_seconds',1),('runtime','maintenance_timer_triggered',False),
+                ('acquisition','https_verified',False)):
+            broken=copy.deepcopy(report)
+            broken['scenarios'][scenario][key]=value
+            with self.subTest(scenario=scenario,key=key),self.assertRaises(ValueError):
+                evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
+
+    def test_development_or_incomplete_network_reports_never_satisfy_promotion(self):
+        with self.assertRaises(ValueError):evidence.validate_closeout(self.report,self.bundle,'d'*64,'c'*64)
+        previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
+        for key,value in (('negative_controls',{}),('external_attempts',1),('processes',[]),('attempts_examined',0)):
+            broken=copy.deepcopy(report)
+            broken['network'][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):
+                evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
+
+
+class PreparedOSTests(unittest.TestCase):
+    def test_vm_has_no_network_device_forwarding_or_operator_bus(self):
+        for arch in ('amd64','arm64'):
+            command=host.qemu_command(arch,'tcg',Path('/fixture/disk'),Path('/fixture/kernel'),Path('/fixture/initrd'),Path('/fixture/serial'))
+            self.assertEqual(command[command.index('-nic')+1],'none')
+            self.assertIn('-nodefaults',command)
+            self.assertNotIn('-netdev',command)
+            self.assertIn('console='+('ttyS0' if arch=='amd64' else 'ttyAMA0'),command[-1])
+            self.assertFalse(any('hostfwd' in field or '/run/user/' in field or 'virtfs' in field for field in command))
+
+    def archive(self, folder, names, symlink=None):
+        path = Path(folder) / 'os.tar'
+        with tarfile.open(path,'w') as stream:
+            if symlink:
+                entry=tarfile.TarInfo(symlink)
+                entry.type=tarfile.SYMTYPE
+                entry.linkname='/tmp'
+                stream.addfile(entry)
+            for name in names:
+                entry=tarfile.TarInfo(name)
+                entry.size=2
+                stream.addfile(entry,io.BytesIO(b'os'))
+        return path,hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def test_checksum_and_member_paths_are_checked_before_extraction(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path,digest=self.archive(folder,['etc/os-release'])
+            host.verify_rootfs(str(path),digest)
+            with self.assertRaises(ValueError):host.verify_rootfs(path,'0'*64)
+            for name in ('../escape','/absolute'):
+                path,digest=self.archive(folder,[name])
+                with self.subTest(name=name),self.assertRaises(ValueError):host.verify_rootfs(path,digest)
+
+    def test_symlink_parent_cannot_redirect_archive_writes_outside_guest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path,digest=self.archive(folder,['redirect/escape'],symlink='redirect')
+            with self.assertRaises(ValueError):host.verify_rootfs(path,digest)
+
+    def test_hard_link_cannot_read_through_an_absolute_guest_symlink(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'os.tar'
+            with tarfile.open(path,'w') as stream:
+                link=tarfile.TarInfo('redirect')
+                link.type=tarfile.SYMTYPE
+                link.linkname='/tmp'
+                stream.addfile(link)
+                hard=tarfile.TarInfo('hard')
+                hard.type=tarfile.LNKTYPE
+                hard.linkname='redirect/outside'
+                stream.addfile(hard)
+            with self.assertRaises(ValueError):host.verify_rootfs(path,hashlib.sha256(path.read_bytes()).hexdigest())
+
+
+if __name__ == '__main__':
+    unittest.main()
