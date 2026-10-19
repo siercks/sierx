@@ -2089,3 +2089,26 @@ isolated Ubuntu amd64 probe passed real import, database/bootstrap, plan/apply,
 no-op/restart checks and both engines' delivered editing/query/deep-link
 workflows. Its Firefox control-window lifecycle failure was corrected; a full
 matching-candidate run is still required before checking the closeout box above.
+
+The complete network-disabled local source gate subsequently passed, including
+55 Chromium and 55 Firefox workflow tests and the separate 10k scrolling/focus
+case in each engine. Native source CI also passed on both architectures at
+`5da3544` (run 39182777001). Python rejection/contract coverage is now 91 tests.
+
+```text
+[chromium workflow] 55 passed (2.4m)
+[firefox workflow] 55 passed (3.1m)
+--- PASS: TestBrowserAcceptance (332.79s)
+[chromium 10k] 1 passed (8.5s)
+[firefox 10k] 1 passed (12.6s)
+--- PASS: TestBrowserAcceptance (123.31s)
+gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
+```
+
+Initial host runs correctly remained red: they exposed an ineffective empty-store
+control, a missing Rocky boot-kernel copy/tool path, and slow vfs copying under
+arm64 software virtualization. The store correction was checked with actual
+rootless Podman: separate graph/runtime paths, zero images and rejection of an
+image present in the normal store. Native overlay selection is now explicit and
+verified. Full matching-candidate/profile acceptance remains pending; do not
+substitute these development results for it.

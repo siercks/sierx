@@ -156,7 +156,7 @@ Environment=HOME=/home/acceptance
 Environment=XDG_RUNTIME_DIR=/run/user/1001
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus
 Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
-Environment=PATH=/usr/lib/postgresql/18/bin:/usr/pgsql-18/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/usr/lib/postgresql/18/bin:/usr/pgsql-18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=+/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py --manager-proof
 ExecStart=+/usr/sbin/sierx-trace-installer
 TimeoutStartSec=1800
