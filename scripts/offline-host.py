@@ -102,7 +102,7 @@ def setup(root, args):
     (linger / 'acceptance').touch()
     containers = home / '.config/containers'
     containers.mkdir(parents=True)
-    (containers / 'storage.conf').write_text('[storage]\ndriver="vfs"\n')
+    (containers / 'storage.conf').write_text('[storage]\ndriver="overlay"\n')
     (containers / 'containers.conf').write_text('[engine]\ncgroup_manager="systemd"\nevents_logger="file"\n')
     for path in (home / '.config', containers, *containers.iterdir()):
         os.chown(path, 1001, 1001)
@@ -307,6 +307,7 @@ def main(args):
         try:
             with private.open('wb') as log:
                 process = subprocess.Popen(command, stdout=log, stderr=log, start_new_session=True)
+                print('offline-host: boot ' + arch + '/' + mode + ' with native overlay storage',flush=True)
                 deadline = time.monotonic() + 1900
                 startup_deadline = time.monotonic() + (180 if mode == 'kvm' else 600)
                 last_phase = None
@@ -351,7 +352,10 @@ def main(args):
                 failed_phase = str(result.get('phase', 'unknown'))
                 if not re.fullmatch(r'[a-z-]{1,80}', failed_phase):
                     failed_phase = 'unknown'
-                raise ValueError('Real rootless acceptance failed at ' + failed_phase + '; inspect private diagnostics')
+                failure_type=result.get('failure_type','unknown')
+                if failure_type not in {'TimeoutExpired','ValueError','RuntimeError','PermissionError','FileNotFoundError'}:
+                    failure_type='unknown'
+                raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+'); inspect private diagnostics')
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             trace = (disk_file(disk,'manager.trace') + disk_file(disk,'installer.trace')).decode()
             observation = network_observer.summarize(trace.splitlines(),

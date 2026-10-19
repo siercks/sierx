@@ -106,6 +106,7 @@ def main():
     require(info['host']['security']['rootless'] is True, 'Podman is not rootless')
     require(info['host']['cgroupManager'] == 'systemd', 'Real systemd cgroup delegation is missing')
     require(info['store']['imageStore']['number'] == 0, 'Image store is not fresh')
+    require(info['store']['graphDriverName'] == 'overlay', 'Native rootless overlay storage is required')
     profile = platform.freedesktop_os_release()
     phase('import')
     password = secrets.token_urlsafe(32)
@@ -263,7 +264,7 @@ if __name__ == '__main__':
     except Exception as error:
         with LOG.open('a') as log:
             log.write('\nFailed phase: ' + PHASE + '\n' + type(error).__name__ + ': ' + str(error) + '\n')
-        result = {'result':'failed','phase':PHASE}
+        result = {'result':'failed','phase':PHASE,'failure_type':type(error).__name__}
         for name in ('sierx-postgres.service','sierx.service','sierx-caddy.service'):
             with LOG.open('ab') as log:
                 try:

@@ -45,7 +45,7 @@ class EvidenceTests(unittest.TestCase):
 
     def test_mocked_manager_host_network_or_privileged_runtime_cannot_pass(self):
         for key, value in (('network','host'), ('rootless',False), ('fresh_image_store',False),
-                           ('user_manager','mock'), ('system_manager','host')):
+                           ('user_manager','mock'), ('system_manager','host'),('storage_driver','vfs')):
             report = copy.deepcopy(self.report)
             report['isolation'][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):

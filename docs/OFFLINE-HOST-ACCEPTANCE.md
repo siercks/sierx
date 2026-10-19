@@ -12,6 +12,13 @@ operations run as the synthetic UID 1001. Guest root only prepares fault copies,
 checks namespace/identity evidence and observes processes. Connected OS/browser
 preparation happens before isolation, in the preparer's Podman store.
 
+The main guest store uses native rootless overlay on its private ext4 disk.
+This avoids the repeated full-layer copying of vfs, particularly under arm64
+software virtualization. The guest verifies the actual selected driver. The
+empty-store and acquisition controls additionally check their actual separate
+graph/runtime paths and zero-image inventory; a configuration file alone is
+not proof that Podman selected it.
+
 ## Reproducer
 
 Use a clean committed Linux checkout matching the native architecture. Install
