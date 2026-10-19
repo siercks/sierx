@@ -292,7 +292,10 @@ def summarize(lines, controls, internal_addresses=(), trace_errors=''):
         address = ipaddress.ip_address(attempt.address)
         # No DNS is needed in the literal-host fixture. A failed lookup sent to
         # a loopback stub must not masquerade as zero external-name attempts.
-        if attempt.port!=53 and (address.is_loopback or (getattr(address,'ipv4_mapped',None) and address.ipv4_mapped.is_loopback) or attempt.address in permitted):
+        # Linux routes explicitly decoded all-zero destinations to the local
+        # host. PostgreSQL/libc use these for UDP source-address probes. This
+        # does not excuse an unknown AF_UNSPEC destination or any DNS attempt.
+        if attempt.port!=53 and (address.is_loopback or address.is_unspecified or (getattr(address,'ipv4_mapped',None) and address.ipv4_mapped.is_loopback) or attempt.address in permitted):
             continue
         matches = [entry['name'] for entry in controls if entry['start'] <= attempt.timestamp <= entry['end']
                    and CONTROLS[entry['name']] == (attempt.process,attempt.address,attempt.port,attempt.protocol)]

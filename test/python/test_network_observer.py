@@ -29,6 +29,17 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_linux_all_zero_source_address_probes_are_local_but_dns_still_fails(self):
+        lines,controls=evidence()
+        for value in ('0.0.0.0','::'):
+            family='AF_INET6' if ':' in value else 'AF_INET'
+            probe=['999<postgres> 100.000000 socket('+family+', SOCK_DGRAM, IPPROTO_UDP) = 3',
+                   '999<postgres> 100.000001 connect(3, '+address(value,5432)+', 16) = 0']
+            with self.subTest(address=value):
+                self.assertEqual(observer.summarize(lines+probe,controls)['external_attempts'],0)
+                probe[1]=probe[1].replace('htons(5432)','htons(53)')
+                with self.assertRaises(ValueError):observer.summarize(lines+probe,controls)
+
     def test_denied_ipv6_socket_setup_is_counted_separately_from_connections(self):
         stats={}
         attempts,_=observer.parse(['10<python3> 1.000000 socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP) = -1 EAFNOSUPPORT'],stats)
