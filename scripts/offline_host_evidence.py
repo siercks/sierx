@@ -20,7 +20,7 @@ BROWSER_CHECKS = ['login', 'create-edit-project', 'create-edit-item', 'transitio
 ISOLATION = {'network':'loopback-only', 'system_manager':'private-vm', 'user_manager':'real-systemd',
              'rootless':True, 'fresh_image_store':True, 'network_devices':0,
              'browser_driver_policy':'seccomp-deny-io-uring','storage_driver':'overlay',
-             'rootless_network':'slirp4netns'}
+             'rootless_network':'slirp4netns','browser_address_families':['AF_UNIX','AF_INET','AF_NETLINK']}
 
 
 def validate_browser(report):
@@ -31,14 +31,14 @@ def validate_browser(report):
     driver=report.get('driver',{})
     if (not re.fullmatch(r'v24\.[0-9]+\.[0-9]+',driver.get('node',''))
             or driver.get('policy')!='seccomp-deny-io-uring' or driver.get('policy_verified') is not True
-            or driver.get('external_fetch_control') is not True):
+            or driver.get('external_fetch_control') is not True or driver.get('ipv4_only_verified') is not True):
         raise ValueError('Browser driver configuration and its real controls are missing')
     for engine, result in zip(('chromium', 'firefox'), report['browsers']):
         if (result.get('engine') != engine or not result.get('version')
                 or result.get('tls')!=('leaf-spki-pin' if engine=='chromium' else 'fixture-ca-nss')
                 or result.get('checks') != BROWSER_CHECKS or type(result.get('external_requests')) is not int or result.get('external_requests') != 0
                 or type(result.get('service_workers')) is not int or result.get('service_workers') != 0
-                or result.get('observer_controls') != ['document', 'fetch', 'image', 'websocket']):
+                or result.get('observer_controls') != ['document','document-ipv6', 'fetch', 'image', 'websocket']):
             raise ValueError('Incomplete delivered browser workflow or observation controls')
 
 
@@ -75,7 +75,8 @@ def validate_network(report):
             or report['attempts_examined']<sum(report['negative_controls'].values())):
         raise ValueError('Missing attempted-connection coverage or real negative controls')
     if (report.get('browser_driver_policy')!='seccomp-deny-io-uring'
-            or type(report.get('blocked_io_uring_setups')) is not int or report['blocked_io_uring_setups']<1):
+            or type(report.get('blocked_io_uring_setups')) is not int or report['blocked_io_uring_setups']<1
+            or type(report.get('blocked_ipv6_sockets')) is not int or report['blocked_ipv6_sockets']<1):
         raise ValueError('Browser driver asynchronous I/O policy was not observed')
 
 

@@ -10,14 +10,14 @@ def full_host_report(bundle,expected,suite,profile,previous):
         'virtual_cpu':'kvm','rootfs_sha256':'c'*64,'kernel_sha256':'d'*64,'archive_sha256':'e'*64,
         'host_versions':{'kernel':'6.8.0-fixture','systemd':'systemd 255','podman':'podman version 4.9.3','selinux':'disabled'},
         'browser':{'result':'passed','playwright':'1.63.0','driver':{'node':'v24.22.0','policy':'seccomp-deny-io-uring',
-            'policy_verified':True,'external_fetch_control':True},'browsers':[
+            'policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True},'browsers':[
             {'engine':engine,'version':'1.0.0','checks':evidence.BROWSER_CHECKS,'external_requests':0,
              'tls':'leaf-spki-pin' if engine=='chromium' else 'fixture-ca-nss',
-             'service_workers':0,'observer_controls':['document','fetch','image','websocket']}
+             'service_workers':0,'observer_controls':['document','document-ipv6','fetch','image','websocket']}
             for engine in ('chromium','firefox')]},
         'network':{'result':'passed','observer':'strace-network-v1','processes':sorted(PROCESSES),
             'external_attempts':0,'negative_controls':{name:1 for name in CONTROLS},'attempts_examined':len(CONTROLS),
-            'browser_driver_policy':'seccomp-deny-io-uring','blocked_io_uring_setups':1},
+            'browser_driver_policy':'seccomp-deny-io-uring','blocked_io_uring_setups':1,'blocked_ipv6_sockets':1},
         'scenarios':{'invalid_deliveries':evidence.INVALID_DELIVERIES,
             'two_release':{'previous':previous['release'],'previous_bundle_sha256':previous['bundle_sha256'],
                 'candidate':bundle['release'],'schema_before':15,'schema_after':15,'fingerprint_preserved':True,

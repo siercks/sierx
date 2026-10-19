@@ -31,14 +31,14 @@ def command(*args, timeout=15, env=None):
     return subprocess.CompletedProcess(args,process.returncode,stdout,stderr)
 
 
-def record(name, action):
+def record(name, action, aliases=()):
     start = time.time()
     try:
         action()
     finally:
         end = time.time()
         entries = json.loads(CONTROLS.read_text()) if CONTROLS.exists() else []
-        entries.append({'name':name, 'start':start, 'end':end})
+        entries.extend({'name':value, 'start':start, 'end':end} for value in (name,*aliases))
         CONTROLS.write_text(json.dumps(entries))
     if end-start > 20:
         raise ValueError('Network negative control exceeded its bounded interval')
@@ -111,7 +111,7 @@ http://127.0.0.1:19443 {
     run('psql',env['DATABASE_URL'],'-XAt','-v','ON_ERROR_STOP=1','-c','CREATE EXTENSION dblink')
     try:
         record('database-tcp', lambda: require_failure(command('psql',env['DATABASE_URL'],'-XAt',
-            '-v','ON_ERROR_STOP=1','-c',"SELECT dblink_connect('hostaddr=198.51.100.13 port=18181 dbname=denied user=denied connect_timeout=1')")))
+            '-v','ON_ERROR_STOP=1','-c',"SELECT dblink_connect('hostaddr=198.51.100.13 port=18181 dbname=denied user=denied connect_timeout=1')")),aliases=('database-proxy-tcp',))
     finally:
         run('psql',env['DATABASE_URL'],'-XAt','-v','ON_ERROR_STOP=1','-c','DROP EXTENSION dblink')
 

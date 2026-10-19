@@ -209,7 +209,8 @@ def main():
     # profiles. libuv's epoll batching is not disabled by UV_USE_IO_URING=0.
     command=['systemd-run','--user','--unit=sierx-browser-acceptance','--wait','--pipe','--quiet','--collect',
              '--property=Type=exec','--property=SystemCallFilter=~io_uring_setup io_uring_enter io_uring_register',
-             '--property=SystemCallErrorNumber=ENOSYS']
+             '--property=SystemCallErrorNumber=ENOSYS',
+             '--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK']
     for name in ('HOME','PATH','PLAYWRIGHT_BROWSERS_PATH','SIERX_BASE_URL','SSL_CERT_FILE','NODE_EXTRA_CA_CERTS',
                  'SIERX_BOOTSTRAP_ADMIN_EMAIL','SIERX_BOOTSTRAP_ADMIN_PASSWORD','SIERX_TEST_SERVER_CERT'):
         command.append('--setenv='+name+'='+ENV[name])

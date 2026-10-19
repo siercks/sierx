@@ -13,7 +13,7 @@ def address(ip,port):
 
 
 def evidence():
-    programs={'installer':'python3','app':'sierx','gateway':'caddy','database':'postgres','chromium':'chrome-headless-shell','firefox':'firefox'}
+    programs={'installer':'python3','app':'sierx','gateway':'caddy','database':'postgres','chromium':'headless_shell','firefox':'firefox','network-proxy':'slirp4netns'}
     lines=[f'{index+1}<runner> 1.000000 execve("/usr/bin/{program}", ["fixture"], 0x0 /* vars */) = 0' for index,program in enumerate(programs.values())]
     controls=[]
     for index,(name,(role,ip,port,protocol)) in enumerate(observer.CONTROLS.items()):
@@ -29,6 +29,31 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_denied_ipv6_socket_setup_is_counted_separately_from_connections(self):
+        stats={}
+        attempts,_=observer.parse(['10<python3> 1.000000 socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP) = -1 EAFNOSUPPORT'],stats)
+        self.assertEqual(attempts,[])
+        self.assertEqual(stats['blocked_ipv6_sockets'],1)
+
+    def test_headless_shell_threads_and_slirp_proxy_have_canonical_roles(self):
+        lines=['10<runner> 1.000000 execve("/opt/playwright/headless_shell", ["fixture"], 0x0) = 0',
+               '10<headless_shell> 1.000001 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 11',
+               '11<Chrome_ChildIOT> 1.000002 connect(3<TCP:[1]>, '+address('198.51.100.15',18181)+', 16) = -1 ENETUNREACH',
+               '20<runner> 1.000003 execve("/usr/bin/slirp4netns", ["fixture"], 0x0) = 0',
+               '20<slirp4netns> 1.000004 connect(3<TCP:[2]>, '+address('198.51.100.13',18181)+', 16) = -1 ENETUNREACH']
+        attempts,executed=observer.parse(lines)
+        self.assertEqual(executed,{'chromium','network-proxy'})
+        self.assertEqual([entry.process for entry in attempts],['chromium','network-proxy'])
+
+    def test_self_reexec_retains_known_executable_identity_without_trusting_argv(self):
+        lines=['10<runner> 1.000000 execve("/usr/bin/podman", ["fixture"], 0x0) = 0',
+               '10<podman> 1.000001 execve("/proc/self/exe", ["firefox"], 0x0) = 0',
+               '10<podman> 1.000002 connect(3<TCP:[1]>, '+address('198.51.100.14',18182)+', 16) = -1 ENETUNREACH']
+        attempts,executed=observer.parse(lines)
+        self.assertEqual(executed,{'installer'})
+        self.assertEqual(attempts[0].process,'installer')
+        with self.assertRaises(ValueError):observer.parse(lines[1:])
+
     def test_container_child_pid_translation_preserves_the_browser_role(self):
         lines=['60<runner> 1.000000 execve("/opt/firefox", ["firefox"], 0x0) = 0',
                '60<firefox> 1.000001 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 2<firefox> /* 61 in strace\'s PID NS */',

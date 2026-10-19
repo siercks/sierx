@@ -31,9 +31,9 @@ class EvidenceTests(unittest.TestCase):
         self.report['browser'] = {'result':'passed', 'playwright':'1.63.0', 'browsers':[
             {'engine':engine, 'version':'1.0', 'checks':evidence.BROWSER_CHECKS, 'external_requests':0,
              'tls':'leaf-spki-pin' if engine=='chromium' else 'fixture-ca-nss',
-             'service_workers':0, 'observer_controls':['document','fetch','image','websocket']}
+             'service_workers':0, 'observer_controls':['document','document-ipv6','fetch','image','websocket']}
             for engine in ('chromium','firefox')]}
-        self.report['browser']['driver']={'node':'v24.22.0','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True}
+        self.report['browser']['driver']={'node':'v24.22.0','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True}
 
     def test_complete_report_is_bound_to_exact_fixture_and_native_candidate(self):
         evidence.validate(self.report, self.bundle, 'd'*64, 'c'*64)
@@ -62,6 +62,9 @@ class EvidenceTests(unittest.TestCase):
             report['browser']['browsers'][1][field]=value
             with self.subTest(field=field),self.assertRaises(ValueError):
                 evidence.validate(report,self.bundle,'d'*64,'c'*64)
+        report=copy.deepcopy(self.report)
+        report['browser']['driver']['ipv4_only_verified']=False
+        with self.assertRaises(ValueError):evidence.validate(report,self.bundle,'d'*64,'c'*64)
 
     def test_complete_closeout_requires_every_real_scenario_and_observer(self):
         previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
@@ -90,7 +93,7 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):evidence.validate_closeout(self.report,self.bundle,'d'*64,'c'*64)
         previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
         report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
-        for key,value in (('negative_controls',{}),('external_attempts',1),('processes',[]),('attempts_examined',0)):
+        for key,value in (('negative_controls',{}),('external_attempts',1),('processes',[]),('attempts_examined',0),('blocked_ipv6_sockets',0)):
             broken=copy.deepcopy(report)
             broken['network'][key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):

@@ -91,6 +91,17 @@ the [pinned libuv implementation](https://github.com/libuv/libuv/blob/v1.52.1/sr
 Browser context guards separately prove navigation, subresource, dedicated
 worker and websocket interception; service workers are blocked explicitly.
 
+The browser test service allows IPv4, Unix and netlink sockets. This is an
+IPv4 loopback browser fixture, not IPv6 browser-host acceptance. Chromium's
+[built-in IPv6 route check](https://github.com/chromium/chromium/blob/153.0.8010.12/net/dns/host_resolver_manager.cc)
+otherwise probes a public address even for local pages. A real syscall control
+verifies this address-family restriction; denied socket setup is counted
+separately. The request guard also proves interception of an off-origin IPv6
+URL. The installer remains unrestricted and must produce the separately
+observed failed IPv6 connection. App, database and gateway profiles are unchanged.
+The database's intentional external control must be observed at both the
+database and its canonical slirp4netns proxy, in the same bounded interval.
+
 ## Evidence and limits
 
 Versioned `host-input-<profile>-<arch>.json` receipts bind the candidate, exact

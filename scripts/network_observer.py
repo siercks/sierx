@@ -10,11 +10,12 @@ import math
 from pathlib import Path
 import re
 
-PROCESSES = {'installer', 'app', 'gateway', 'database', 'chromium', 'firefox'}
+PROCESSES = {'installer', 'app', 'gateway', 'database', 'chromium', 'firefox','network-proxy'}
 CONTROLS = {
     'app-tcp': ('app', '198.51.100.11', 18181, 'tcp'),
     'gateway-tcp': ('gateway', '198.51.100.12', 18181, 'tcp'),
     'database-tcp': ('database', '198.51.100.13', 18181, 'tcp'),
+    'database-proxy-tcp': ('network-proxy', '198.51.100.13', 18181, 'tcp'),
     'installer-fetch': ('installer', '198.51.100.14', 18181, 'tcp'),
     'registry-pull': ('installer', '198.51.100.14', 18182, 'tcp'),
     'driver-node-fetch': ('installer', '198.51.100.14', 18183, 'tcp'),
@@ -30,7 +31,8 @@ def component(name):
     if name == 'sierx': return 'app'
     if name == 'caddy': return 'gateway'
     if name in {'postgres', 'postmaster'}: return 'database'
-    if name.startswith(('chrome', 'chromium')): return 'chromium'
+    if name.startswith(('chrome', 'chromium')) or name=='headless_shell': return 'chromium'
+    if name=='slirp4netns':return 'network-proxy'
     if name.startswith('firefox') or name in {'Socket Process', 'Web Content', 'RDD Process'}: return 'firefox'
     if name.startswith('python') or name in {'goose', 'sierxctl', 'podman', 'node', 'curl'}: return 'installer'
     return 'other'
@@ -144,6 +146,7 @@ def records(lines):
 def parse(lines,stats=None):
     stats={} if stats is None else stats
     stats.setdefault('blocked_io_uring_setups',0)
+    stats.setdefault('blocked_ipv6_sockets',0)
     sockets, connected, attempts, executed, owners, roles, inode_family, inode_peer, members = {}, {}, [], set(), {}, {}, {}, {}, {}
     for pid,program,timestamp,body in records(lines):
         role=roles.get(pid,component(program))
@@ -167,7 +170,9 @@ def parse(lines,stats=None):
             path=args[0] if name=='execve' else args[1]
             executable=re.match(r'"([^"]+)"',path)
             inherited=re.search(r'<([^>]+)>',args[0]) if name=='execveat' else None
-            if executable:roles[pid]=component(executable[1])
+            if executable and executable[1] in {'/proc/self/exe','/proc/thread-self/exe'}:
+                if pid not in roles:raise ValueError('Self re-exec lacks a canonical startup identity')
+            elif executable:roles[pid]=component(executable[1])
             elif inherited:roles[pid]=component(inherited[1])
             if executable or inherited:executed.add(roles[pid])
         if name in {'clone','clone3','fork','vfork'} and returned is not None and returned>0:
@@ -186,6 +191,8 @@ def parse(lines,stats=None):
             sockets.pop(key,None);connected.pop(key,None)
             owned.discard(key[1])
         if name == 'socket' and len(args) >= 2:
+            if args[0]=='AF_INET6' and returned is not None and returned<0 and re.search(r'\b(?:EAFNOSUPPORT|EPERM|ENOSYS)\b',body):
+                stats['blocked_ipv6_sockets']+=1
             if returned is not None and returned>=0:
                 created=(owner,returned)
                 owned.add(returned)

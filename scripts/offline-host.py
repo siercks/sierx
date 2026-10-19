@@ -384,7 +384,7 @@ def main(args):
                 if serial.exists():
                     stream.write(serial.read_bytes()[-65536:])
                 stream.write(disk_file(disk, 'diagnostics.log')[-65536:])
-            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr'):
+            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','network-controls.json'):
                 private.with_suffix('.'+name).write_bytes(disk_file(disk,name))
 
 

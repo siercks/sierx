@@ -28,7 +28,7 @@ async function guard(context) {
   });
   await context.route('**/*', async (route) => {
     if (allowed(route.request().url())) return route.continue();
-    if (state.negative) state.controls.add(route.request().resourceType());
+    if (state.negative) state.controls.add(route.request().resourceType()+(new URL(route.request().url()).hostname.includes(':')?'-ipv6':''));
     else state.external.push(route.request().resourceType());
     await route.abort('blockedbyclient');
   });
@@ -48,6 +48,7 @@ async function controls(context, state) {
   for (const existing of context.pages()) if (existing !== page) await existing.close();
   state.negative = true;
   await page.goto('https://192.0.2.10/blocked-navigation', { timeout: 5000 }).catch(() => {});
+  await page.goto('https://[2001:db8::10]/blocked-ipv6-navigation', { timeout: 5000 }).catch(() => {});
   const blank = await context.newPage();
   await blank.setContent('<img src="https://192.0.2.10/blocked-image">');
   await blank.evaluate(() => { const socket = new WebSocket('ws://192.0.2.10:18181/blocked-socket'); socket.onerror = () => {}; });
@@ -62,7 +63,7 @@ async function controls(context, state) {
       });
     } finally { worker.terminate(); URL.revokeObjectURL(source); }
   });
-  await expect.poll(() => [...state.controls].sort()).toEqual(['document', 'fetch', 'image', 'websocket']);
+  await expect.poll(() => [...state.controls].sort()).toEqual(['document','document-ipv6', 'fetch', 'image', 'websocket']);
   assert.equal(state.workers, 0, 'Service workers must not hide requests');
 }
 
@@ -169,6 +170,17 @@ async function driverControl() {
   const proof = execFileSync('python3', ['-c',
     'import ctypes,errno,os; lib=ctypes.CDLL(None,use_errno=True); lib.syscall.restype=ctypes.c_long; buf=ctypes.create_string_buffer(256); result=lib.syscall(ctypes.c_long(425),ctypes.c_long(2),ctypes.byref(buf)); print("ENOSYS" if result==-1 and ctypes.get_errno()==errno.ENOSYS else "UNOBSERVABLE"); os.close(result) if result>=0 else None'], { encoding: 'utf8', stdio: 'pipe' });
   assert.equal(proof.trim(), 'ENOSYS', 'Browser driver must enforce its recorded syscall policy');
+  const familyProof=execFileSync('python3',['-c',[
+    'import errno,socket',
+    'with socket.socket(socket.AF_INET,socket.SOCK_STREAM): pass',
+    'try:',
+    '    client=socket.socket(socket.AF_INET6,socket.SOCK_STREAM)',
+    'except OSError as error:',
+    '    print("IPV4_ONLY" if error.errno in {errno.EAFNOSUPPORT,errno.EPERM,errno.ENOSYS} else "UNEXPECTED")',
+    'else:',
+    '    client.close(); print("UNRESTRICTED")'
+  ].join('\n')],{encoding:'utf8',stdio:'pipe'});
+  assert.equal(familyProof.trim(),'IPV4_ONLY','Browser driver must enforce the recorded IPv4 fixture policy');
   const start = Date.now() / 1000;
   let failed = false;
   try { await fetch('http://198.51.100.14:18183/forbidden-driver-fetch', { signal: AbortSignal.timeout(3000) }); }
@@ -204,7 +216,8 @@ async function main() {
   try { await networkControl(probe, 'firefox'); }
   finally { await probe.close(); }
   return { result: 'passed', playwright: JSON.parse(readFileSync('/opt/acceptance/node_modules/playwright/package.json')).version,
-    driver: { node: process.version, policy: 'seccomp-deny-io-uring', policy_verified: true, external_fetch_control: true }, browsers: results };
+    driver: { node: process.version, policy: 'seccomp-deny-io-uring', policy_verified: true, external_fetch_control: true,
+              ipv4_only_verified:true }, browsers: results };
 }
 
 try { console.log(JSON.stringify(await main())); }
