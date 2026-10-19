@@ -123,7 +123,7 @@ http://127.0.0.1:19443 {
         raise ValueError('Forbidden installer fetch succeeded')
     phase('negative-installer')
     record('installer-fetch', fetch)
-    record('registry-pull',lambda: require_failure(command('podman','pull','--retry=0','--tls-verify=false',
+    record('registry-pull',lambda: require_failure(command('podman','pull','--tls-verify=false',
         '198.51.100.14:18182/forbidden/control:unavailable')))
     def packet(family, address, port, udp=False):
         with socket.socket(family,socket.SOCK_DGRAM if udp else socket.SOCK_STREAM) as client:

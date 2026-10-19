@@ -89,7 +89,7 @@ def main(bundle, lock, env, run):
         if json.loads(acquire('podman','images','--format','json')):
             raise ValueError('Synthetic acquisition store was not empty')
         source='localhost:19444/sierx@'+digest
-        acquire('podman','pull','--retry=0','--tls-verify=true','--cert-dir',certs,'--authfile',auth,source)
+        acquire('podman','pull','--tls-verify=true','--cert-dir',certs,'--authfile',auth,source)
         metadata=json.loads(acquire('podman','image','inspect',lock['images']['app']['id']))[0]
         if (metadata['Id'].removeprefix('sha256:')!=lock['images']['app']['id'].removeprefix('sha256:')
                 or metadata['Labels']['org.opencontainers.image.revision']!=lock['release']['revision']
