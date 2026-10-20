@@ -39,10 +39,25 @@ func (s *Server) requestLog(next http.Handler) http.Handler {
 			s.Logger.Info("request", "method", r.Method, "route", route, "status", status, "duration_ms", time.Since(start).Milliseconds(), "actor", identity.actor, "workspace", identity.workspace)
 		}()
 		if s.CheckLifecycle != nil {
-			ctx, cancel := context.WithTimeout(r.Context(), time.Second)
+			timeout := s.LifecycleCheckTimeout
+			if timeout <= 0 {
+				timeout = time.Second
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 			err := s.CheckLifecycle(ctx)
+			contextError := ctx.Err()
+			if err == nil {
+				err = contextError
+			}
 			cancel()
 			if err != nil {
+				reason := "verification-unavailable"
+				if contextError == context.DeadlineExceeded {
+					reason = "deadline-exceeded"
+				} else if contextError == context.Canceled {
+					reason = "request-canceled"
+				}
+				s.Logger.Warn("lifecycle verification rejected request", "reason", reason)
 				http.Error(ww, "Service unavailable pending operator recovery verification.", http.StatusServiceUnavailable)
 				return
 			}

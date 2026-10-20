@@ -32,17 +32,20 @@ class EvidenceTests(unittest.TestCase):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['browser']['driver']['timing_mode']='software-emulation'
         report['virtual_cpus']=4
+        report['lifecycle_check_timeout_seconds']=10
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['browser']['driver']['recovery_read_retries']=2
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='kvm'
         report['virtual_cpus']=2
+        report['lifecycle_check_timeout_seconds']=1
         report['network']['control_interval_limit_seconds']=20
         report['browser']['driver']['timing_mode']='standard'
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='tcg'
         report['virtual_cpus']=4
+        report['lifecycle_check_timeout_seconds']=10
         report['browser']['driver']['timing_mode']='software-emulation'
         report['network']['control_interval_limit_seconds']=121
         with self.assertRaises(ValueError):
@@ -69,6 +72,24 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpus']=4
+        report['lifecycle_check_timeout_seconds']=10
+        evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+
+    def test_verification_timeout_must_match_real_acceleration(self):
+        previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
+        for value in (None,True,'1',0,5,10):
+            broken=copy.deepcopy(report)
+            broken['lifecycle_check_timeout_seconds']=value
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
+        report['virtual_cpu']='tcg'
+        report['virtual_cpus']=4
+        report['browser']['driver']['timing_mode']='software-emulation'
+        report['network']['control_interval_limit_seconds']=120
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['lifecycle_check_timeout_seconds']=10
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
 
     def test_public_browser_failure_excludes_private_content_and_unknown_labels(self):
@@ -93,18 +114,20 @@ class EvidenceTests(unittest.TestCase):
                  {'msg':'request','route':'unmatched','status':503,'duration_ms':20},
                  {'msg':'request','route':'/api/v1/items','status':503,'duration_ms':1500},
                  {'msg':'request','route':'unmatched','status':503,'duration_ms':'private'},
-                 {'msg':'private','route':'unmatched','status':503,'duration_ms':1500}]
+                 {'msg':'private','route':'unmatched','status':503,'duration_ms':1500},
+                 {'msg':'lifecycle verification rejected request','reason':'deadline-exceeded','private':'secret'},
+                 {'msg':'lifecycle verification rejected request','reason':'secret'}]
         labels='\noffline-browser: unavailable POST-recovery\noffline-browser: unavailable GET-problem\n'
         labels+='offline-browser: unavailable POST-recovery private\noffline-browser: unavailable PRIVATE-other\n'
         journal='\n'.join('private-journal-prefix '+json.dumps(record) for record in records)
         self.assertEqual(evidence.browser_failure_diagnostic(marker+labels+journal),
-                         'firefox-create-item-response (AssertionError) unavailable=GET-problem,POST-recovery recovery-late=1 recovery-early=1')
+                         'firefox-create-item-response (AssertionError) unavailable=GET-problem,POST-recovery recovery-late=1 recovery-early=1 recovery-timeouts=1')
 
     def setUp(self):
         self.bundle = {'arch':'amd64', 'release':{'revision':'a'*40, 'image':'example.test/sierx@sha256:'+'b'*64}}
         self.report = {**self.bundle, 'schema':evidence.SCHEMA, 'suite':evidence.SUITE, 'suite_sha256':'c'*64,
                        'bundle_sha256':'d'*64, 'result':'passed', 'profile':'ubuntu-24.04',
-                       'checks':evidence.CHECKS, 'isolation':evidence.ISOLATION,'virtual_cpus':2}
+                       'checks':evidence.CHECKS, 'isolation':evidence.ISOLATION,'virtual_cpus':2,'lifecycle_check_timeout_seconds':1}
         self.report['coverage']='development'
         self.report['host_versions']={'kernel':'6.8.0-fixture','systemd':'systemd 255','podman':'podman version 4.9.3','selinux':'disabled'}
         self.report['browser'] = {'result':'passed', 'playwright':'1.63.0', 'browsers':[

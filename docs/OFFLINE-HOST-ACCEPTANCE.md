@@ -31,7 +31,16 @@ observer can use the [four cores on GitHub's public ARM runners](https://docs.gi
 runs each virtual CPU on a host thread. KVM guests retain two virtual CPUs.
 Reports record the guest's actual `virtual_cpus` count; promotion rejects a
 count that differs from its acceleration profile. Memory remains 4 GiB and
-server deadlines are unchanged.
+HTTP read/write deadlines are unchanged.
+Native host tests explicitly retain the default one-second lifecycle check.
+TCG sets `SIERX_LIFECYCLE_CHECK_TIMEOUT=10s` after measured ordinary-ptrace
+emulation rejected recovery GETs at the former one-second deadline even with
+four CPUs. This is a bounded server configuration on the emulated fixture:
+the same checkpoint/database comparison still runs before every handler, and
+timeouts, cancellation and mismatches still reject access. The fixture verifies
+the actual container setting, records `lifecycle_check_timeout_seconds`, and
+rejects reports that differ from the native/emulated profile. Delivered native
+image acceptance and both KVM profiles exercise the default one-second setting.
 
 The GitHub ARM preparer runs on `ubuntu-26.04-arm` for its newer host QEMU;
 the isolated accepted guest remains Ubuntu 24.04 with its own recorded kernel
@@ -55,7 +64,7 @@ GET after the server's exact plain-text recovery-gate 503 response, with at most
 five retries per engine and a ten-minute navigation recovery bound. The report
 records the total `recovery_read_retries` (zero for native runs). Unrelated
 503s, write requests and negative controls are not retried. The server's
-recovery check and deadlines are unchanged. Native control windows remain bounded at 20
+recovery comparison is unchanged. Native control windows remain bounded at 20
 seconds; TCG allows 120 seconds including emulated process startup, with
 60-second control command limits. The observer selects this budget from the
 root launcher's actual acceleration mode and records it in the report; input
@@ -72,7 +81,8 @@ requires its first POST response to be 201 before checking the resulting view.
 For recovery rejections present in the private service journal, `recovery-late`
 counts unmatched 503 requests lasting at least 1,000 milliseconds;
 `recovery-early` counts shorter requests. These counts help identify deadline
-pressure without publishing journals or changing the server's deadlines.
+pressure without publishing journals.
+`recovery-timeouts` counts fixed `deadline-exceeded` verification warnings.
 
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64

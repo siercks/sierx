@@ -165,9 +165,12 @@ def main():
     ENV['SSL_CERT_FILE'] = str(ca/'ca.crt')
     ENV['SIERX_TEST_SERVER_CERT']=str(tls/'server.crt')
     ENV['SIERX_TEST_EMULATED']='1' if OPTIONS['virtual_cpu']=='tcg' else '0'
+    timeout_seconds=10 if OPTIONS['virtual_cpu']=='tcg' else 1
+    ENV['SIERX_LIFECYCLE_CHECK_TIMEOUT']=str(timeout_seconds)+'s'
     ENV['NODE_EXTRA_CA_CERTS'] = ENV['SSL_CERT_FILE']
     app = {key: ENV[key] for key in ('SIERX_ENV','SIERX_AUTH_MODE','SIERX_BASE_URL',
-        'SIERX_LISTEN_ADDR','SIERX_SESSION_KEY','SIERX_RUNTIME_DATABASE_URL','SIERX_AUTH_DATABASE_URL')}
+        'SIERX_LISTEN_ADDR','SIERX_SESSION_KEY','SIERX_RUNTIME_DATABASE_URL','SIERX_AUTH_DATABASE_URL',
+        'SIERX_LIFECYCLE_CHECK_TIMEOUT')}
     app.update(SIERX_LIFECYCLE_CHECKPOINT='/var/lib/sierx/lifecycle/guard/checkpoint.json',
                SIERX_LIFECYCLE_GUARD_KEY_FILE='/var/lib/sierx/lifecycle/guard/verification.key')
     (config / 'app.env').write_text(''.join(key + '=' + value + '\n' for key,value in app.items()))
@@ -175,6 +178,10 @@ def main():
     phase('actual-plan-apply')
     operation('plan')
     operation('apply')
+    timeout_setting='SIERX_LIFECYCLE_CHECK_TIMEOUT='+ENV['SIERX_LIFECYCLE_CHECK_TIMEOUT']
+    template='{{range .Config.Env}}{{if eq . "'+timeout_setting+'"}}{{.}}{{end}}{{end}}'
+    require(run('podman','inspect','sierx','--format',template)==timeout_setting,
+            'Application did not receive its recorded bounded verification deadline')
     phase('https-data-check')
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),
@@ -266,6 +273,7 @@ def main():
             'isolation':evidence.ISOLATION, 'checks':evidence.CHECKS + (evidence.CLOSEOUT_CHECKS if OPTIONS['closeout'] else []),
             'coverage':'closeout' if OPTIONS['closeout'] else 'development','browser':browser,
             'virtual_cpus':os.cpu_count(),
+            'lifecycle_check_timeout_seconds':timeout_seconds,
             'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions}
 
 
