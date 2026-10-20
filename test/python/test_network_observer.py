@@ -29,6 +29,27 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_successful_unannotated_unix_pair_is_inherited_and_shared(self):
+        for output in ('[29, 30]', '[29<UNIX-STREAM:[1->2]>, 30<UNIX-STREAM:[2->1]>]'):
+            lines=['10<chrome> 1.000000 socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, '+output+') = 0',
+                   '10<chrome> 1.000001 clone(child_stack=NULL, flags=SIGCHLD) = 11',
+                   '11<chrome> 1.000002 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 12',
+                   '12<chrome> 1.000003 sendto(29, "message", 7, 0, NULL, 0) = 7']
+            with self.subTest(output=output):self.assertEqual(observer.parse(lines)[0], [])
+
+    def test_failed_malformed_or_reused_pair_cannot_hide_internet_sends(self):
+        send='10<chrome> 1.000003 sendto(29, "message", 7, 0, NULL, 0) = 7'
+        for output,returned in (('[29<UNIX:[1]>, 30<UNIX:[2]>]', '-1 EFAULT'),
+                                ('[29, ...]', '0'), ('[29, 29]', '0')):
+            with self.subTest(output=output,returned=returned),self.assertRaises(ValueError):
+                observer.parse(['10<chrome> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, '+output+') = '+returned,send])
+        lines=['10<chrome> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [29, 30]) = 0',
+               '10<chrome> 1.000001 close(29) = 0',
+               '10<chrome> 1.000002 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 29',send]
+        with self.assertRaises(ValueError):observer.parse(lines)
+        lines[3]='10<chrome> 1.000003 connect(29, '+address('198.51.100.99',443)+', 16) = -1 ENETUNREACH'
+        self.assertEqual(observer.parse(lines)[0][0].address,'198.51.100.99')
+
     def test_long_control_window_requires_explicit_bounded_emulation_budget(self):
         lines, controls = evidence()
         controls[0]['end'] = controls[0]['start'] + 60

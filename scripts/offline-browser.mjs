@@ -23,10 +23,17 @@ const apiFailures = new Set();
 const unavailableKinds = new Set();
 const pendingDiagnostics = new Set();
 let recoveryReadRetries = 0;
-// Match Mozilla's own desktop test profile: a slow offline run must not
-// trigger the browser updater's aus5.mozilla.org lookup in the background.
+// Apply these before process startup as well as through the protocol. The
+// separate system-addon updater otherwise attempts DNS during slow launches.
 const firefoxUserPrefs = { 'app.update.disabledForTesting': true,
-  'app.update.auto': false, 'app.update.checkInstallTime': false };
+  'app.update.auto': false, 'app.update.checkInstallTime': false,
+  'extensions.systemAddon.update.enabled': false };
+
+function prepareFirefoxProfile(profile) {
+  writeFileSync(join(profile, 'user.js'), Object.entries(firefoxUserPrefs)
+    .map(([key, value]) => `user_pref(${JSON.stringify(key)}, ${JSON.stringify(value)});`).join('\n') + '\n',
+    { flag: 'wx', mode: 0o600 });
+}
 
 async function guard(context) {
   const state = { external: [], workers: 0, negative: false, controls: new Set() };
@@ -214,9 +221,9 @@ async function core(context, engine) {
            checks: ['login', 'create-edit-project', 'create-edit-item', 'transition', 'comment', 'link', 'query-reload', 'cold-bootstrap', 'canonical-deep-link'] };
 }
 
-async function networkControl(browser, engine) {
+async function networkControl(browser, engine, existingContext) {
   phase = engine + '-network-control';
-  const context = await browser.newContext();
+  const context = existingContext ?? await browser.newContext();
   context.setDefaultTimeout(emulated && engine === 'firefox' ? 600000 : emulated ? 120000 : 30000);
   const page = await context.newPage();
   const start = Date.now() / 1000;
@@ -274,6 +281,7 @@ async function main() {
   const profile = mkdtempSync(join(tmpdir(), 'sierx-firefox-trust-'));
   try {
     phase = 'firefox-launch';
+    prepareFirefoxProfile(profile);
     execFileSync('certutil', ['-N', '--empty-password', '-d', 'sql:' + profile], { stdio: 'pipe' });
     execFileSync('certutil', ['-A', '-n', 'Sierx fixture CA', '-t', 'C,,', '-i', certificate, '-d', 'sql:' + profile], { stdio: 'pipe' });
     const context = await firefox.launchPersistentContext(profile, { headless: true, timeout: firefoxLaunchTimeout, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false, firefoxUserPrefs });
@@ -281,9 +289,13 @@ async function main() {
     finally { await context.close(); }
   } finally { rmSync(profile, { recursive: true, force: true }); }
   phase = 'firefox-network-launch';
-  const probe = await firefox.launch({ headless: true, timeout: firefoxLaunchTimeout, firefoxUserPrefs });
-  try { await networkControl(probe, 'firefox'); }
-  finally { await probe.close(); }
+  const probeProfile = mkdtempSync(join(tmpdir(), 'sierx-firefox-network-'));
+  try {
+    prepareFirefoxProfile(probeProfile);
+    const probe = await firefox.launchPersistentContext(probeProfile, { headless: true, timeout: firefoxLaunchTimeout, firefoxUserPrefs });
+    try { await networkControl(null, 'firefox', probe); }
+    finally { await probe.close(); }
+  } finally { rmSync(probeProfile, { recursive: true, force: true }); }
   return { result: 'passed', playwright: JSON.parse(readFileSync('/opt/acceptance/node_modules/playwright/package.json')).version,
     driver: { node: process.version, policy: 'seccomp-deny-io-uring', policy_verified: true, external_fetch_control: true,
               ipv4_only_verified:true, timing_mode: emulated ? 'software-emulation' : 'standard',

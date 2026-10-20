@@ -183,10 +183,14 @@ The shipped app, gateway and database keep their ordinary profiles. libuv's
 the [pinned libuv implementation](https://github.com/libuv/libuv/blob/v1.52.1/src/unix/linux.c).
 Browser context guards separately prove navigation, subresource, dedicated
 worker and websocket interception; service workers are blocked explicitly.
-Both Firefox test profiles explicitly disable application update checks using
-[Mozilla's desktop testing preferences](https://firefox-source-docs.mozilla.org/python/marionette_driver.html).
-This prevents delayed `aus5.mozilla.org` DNS traffic in slower runs. Such traffic
-is not exempted by the observer; any remaining unauthorized DNS still fails.
+Both disposable Firefox profiles write their update preferences to `user.js`
+before starting the process, including `extensions.systemAddon.update.enabled=false`
+for the separate system-addon updater. Protocol preferences alone arrive after
+startup. A delayed-launch reproduction still attempted `aus5.mozilla.org` DNS
+with only the application updater preferences or an installation policy; writing
+the system-addon preference before startup prevented those attempts. These
+settings only affect the test browser. Such traffic is not exempted by the
+observer; any remaining unauthorized DNS still fails.
 
 The browser test service allows IPv4, Unix and netlink sockets. This is an
 IPv4 loopback browser fixture, not IPv6 browser-host acceptance. Chromium's

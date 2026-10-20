@@ -205,10 +205,23 @@ def parse(lines,stats=None):
                 if created_inode:
                     inode_family[created_inode]=sockets[created]
                     inode_peer.pop(created_inode,None)
-        if name == 'socketpair' and args and args[0] == 'AF_UNIX':
-            for number in re.findall(r'(\d+)<UNIX', text):
-                sockets[(owner,int(number))]=('AF_UNIX','local')
-                owned.add(int(number))
+        if name == 'socketpair' and returned == 0 and args and args[0] == 'AF_UNIX':
+            # The successful syscall proves the family even when ptrace cannot
+            # annotate its output descriptors. Never infer it from a failed call.
+            output = args[3] if len(args) == 4 else ''
+            pair = arguments(output[1:-1]) if output.startswith('[') and output.endswith(']') else []
+            if (len(pair) != 2 or any(not re.fullmatch(r'[0-9]+(?:<.*>)?', value) for value in pair)
+                    or fd(pair[0]) == fd(pair[1])):
+                raise ValueError('Successful Unix socketpair has unreadable output descriptors')
+            for value in pair:
+                number = fd(value)
+                sockets[(owner,number)] = ('AF_UNIX','local')
+                connected.pop((owner,number),None)
+                owned.add(number)
+                pair_inode = socket_identity(value)
+                if pair_inode:
+                    inode_family[pair_inode] = ('AF_UNIX','local')
+                    inode_peer.pop(pair_inode,None)
         if name in {'accept','accept4'} and returned is not None and returned>=0:
             created=(owner,returned)
             owned.add(returned)
