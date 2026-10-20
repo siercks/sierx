@@ -18,6 +18,7 @@ const serverCertificate = process.env.SIERX_TEST_SERVER_CERT;
 assert(base && certificate && serverCertificate, 'Explicit fixture origin, CA and leaf certificate are required');
 const origin = new URL(base).origin;
 let phase = 'launch';
+const apiFailures = new Set();
 // Match Mozilla's own desktop test profile: a slow offline run must not
 // trigger the browser updater's aus5.mozilla.org lookup in the background.
 const firefoxUserPrefs = { 'app.update.disabledForTesting': true,
@@ -32,6 +33,11 @@ async function guard(context) {
     return target.origin === origin;
   };
   context.on('serviceworker', () => { state.workers++; });
+  context.on('response', (response) => {
+    const target = new URL(response.url());
+    if (target.origin === origin && target.pathname.startsWith('/api/v1/') && response.status() >= 400)
+      apiFailures.add(response.status());
+  });
   context.on('request', (request) => {
     if (!allowed(request.url()) && !state.negative) state.external.push(request.resourceType());
   });
@@ -109,7 +115,7 @@ async function core(context, engine) {
   await dialog.getByRole('button', { name: 'Save project', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Edited offline project ' + prefix, exact: true })).toBeVisible();
-  phase = engine + '-create-edit-transition-comment-link';
+  phase = engine + '-create-item';
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('Title', { exact: true }).fill(title);
@@ -118,20 +124,29 @@ async function core(context, engine) {
   await dialog.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   const key = new URL(page.url()).pathname.slice(1);
+  phase = engine + '-edit-item';
   await page.getByRole('button', { name: 'Edit item', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title + ' edited');
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
+  phase = engine + '-transition';
   await page.getByRole('button', { name: 'Change status', exact: true }).click();
   await page.getByRole('combobox', { name: 'New status', exact: true }).selectOption('doing');
   await page.getByRole('dialog').getByRole('button', { name: 'Change status', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByLabel('New comment', { exact: true }).fill('**Delivered comment** ' + prefix);
+  phase = engine + '-comment';
+  const comment = page.getByLabel('New comment', { exact: true });
+  await comment.fill('**Delivered comment** ' + prefix);
   await page.getByRole('button', { name: 'Add comment', exact: true }).click();
-  await expect(page.getByText('Delivered comment ' + prefix, { exact: true })).toBeVisible();
+  // The body can arrive before the item-version refresh. Form reset happens
+  // only after the write and all invalidated queries complete.
+  await expect(comment).toHaveValue('');
+  await expect(page.locator('.comment-body').getByText('Delivered comment ' + prefix, { exact: true })).toBeVisible();
+  phase = engine + '-create-link-target';
   const targetResponse = await context.request.post(base + '/api/v1/items', { headers: { Origin: origin }, data: { project: prefix, type: 'story', title: 'Link target ' + prefix } });
   assert.equal(targetResponse.status(), 201);
   const target = await targetResponse.json();
+  phase = engine + '-link';
   await page.getByRole('button', { name: 'Link item', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Item key', { exact: true }).fill(target.key);
   await page.getByRole('dialog').getByRole('button', { name: 'Add link', exact: true }).click();
@@ -247,6 +262,15 @@ try { console.log(JSON.stringify(await main())); }
 catch (error) {
   // stderr is retained only in the private, synthetic guest diagnostic log.
   console.error('offline-browser: failed at ' + phase + ' (' + error.name + '); no passing report');
+  const message = String(error.message ?? '');
+  const reason = message.includes('strict mode violation') ? 'ambiguous-locator' :
+    /timed out|timeout.*exceeded/i.test(message) ? 'wait-timeout' : error.matcherResult ? 'assertion-failed' : 'operation-failed';
+  console.error('offline-browser: reason ' + reason);
+  const matcher = error.matcherResult?.name;
+  if (['toBeVisible','toBeHidden','toHaveValue','toHaveURL','toContainText','toHaveCount','toEqual'].includes(matcher))
+    console.error('offline-browser: matcher ' + matcher);
+  for (const status of [...apiFailures].filter((value) => Number.isInteger(value) && value >= 400 && value <= 599).sort().slice(0, 10))
+    console.error('offline-browser: http-status ' + status);
   console.error(error.stack);
   process.exitCode = 1;
 }

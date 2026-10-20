@@ -48,6 +48,11 @@ class EvidenceTests(unittest.TestCase):
         marker = 'offline-browser: failed at firefox-login (TimeoutError); no passing report'
         self.assertEqual(evidence.browser_failure_diagnostic(private+marker+'\nprivate stack trace'),
                          'firefox-login (TimeoutError)')
+        labels='\noffline-browser: reason wait-timeout\noffline-browser: matcher toBeVisible\noffline-browser: http-status 409\n'
+        self.assertEqual(evidence.browser_failure_diagnostic(private+marker+labels),
+                         'firefox-login (TimeoutError) reason=wait-timeout matcher=toBeVisible http=409')
+        unknown='\noffline-browser: reason private-value\noffline-browser: matcher private-value\noffline-browser: http-status 409 private-value\n'
+        self.assertEqual(evidence.browser_failure_diagnostic(marker+unknown),'firefox-login (TimeoutError)')
         for message in ('offline-browser: failed at private-fixture-value (Error); no passing report',
                         'offline-browser: failed at firefox-login (PrivatePassword); no passing report',
                         marker+' private-fixture-value'):

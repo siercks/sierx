@@ -28,11 +28,19 @@ def browser_failure_diagnostic(text):
     phases = {'launch','driver-policy','firefox-network-launch'} | {
         engine+'-'+stage for engine in ('chromium','firefox') for stage in (
             'launch','context-setup','new-page','login','create-project','edit-project','create-edit-transition-comment-link',
+            'create-item','edit-item','transition','comment','create-link-target','link',
             'search-reload-bootstrap','guard-controls','network-control')}
     errors = {'Error','TimeoutError','AssertionError','TypeError','ProtocolError','TargetClosedError'}
     for phase, error in re.findall(r'^offline-browser: failed at ([a-z-]+) \(([A-Za-z]+)\); no passing report$', text, re.MULTILINE):
         if phase in phases and error in errors:
-            return phase+' ('+error+')'
+            result = phase+' ('+error+')'
+            reason = re.search(r'^offline-browser: reason (ambiguous-locator|wait-timeout|assertion-failed|operation-failed)$',text,re.MULTILINE)
+            matcher = re.search(r'^offline-browser: matcher (toBeVisible|toBeHidden|toHaveValue|toHaveURL|toContainText|toHaveCount|toEqual)$',text,re.MULTILINE)
+            statuses = sorted(set(re.findall(r'^offline-browser: http-status ([45][0-9]{2})$',text,re.MULTILINE)))[:10]
+            if reason:result += ' reason='+reason[1]
+            if matcher:result += ' matcher='+matcher[1]
+            if statuses:result += ' http='+','.join(statuses)
+            return result
     return None
 
 

@@ -742,6 +742,41 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
   // disallowed by this test's use of keyboard/focus rather than pointer APIs.
   await audit(page);
 });
+test('comment completion waits for item refresh before follow-up linking', async ({ page, context }) => {
+  const item = await create(context, 'Comment then link');
+  const target = await create(context, 'Follow-up link target');
+  await page.goto('/' + item.key);
+  let posted = false;
+  let releaseItem!: () => void;
+  const itemGate = new Promise<void>((resolve) => { releaseItem = resolve; });
+  await page.route((url) => url.pathname === '/api/v1/comments', async (route) => {
+    if (route.request().method() === 'POST') posted = true;
+    await route.continue();
+  });
+  await page.route((url) => url.pathname === '/api/v1/items/' + item.key, async (route) => {
+    if (posted && route.request().method() === 'GET') await itemGate;
+    await route.continue();
+  });
+  const comment = page.getByLabel('New comment', { exact: true });
+  await comment.fill('Posted before item refresh');
+  try {
+    await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+    await expect(page.locator('.comment-body')).toContainText('Posted before item refresh');
+    await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+    await expect(comment).toHaveValue('Posted before item refresh');
+  } finally {
+    releaseItem();
+  }
+  await expect(comment).toHaveValue('');
+  await page.getByRole('button', { name: 'Link item', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Item key', { exact: true }).fill(target.key);
+  await dialog.getByRole('button', { name: 'Add link', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('completed');
+  const links = await (await context.request.get('/api/v1/items/' + item.key + '/links')).json();
+  expect(links.data.some((link: { to: { key: string } }) => link.to.key === target.key)).toBe(true);
+});
+
 test('parent displays sibling order and destination can remove a link', async ({
   page,
   context,
