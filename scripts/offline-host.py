@@ -198,7 +198,10 @@ def acceleration(requested):
 
 def qemu_command(arch, mode, disk, kernel, initrd, serial):
     emulator = 'qemu-system-x86_64' if arch == 'amd64' else 'qemu-system-aarch64'
-    cpu = 'host' if mode == 'kvm' else ('max' if arch == 'amd64' else 'cortex-a72')
+    # This is functional native-architecture coverage, not a legacy CPU or
+    # performance fixture. Expose TCG's available instructions (including Arm
+    # atomics/crypto) instead of constraining software execution to Cortex-A72.
+    cpu = 'host' if mode == 'kvm' else 'max'
     console = 'ttyS0' if arch == 'amd64' else 'ttyAMA0'
     board = 'q35' if arch == 'amd64' else 'virt'
     return [emulator, '-machine', board, '-accel', mode, '-cpu', cpu, '-m', '4096', '-smp', '2',

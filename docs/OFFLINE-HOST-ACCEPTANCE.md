@@ -13,9 +13,13 @@ checks namespace/identity evidence and observes processes. Connected OS/browser
 preparation happens before isolation, in the preparer's Podman store.
 
 KVM runs have a 1,900-second workload limit. A host without nested virtualization
-uses native-architecture TCG with a bounded 4,500-second workload limit and an
-1,800-second initial image-import limit. The workflow remains capped at 90
-minutes. These functional checks make no native-speed/performance claim.
+uses native-architecture TCG with a bounded 4,500-second workload limit and
+1,800-second command limits for initial image import and database setup. Other
+commands retain their 600-second limit; KVM commands retain that limit in every
+phase. The workflow remains capped at 90 minutes. TCG uses QEMU's `max` CPU
+model rather than limiting Arm execution to Cortex-A72; see the
+[QEMU CPU model documentation](https://www.qemu.org/docs/master/system/arm/virt.html).
+These functional checks make no native-speed/performance claim.
 
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64
