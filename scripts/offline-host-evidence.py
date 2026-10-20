@@ -90,7 +90,12 @@ if __name__=='__main__':
         elif args.operation=='receipt':receipt(args.directory,args.profile,args.repository,revision)
         elif args.operation=='verify':verify(args.directory,args.repository,revision)
         else:
-            aggregate(os.environ.get('SCOPE_RESULT'),os.environ.get('HOST_REQUIRED'),os.environ.get('HOST_RESULT'))
+            try:
+                aggregate(os.environ.get('SCOPE_RESULT'),os.environ.get('HOST_REQUIRED'),os.environ.get('HOST_RESULT'))
+            except ValueError as error:
+                # These are fixed coverage/status diagnostics, never report
+                # contents. Distinguish a failed host job from a stale receipt.
+                raise SystemExit('offline-host-evidence: '+str(error)) from None
             if os.environ['HOST_REQUIRED']=='true':verify(args.directory,args.repository,revision)
         if args.operation=='aggregate' and os.environ['HOST_REQUIRED']=='false':
             print('offline-host-evidence: documentation-only change; host coverage not required')

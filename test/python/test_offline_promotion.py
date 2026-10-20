@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -141,6 +144,16 @@ class OfflinePromotionTests(unittest.TestCase):
         for args in (('failure','false','skipped'),('success','true','skipped'),
                      ('success','true','cancelled'),('success','true','failure'),('success','','success')):
             with self.subTest(args=args),self.assertRaises(ValueError):aggregate(*args)
+
+    def test_failed_host_job_reports_coverage_failure_without_reading_receipts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/offline-host-evidence.py'),
+                'aggregate','--directory',temporary],cwd=ROOT,capture_output=True,text=True,
+                env={**os.environ,'SCOPE_RESULT':'success','HOST_REQUIRED':'true','HOST_RESULT':'failure'})
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('Required native host coverage failed',result.stderr)
+            self.assertNotIn('mismatched',result.stderr)
+            self.assertEqual(list(Path(temporary).iterdir()),[])
 
     def test_scope_only_skips_documentation_and_never_skips_a_release(self):
         helper=promotion._host_evidence

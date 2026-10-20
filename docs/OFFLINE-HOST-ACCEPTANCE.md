@@ -87,6 +87,14 @@ tracer errors and successful undecodable asynchronous I/O fail closed. DNS is
 unnecessary in this literal-host fixture; even a failed loopback DNS lookup is
 rejected outside its explicit control.
 
+The installer observer uses strace's kernel syscall selection (`--seccomp-bpf`)
+to avoid stopping on unselected archive reads/writes. The service manager
+retains ordinary ptrace observation, including the browser service's seccomp
+denials: seccomp-denied calls are not visible through `RET_TRACE` filtering.
+The traced socket/process/descriptor calls and required external controls are
+unchanged. Neither observer detaches for import, and no phase skips observation.
+See the [strace option and precedence rules](https://man7.org/linux/man-pages/man1/strace.1.html).
+
 The Node/browser test service has an explicit seccomp policy denying io_uring
 with ENOSYS, so all its network operations use observable socket calls. A real
 syscall probe verifies the policy, and a separate Node fetch proves observation.

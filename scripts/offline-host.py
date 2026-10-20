@@ -119,7 +119,13 @@ def setup(root, args):
     for name, command in (('manager','/usr/lib/systemd/systemd --user'),
                           ('installer','/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py')):
         wrapper = root / ('usr/sbin/sierx-trace-'+name)
-        wrapper.write_text('#!/bin/sh\nexec 3>&2\nexec /usr/bin/strace -qq -f --decode-pids=comm,pidns -ttt -yy -s 256 -e trace='+trace_calls+
+        # The installer spends most of its time reading/hash-checking archives.
+        # Filter its unselected calls in the kernel, rather than context-switch
+        # through the observer on every read/write under software emulation.
+        # Keep the manager's ordinary ptrace observer: browser service seccomp
+        # denials take precedence over RET_TRACE and must remain observable.
+        filtering = ' --seccomp-bpf' if name == 'installer' else ''
+        wrapper.write_text('#!/bin/sh\nexec 3>&2\nexec /usr/bin/strace -qq -f'+filtering+' --decode-pids=comm,pidns -ttt -yy -s 256 -e trace='+trace_calls+
             ' -o /var/log/sierx-network/'+name+'.trace -u acceptance /usr/sbin/sierx-observed-'+name+
             ' 2>/var/log/sierx-network/'+name+'.stderr\n')
         tracee = root / ('usr/sbin/sierx-observed-'+name)
