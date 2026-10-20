@@ -123,7 +123,9 @@ jobs:
           if-no-files-found: ignore
 
   aggregate:
-    name: Offline delivery
+    # Even the skipped development job must have a different check name:
+    # GitHub treats skipped jobs as successful for required-check purposes.
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_probe && 'Development runtime probe (no closeout)' || 'Offline delivery' }}
     # A development dispatch has no closeout aggregate. Release calls and PRs
     # always retain the full three-profile gate and all scenario requirements.
     if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
