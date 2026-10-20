@@ -146,7 +146,18 @@ export async function mutateItem(workspace: string, key: string, write: Write) {
     );
   }
   try {
-    await request(write.path, write);
+    const saved = await request<Item | undefined>(write.path, write);
+    // These endpoints return the complete committed item. Keep that response
+    // even if a later invalidation GET fails, so another form uses its version.
+    // Comment/link envelopes are not item documents. Never replace a newer read.
+    const itemPath = '/items/' + key;
+    const returnsItem = (write.method === 'PATCH' && write.path === itemPath) ||
+      (write.method === 'POST' && [itemPath + '/transition', itemPath + '/move'].includes(write.path));
+    if (returnsItem && saved?.key === key && Number.isSafeInteger(saved.version) && saved.version > write.version) {
+      cache.setQueryData<Item>(itemKey(workspace, key), (current) =>
+        !current || current.version <= saved.version ? saved : current,
+      );
+    }
   } catch (error) {
     for (const [queryKey, data] of previous) cache.setQueryData(queryKey, data);
     if (error instanceof APIError && error.problem.current)

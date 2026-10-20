@@ -379,6 +379,41 @@ test('usability: item save closes only on success and returns focus', async ({ p
   await expect(page.getByRole('heading', { name: 'Saved without another click' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit item', exact: true })).toBeFocused();
 });
+test('saved item remains current through failed refresh before the next transition', async ({ page, context }) => {
+  const item = await create(context, 'Committed response survives refresh');
+  await page.goto('/' + item.key);
+  const title = item.title + ' edited';
+  const itemPath = '/api/v1/items/' + item.key;
+  const writes: { method: string; version: string | undefined }[] = [];
+  page.on('request', (request) => {
+    if ([itemPath, itemPath + '/transition'].includes(new URL(request.url()).pathname) && ['PATCH', 'POST'].includes(request.method()))
+      writes.push({ method: request.method(), version: request.headers()['if-match'] });
+  });
+  await page.route('**/api/v1/items/' + item.key + '**', (route) =>
+    route.request().method() === 'GET' && new URL(route.request().url()).pathname === itemPath
+      ? route.fulfill({ status: 503, contentType: 'text/plain', body: 'Service unavailable pending operator recovery verification.\n' })
+      : route.continue());
+  await page.getByRole('button', { name: 'Edit item', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Change status', exact: true }).click();
+  await page.getByRole('combobox', { name: 'New status', exact: true }).selectOption('doing');
+  const [response] = await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === itemPath + '/transition' && response.request().method() === 'POST'),
+    page.getByRole('dialog').getByRole('button', { name: 'Change status', exact: true }).click(),
+  ]);
+  expect(response.status()).toBe(200);
+  await expect(page.getByRole('dialog')).toBeHidden();
+  expect(writes).toEqual([{ method: 'PATCH', version: `"${item.version}"` }, { method: 'POST', version: `"${item.version + 1}"` }]);
+  const saved = await (await context.request.get(itemPath)).json();
+  expect(saved.title).toBe(title); expect(saved.status.key).toBe('doing'); expect(saved.version).toBe(item.version + 2);
+  await page.unroute('**/api/v1/items/' + item.key + '**');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+});
+
 test('priorities: Details edits change only assignee or the selected date', async ({ page, context }) => {
   const item = await create(context, 'Quick field edits', 'story', { body: 'Keep this description' });
   const me = await (await context.request.get('/api/v1/me')).json();
