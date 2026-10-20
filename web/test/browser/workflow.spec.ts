@@ -777,12 +777,32 @@ test('parent displays sibling order and destination can remove a link', async ({
     },
   );
   expect(linked.status()).toBe(201);
+  const link = await linked.json();
+  const linkPath = '/api/v1/links/' + link.id;
+  let releaseDelete!: () => void;
+  const deleteGate = new Promise<void>((resolve) => { releaseDelete = resolve; });
+  await page.route((target) => target.pathname === linkPath, async (route) => {
+    if (route.request().method() === 'DELETE') await deleteGate;
+    await route.continue();
+  });
   await page.goto('/' + second.key);
   await page.getByRole('button', { name: 'Remove link' }).first().click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Remove link' })
-    .click();
+  const dialog = page.getByRole('dialog');
+  const deleted = page.waitForResponse((response) =>
+    response.request().method() === 'DELETE' && new URL(response.url()).pathname === linkPath,
+  );
+  try {
+    await dialog.getByRole('button', { name: 'Remove link' }).click();
+    await expect(dialog.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    const pending = await (await context.request.get('/api/v1/items/' + second.key + '/links')).json();
+    expect(pending.data).toHaveLength(1);
+  } finally {
+    releaseDelete();
+  }
+  // While saving, the submit label changes and the modal hides background
+  // buttons from role queries. Their absence alone is not deletion success.
+  expect((await deleted).status()).toBe(200);
+  await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remove link' })).toHaveCount(0);
   const remaining = await (
     await context.request.get('/api/v1/items/' + second.key + '/links')
