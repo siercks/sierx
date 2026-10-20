@@ -16,6 +16,7 @@ import offline_host_evidence as evidence
 import importlib.util
 import offline_host_inputs
 import ipaddress
+import offline_host_diagnostics as diagnostics
 
 HOME = Path(os.environ['HOME'])
 BUNDLE = Path('/opt/sierx-bundle')
@@ -61,6 +62,7 @@ def phase(name):
     PHASE = name
     (HOME / 'progress.json').write_text(json.dumps({'phase': name}))
     print('SIERX_PHASE: ' + name, flush=True)
+    diagnostics.emit_resources()
 
 
 def run(*args, env=None):
@@ -83,6 +85,7 @@ def operation(name, bundle=BUNDLE, expected=None):
     require(name in {'import','db-up','migrate-up','bootstrap','plan','apply','smoke'},
             'Unsupported acceptance operation')
     print('SIERX_OPERATION: start ' + name, flush=True)
+    diagnostics.emit_resources()
     result = run('python3', '-B', bundle / 'scripts/offline.py', name,
                env={**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
                     'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']})

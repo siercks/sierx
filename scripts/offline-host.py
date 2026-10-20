@@ -23,11 +23,13 @@ import offline
 import offline_host_evidence as evidence
 import network_observer
 import offline_archive
+import offline_host_diagnostics as diagnostics
 
 ROOT = Path(__file__).resolve().parent.parent
 SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs', 'offline-browser-navigation.mjs',
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
-               'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py')
+               'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
+               'offline_host_diagnostics.py')
 
 
 def suite_digest(scripts=None, packages=None):
@@ -166,6 +168,7 @@ Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 Environment=PATH=/usr/lib/postgresql/18/bin:/usr/pgsql-18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=+/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py --manager-proof
 ExecStart=+/usr/sbin/sierx-trace-installer
+ExecStopPost=+/usr/bin/python3 /opt/acceptance/tests/offline_host_diagnostics.py --service-exit
 TimeoutStartSec=10700
 StandardOutput=journal+console
 StandardError=journal
@@ -323,16 +326,23 @@ def main(args):
         recovered = False
         try:
             with private.open('wb') as log:
+                host_resources = diagnostics.resources()
+                print('offline-host: host resources '+json.dumps(host_resources, sort_keys=True), flush=True)
                 process = subprocess.Popen(command, stdout=log, stderr=log, start_new_session=True)
                 print('offline-host: boot ' + arch + '/' + mode + ' with native overlay storage',flush=True)
                 deadline = time.monotonic() + (10800 if mode=='tcg' else 1900)
                 startup_deadline = time.monotonic() + (180 if mode == 'kvm' else 600)
                 last_phase = None
                 last_operation = None
+                last_resources = None
                 finished = None
                 while process.poll() is None and time.monotonic() < deadline:
                     if serial.exists():
                         console_text=serial.read_text(errors='replace')
+                        resources = diagnostics.latest(console_text, 'SIERX_RESOURCES')
+                        if resources is not None and resources != last_resources:
+                            last_resources = resources
+                            print('offline-host: resources '+json.dumps(resources, sort_keys=True), flush=True)
                         phases = re.findall(r'SIERX_PHASE: ([a-z-]{1,80})', console_text)
                         if phases and phases[-1] != last_phase:
                             last_phase = phases[-1]
@@ -363,6 +373,8 @@ def main(args):
                 matches=re.findall(r'SIERX_FINISHED: ([a-f0-9]{64}) (passed|failed)',serial.read_text(errors='replace'))
                 finished=matches[-1] if matches else None
             if finished is None or finished[0]!=args.suite_sha256:
+                summary = diagnostics.stopped(process.returncode, serial.read_text(errors='replace'), private.read_text(errors='replace'), host_resources)
+                print('offline-host: incomplete VM result '+json.dumps(summary, sort_keys=True), flush=True)
                 raise ValueError('Guest stopped before a complete synced acceptance result')
             raw_result = disk_file(disk, 'result.json')
             if not raw_result.strip():

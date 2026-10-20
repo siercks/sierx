@@ -233,6 +233,18 @@ never uploaded. Only the explicitly named sanitized reports/receipts are public.
 The launcher waits for a synced completion marker, stops its owned VM and
 replays only that disposable disk's journal before reading evidence.
 
+An incomplete VM shutdown still fails acceptance. Phase/operation boundaries
+emit only numeric free-memory, free-storage and OOM counters; trace sizes are
+available to the guest's root shutdown helper. Its `ExecStopPost` emits only
+allowlisted systemd result/exit categories. The launcher can summarize those
+records, its numeric emulator exit code and fixed error-presence flags, alongside
+host resource counters. Unknown values remain explicitly unknown. No raw error,
+environment, journal or trace content enters that summary. These diagnostics
+have no passing result or coverage claim and cannot substitute for a synced
+guest result or any required report. They do not change resource/time budgets
+or run installer, application or network scenarios outside observation.
+The categories follow [systemd's service exit environment contract](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#%24SERVICE_RESULT).
+
 `--development` permits work on the fixture against an older approved bundle.
 It records limited development coverage and cannot satisfy promotion. Keep
 actual exact-candidate/native-profile results distinct from such probes.
