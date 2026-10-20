@@ -27,7 +27,7 @@ def browser_failure_diagnostic(text):
     """Extract only fixed failure labels; private messages/stack traces stay private."""
     phases = {'launch','driver-policy','firefox-network-launch'} | {
         engine+'-'+stage for engine in ('chromium','firefox') for stage in (
-            'launch','login','create-project','edit-project','create-edit-transition-comment-link',
+            'launch','context-setup','new-page','login','create-project','edit-project','create-edit-transition-comment-link',
             'search-reload-bootstrap','guard-controls','network-control')}
     errors = {'Error','TimeoutError','AssertionError','TypeError','ProtocolError','TargetClosedError'}
     for phase, error in re.findall(r'^offline-browser: failed at ([a-z-]+) \(([A-Za-z]+)\); no passing report$', text, re.MULTILINE):

@@ -11,6 +11,7 @@ assert([undefined, '0', '1'].includes(process.env.SIERX_TEST_EMULATED), 'Invalid
 const emulated = process.env.SIERX_TEST_EMULATED === '1';
 const expect = baseExpect.configure({ timeout: emulated ? 60000 : 5000 });
 const launchTimeout = emulated ? 180000 : 30000;
+const firefoxLaunchTimeout = emulated ? 600000 : 30000;
 const base = process.env.SIERX_BASE_URL;
 const certificate = process.env.SSL_CERT_FILE;
 const serverCertificate = process.env.SIERX_TEST_SERVER_CERT;
@@ -76,10 +77,15 @@ async function controls(context, state) {
 }
 
 async function core(context, engine) {
-  context.setDefaultTimeout(emulated ? 120000 : 30000);
+  phase = engine + '-context-setup';
+  context.setDefaultTimeout(emulated && engine === 'firefox' ? firefoxLaunchTimeout : emulated ? 120000 : 30000);
   context.setDefaultNavigationTimeout(emulated ? 120000 : 30000);
   const observation = await guard(context);
-  const page = await context.newPage();
+  phase = engine + '-new-page';
+  // A fresh persistent Firefox profile already opens a blank page. Reuse it
+  // instead of starting an unnecessary second renderer under emulation.
+  const page = context.pages()[0] ?? await context.newPage();
+  context.setDefaultTimeout(emulated ? 120000 : 30000);
   const prefix = 'OF' + randomUUID().slice(0, 6).toUpperCase();
   const title = 'Offline browser ' + engine + ' ' + prefix;
   phase = engine + '-login';
@@ -224,12 +230,12 @@ async function main() {
     phase = 'firefox-launch';
     execFileSync('certutil', ['-N', '--empty-password', '-d', 'sql:' + profile], { stdio: 'pipe' });
     execFileSync('certutil', ['-A', '-n', 'Sierx fixture CA', '-t', 'C,,', '-i', certificate, '-d', 'sql:' + profile], { stdio: 'pipe' });
-    const context = await firefox.launchPersistentContext(profile, { headless: true, timeout: launchTimeout, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false, firefoxUserPrefs });
+    const context = await firefox.launchPersistentContext(profile, { headless: true, timeout: firefoxLaunchTimeout, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false, firefoxUserPrefs });
     try { results.push(await core(context, 'firefox')); }
     finally { await context.close(); }
   } finally { rmSync(profile, { recursive: true, force: true }); }
   phase = 'firefox-network-launch';
-  const probe = await firefox.launch({ headless: true, timeout: launchTimeout, firefoxUserPrefs });
+  const probe = await firefox.launch({ headless: true, timeout: firefoxLaunchTimeout, firefoxUserPrefs });
   try { await networkControl(probe, 'firefox'); }
   finally { await probe.close(); }
   return { result: 'passed', playwright: JSON.parse(readFileSync('/opt/acceptance/node_modules/playwright/package.json')).version,
