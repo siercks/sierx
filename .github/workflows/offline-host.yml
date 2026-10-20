@@ -42,7 +42,8 @@ jobs:
           - runner: ubuntu-24.04
             profile: ubuntu24
             arch: amd64
-          - runner: ubuntu-24.04-arm
+          # The guest remains Ubuntu 24.04; use the current host emulator.
+          - runner: ubuntu-26.04-arm
             profile: ubuntu24
             arch: arm64
           - runner: ubuntu-24.04
@@ -71,6 +72,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq podman python3 curl qemu-system-x86 qemu-system-arm e2fsprogs
+          qemu-system-aarch64 --version
+          if ! sudo modprobe kvm; then
+            echo 'KVM module unavailable; acceptance will probe and use bounded emulation if needed.'
+          fi
       - name: Build native local candidate without package publication
         if: ${{ !inputs.staged }}
         run: make release-binaries release-image sbom offline-candidate-prepare

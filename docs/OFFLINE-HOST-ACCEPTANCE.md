@@ -21,6 +21,13 @@ model rather than limiting Arm execution to Cortex-A72; see the
 [QEMU CPU model documentation](https://www.qemu.org/docs/master/system/arm/virt.html).
 These functional checks make no native-speed/performance claim.
 
+The GitHub ARM preparer runs on `ubuntu-26.04-arm` for its newer host QEMU;
+the isolated accepted guest remains Ubuntu 24.04 with its own recorded kernel
+and rootfs hashes. Preparation attempts to load KVM, and the launcher still
+requires a successful VM-creation probe before selecting it. Public progress
+contains fixed phase/operation names only; command output and journals remain
+private. A timeout is a failed acceptance, never a passing report.
+
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64
 software virtualization. The guest verifies the actual selected driver. The

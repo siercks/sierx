@@ -177,7 +177,7 @@ class OfflinePromotionTests(unittest.TestCase):
         self.assertIn('name: Offline delivery',host_workflow)
         self.assertIn('make offline-host-aggregate',host_workflow)
         self.assertIn('profile: rocky10',host_workflow)
-        self.assertIn('runner: ubuntu-24.04-arm',host_workflow)
+        self.assertIn('runner: ubuntu-26.04-arm\n            profile: ubuntu24\n            arch: arm64',host_workflow)
         self.assertNotIn('packages: write',host_workflow)
         self.assertNotIn('secrets: inherit',host_workflow)
         release_script = (ROOT / "scripts/release.sh").read_text()

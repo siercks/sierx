@@ -75,9 +75,16 @@ def run(*args, env=None):
 
 
 def operation(name, bundle=BUNDLE, expected=None):
-    return run('python3', '-B', bundle / 'scripts/offline.py', name,
+    # Only fixed operation names enter the public progress stream. Command
+    # output, arguments, environment and private journals stay in diagnostics.
+    require(name in {'import','db-up','migrate-up','bootstrap','plan','apply','smoke'},
+            'Unsupported acceptance operation')
+    print('SIERX_OPERATION: start ' + name, flush=True)
+    result = run('python3', '-B', bundle / 'scripts/offline.py', name,
                env={**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
                     'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']})
+    print('SIERX_OPERATION: complete ' + name, flush=True)
+    return result
 
 
 def await_database():

@@ -322,6 +322,7 @@ def main(args):
                 deadline = time.monotonic() + (4500 if mode=='tcg' else 1900)
                 startup_deadline = time.monotonic() + (180 if mode == 'kvm' else 600)
                 last_phase = None
+                last_operation = None
                 finished = None
                 while process.poll() is None and time.monotonic() < deadline:
                     if serial.exists():
@@ -330,6 +331,10 @@ def main(args):
                         if phases and phases[-1] != last_phase:
                             last_phase = phases[-1]
                             print('offline-host: ' + last_phase, flush=True)
+                        operations = re.findall(r'SIERX_OPERATION: ((?:start|complete) (?:import|db-up|migrate-up|bootstrap|plan|apply|smoke))\b', console_text)
+                        if operations and operations[-1] != last_operation:
+                            last_operation = operations[-1]
+                            print('offline-host: operation ' + last_operation, flush=True)
                         matches=re.findall(r'SIERX_FINISHED: ([a-f0-9]{64}) (passed|failed)',console_text)
                         if matches:
                             finished=matches[-1]
