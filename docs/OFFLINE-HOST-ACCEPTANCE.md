@@ -175,8 +175,13 @@ The required external controls remain unchanged. Descriptor receipts are also
 observed through `recvmsg`: successful SCM_RIGHTS output annotations establish
 the received socket's family and peer before a later send can omit its annotation.
 Blocking receipts install descriptors at return, after any intervening close of
-the previous descriptor. Failed, opaque, malformed or truncated receipts do not
-grant a local socket classification. Neither observer detaches for import, and
+the previous descriptor. Failed, opaque, malformed or unreadable trace receipts
+do not grant a local socket classification. Linux's `MSG_CTRUNC` flag instead
+records kernel-discarded ancillary data: [excess SCM_RIGHTS descriptors are closed
+by the kernel](https://man7.org/linux/man-pages/man7/unix.7.html). Every returned
+descriptor is still decoded completely and outside sockets remain rejected;
+an ellipsis or unreadable header is never excused by this flag. Reports count
+these kernel discards separately. Neither observer detaches for import, and
 no phase skips observation.
 See the [strace option and precedence rules](https://man7.org/linux/man-pages/man1/strace.1.html).
 

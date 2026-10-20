@@ -18,7 +18,7 @@ def full_host_report(bundle,expected,suite,profile,previous):
         'network':{'result':'passed','observer':'strace-network-v1','processes':sorted(PROCESSES),
             'external_attempts':0,'negative_controls':{name:1 for name in CONTROLS},'attempts_examined':len(CONTROLS),
             'browser_driver_policy':'seccomp-deny-io-uring','blocked_io_uring_setups':1,'blocked_ipv6_sockets':1,
-            'control_interval_limit_seconds':20},
+            'control_interval_limit_seconds':20,'kernel_control_truncations':0},
         'scenarios':{'invalid_deliveries':evidence.INVALID_DELIVERIES,
             'two_release':{'previous':previous['release'],'previous_bundle_sha256':previous['bundle_sha256'],
                 'candidate':bundle['release'],'schema_before':15,'schema_after':15,'fingerprint_preserved':True,

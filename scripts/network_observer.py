@@ -150,6 +150,7 @@ def parse(lines,stats=None):
     stats={} if stats is None else stats
     stats.setdefault('blocked_io_uring_setups',0)
     stats.setdefault('blocked_ipv6_sockets',0)
+    stats.setdefault('kernel_control_truncations',0)
     sockets, connected, attempts, executed, owners, roles, inode_family, inode_peer, members = {}, {}, [], set(), {}, {}, {}, {}, {}
     for pid,program,timestamp,body in records(lines):
         role=roles.get(pid,component(program))
@@ -246,7 +247,10 @@ def parse(lines,stats=None):
             if not args[1].startswith('{') or not args[1].endswith('}'):
                 raise ValueError('Received message header is unreadable')
             if 'MSG_CTRUNC' in (field(args[1], 'msg_flags') or ''):
-                raise ValueError('Received descriptor control data was truncated')
+                # Linux closes ancillary descriptors that do not fit. This flag
+                # is not an unreadable strace record: every returned descriptor
+                # below still needs complete metadata, or remains unclassified.
+                stats['kernel_control_truncations'] += 1
             control = field(args[1], 'msg_control')
             if control is None and field(args[1], 'msg_controllen') not in {None, '0'}:
                 raise ValueError('Received descriptor control data is unreadable')

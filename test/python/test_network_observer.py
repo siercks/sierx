@@ -29,6 +29,22 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_kernel_discard_flag_still_requires_complete_metadata_for_every_returned_fd(self):
+        receipt='10<firefox> 1.000001 recvmsg(9<UNIX:[1]>, {msg_control=[{cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60<UNIX:[2]>]}], msg_flags=MSG_CTRUNC}, 0) = 1'
+        send='10<firefox> 1.000002 sendmsg(60, {msg_name=NULL, msg_iov=[], msg_control=NULL}, 0) = 0'
+        stats={}
+        self.assertEqual(observer.parse([receipt,send],stats)[0],[])
+        self.assertEqual(stats['kernel_control_truncations'],1)
+        internet=receipt.replace('60<UNIX:[2]>','60<TCP:[127.0.0.1:1234->198.51.100.99:443]>')
+        self.assertEqual(observer.parse([internet,send])[0][0].address,'198.51.100.99')
+        for invalid in (receipt.replace('60<UNIX:[2]>','60'),receipt.replace('60<UNIX:[2]>','60, ...')):
+            with self.subTest(receipt=invalid),self.assertRaises(ValueError):observer.parse([invalid,send])
+        old='10<firefox> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [60, 61]) = 0'
+        empty='10<firefox> 1.000001 recvmsg(9<UNIX:[1]>, {msg_control=NULL, msg_controllen=0, msg_flags=MSG_CTRUNC}, 0) = 1'
+        self.assertEqual(observer.parse([old,empty,send])[0],[])
+        with self.assertRaises(ValueError):observer.parse([old,receipt.replace('60<UNIX:[2]>','60'),send])
+        with self.assertRaises(ValueError):observer.parse([old,'10<firefox> 1.000001 recvmsg(9, {msg_control=[...], msg_flags=MSG_CTRUNC}, 0) = 1',send])
+
     def test_blocking_descriptor_receipt_installs_after_an_intervening_old_fd_close(self):
         lines=['10<firefox> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [60, 61]) = 0',
                '10<firefox> 1.000001 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 11',
@@ -55,7 +71,6 @@ class NetworkObserverTests(unittest.TestCase):
         for invalid in (receipt.replace(' = 1',' = -1 EFAULT'),
                         receipt.replace('60<UNIX-STREAM:[123->124]>','60'),
                         receipt.replace('60<UNIX-STREAM:[123->124]>','60, ...'),
-                        receipt.replace('msg_flags=0','msg_flags=MSG_CTRUNC'),
                         receipt.replace('SCM_RIGHTS','SCM_CREDENTIALS')):
             with self.subTest(receipt=invalid),self.assertRaises(ValueError):observer.parse([invalid,send])
         old='10<firefox> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [60, 61]) = 0'

@@ -138,6 +138,8 @@ def validate_network(report):
             or type(report.get('blocked_io_uring_setups')) is not int or report['blocked_io_uring_setups']<1
             or type(report.get('blocked_ipv6_sockets')) is not int or report['blocked_ipv6_sockets']<1):
         raise ValueError('Browser driver asynchronous I/O policy was not observed')
+    if type(report.get('kernel_control_truncations')) is not int or report['kernel_control_truncations'] < 0:
+        raise ValueError('Missing kernel ancillary-discard accounting')
 
 
 def validate_closeout(report,bundle,expected,suite_sha256):

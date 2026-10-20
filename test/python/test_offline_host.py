@@ -228,7 +228,7 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):evidence.validate_closeout(self.report,self.bundle,'d'*64,'c'*64)
         previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
         report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
-        for key,value in (('negative_controls',{}),('external_attempts',1),('processes',[]),('attempts_examined',0),('blocked_ipv6_sockets',0)):
+        for key,value in (('negative_controls',{}),('external_attempts',1),('processes',[]),('attempts_examined',0),('blocked_ipv6_sockets',0),('kernel_control_truncations',-1),('kernel_control_truncations',True)):
             broken=copy.deepcopy(report)
             broken['network'][key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):
