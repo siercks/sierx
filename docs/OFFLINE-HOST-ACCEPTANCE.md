@@ -14,7 +14,7 @@ preparation happens before isolation, in the preparer's Podman store.
 
 KVM runs have a 1,900-second workload limit. A host without nested virtualization
 uses native-architecture TCG with a bounded 10,800-second workload limit and
-1,800-second command limits (3,600 seconds for the complete browser command).
+1,800-second command limits (5,400 seconds for the complete browser command).
 A measured emulated run spent 21 minutes importing,
 27 minutes setting up the database and eight minutes migrating/bootstraping,
 then exceeded the former 600-second plan/apply command limit. The longer
@@ -33,15 +33,17 @@ requires a successful VM-creation probe before selecting it. Public progress
 contains fixed phase/operation names only; command output and journals remain
 private. A timeout is a failed acceptance, never a passing report.
 
-Software-emulated browser fixtures allow 180 seconds to launch Chromium and
-600 seconds for Firefox startup/initial page, 120 seconds for actions/navigation, and 60
-seconds for assertions/worker guards. An ARM trial completed Chromium's workflows
-but timed out in Firefox's startup stage, which previously covered both launch
-and initial page creation. These now have separate safe labels; a fresh
-persistent context reuses its initial blank page. Standard runs
-retain Playwright's normal 30-second action/launch and five-second assertion
-limits. Reports identify the timing mode. Required actions, TLS verification,
-connection controls are unchanged. Native control windows remain bounded at 20
+Software-emulated browser fixtures allow 180 seconds to launch Chromium,
+120 seconds for its actions/navigation, and 60 seconds for its assertions.
+Firefox allows 600 seconds for startup/initial page and actions/navigation,
+with 180-second assertions. Worker guards remain capped at 60 seconds. These
+functional waits accommodate measured slow emulated startup and rendering.
+Firefox reuses its initial blank page; startup and login steps have separate
+safe failure labels. The complete emulated browser command has a 90-minute cap
+within the three-hour workload cap. Standard runs retain Playwright's normal
+30-second action/launch and five-second assertion limits. Reports identify the
+timing mode. Required actions, TLS verification and connection controls remain
+mandatory. Native control windows remain bounded at 20
 seconds; TCG allows 120 seconds including emulated process startup, with
 60-second control command limits. The observer selects this budget from the
 root launcher's actual acceleration mode and records it in the report; input

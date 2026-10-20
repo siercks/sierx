@@ -28,6 +28,7 @@ def browser_failure_diagnostic(text):
     phases = {'launch','driver-policy','firefox-network-launch'} | {
         engine+'-'+stage for engine in ('chromium','firefox') for stage in (
             'launch','context-setup','new-page','login','create-project','edit-project','create-edit-transition-comment-link',
+            'login-navigation','login-fields','login-submit','login-ready',
             'create-item','edit-item','transition','comment','create-link-target','link',
             'search-reload-bootstrap','guard-controls','network-control')}
     errors = {'Error','TimeoutError','AssertionError','TypeError','ProtocolError','TargetClosedError'}

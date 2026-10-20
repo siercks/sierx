@@ -9,7 +9,7 @@ const { chromium, firefox } = await import('/opt/acceptance/node_modules/playwri
 const { expect: baseExpect } = await import('/opt/acceptance/node_modules/@playwright/test/index.mjs');
 assert([undefined, '0', '1'].includes(process.env.SIERX_TEST_EMULATED), 'Invalid fixture timing mode');
 const emulated = process.env.SIERX_TEST_EMULATED === '1';
-const expect = baseExpect.configure({ timeout: emulated ? 60000 : 5000 });
+const defaultExpect = baseExpect.configure({ timeout: emulated ? 60000 : 5000 });
 const launchTimeout = emulated ? 180000 : 30000;
 const firefoxLaunchTimeout = emulated ? 600000 : 30000;
 const base = process.env.SIERX_BASE_URL;
@@ -78,27 +78,32 @@ async function controls(context, state) {
       });
     } finally { worker.terminate(); URL.revokeObjectURL(source); }
   }, emulated ? 60000 : 5000);
-  await expect.poll(() => [...state.controls].sort()).toEqual(['document','document-ipv6', 'fetch', 'image', 'websocket']);
+  await defaultExpect.poll(() => [...state.controls].sort()).toEqual(['document','document-ipv6', 'fetch', 'image', 'websocket']);
   assert.equal(state.workers, 0, 'Service workers must not hide requests');
 }
 
 async function core(context, engine) {
+  const slowFirefox = emulated && engine === 'firefox';
+  const expect = baseExpect.configure({ timeout: slowFirefox ? 180000 : emulated ? 60000 : 5000 });
   phase = engine + '-context-setup';
   context.setDefaultTimeout(emulated && engine === 'firefox' ? firefoxLaunchTimeout : emulated ? 120000 : 30000);
-  context.setDefaultNavigationTimeout(emulated ? 120000 : 30000);
+  context.setDefaultNavigationTimeout(slowFirefox ? 600000 : emulated ? 120000 : 30000);
   const observation = await guard(context);
   phase = engine + '-new-page';
   // A fresh persistent Firefox profile already opens a blank page. Reuse it
   // instead of starting an unnecessary second renderer under emulation.
   const page = context.pages()[0] ?? await context.newPage();
-  context.setDefaultTimeout(emulated ? 120000 : 30000);
+  context.setDefaultTimeout(slowFirefox ? 600000 : emulated ? 120000 : 30000);
   const prefix = 'OF' + randomUUID().slice(0, 6).toUpperCase();
   const title = 'Offline browser ' + engine + ' ' + prefix;
-  phase = engine + '-login';
+  phase = engine + '-login-navigation';
   await page.goto(base + '/login');
+  phase = engine + '-login-fields';
   await page.getByLabel('Email', { exact: true }).fill(process.env.SIERX_BOOTSTRAP_ADMIN_EMAIL);
   await page.getByLabel('Password', { exact: true }).fill(process.env.SIERX_BOOTSTRAP_ADMIN_PASSWORD);
+  phase = engine + '-login-submit';
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  phase = engine + '-login-ready';
   await expect(page.getByRole('button', { name: 'Create item', exact: true })).toBeVisible();
   phase = engine + '-create-project';
   await page.getByRole('button', { name: 'Create project', exact: true }).click();
@@ -186,7 +191,7 @@ async function core(context, engine) {
 async function networkControl(browser, engine) {
   phase = engine + '-network-control';
   const context = await browser.newContext();
-  context.setDefaultTimeout(emulated ? 120000 : 30000);
+  context.setDefaultTimeout(emulated && engine === 'firefox' ? 600000 : emulated ? 120000 : 30000);
   const page = await context.newPage();
   const start = Date.now() / 1000;
   try {
