@@ -172,7 +172,15 @@ def validate_closeout(report,bundle,expected,suite_sha256):
     health=scenarios['failed_health']
     if set(health)!=flags or any(health[name] is not True for name in flags):
         raise ValueError('Failed health must restore the previous accepted release and data')
-    runtime=scenarios['runtime']
+    validate_runtime(scenarios['runtime'])
+    acquisition=scenarios['acquisition']
+    if (acquisition.get('result')!='passed' or acquisition.get('source')!='synthetic-loopback-registry'
+            or any(acquisition.get(name) is not True for name in ('opt_in','https_verified','empty_store','image_identity_verified'))
+            or any(type(acquisition.get(name)) is not int or acquisition[name]<1 for name in ('manifest_requests','blob_requests'))):
+        raise ValueError('Missing explicit trusted HTTPS acquisition control')
+
+
+def validate_runtime(runtime):
     elapsed=runtime.get('elapsed_seconds')
     if (type(runtime.get('seconds')) is not int or not 120<=runtime['seconds']<=180
             or type(elapsed) not in {int,float} or not math.isfinite(elapsed) or not 120<=elapsed<=180
@@ -187,8 +195,20 @@ def validate_closeout(report,bundle,expected,suite_sha256):
             raise ValueError('Invalid runtime unit inventory or an unsolicited acquisition timer')
     if not {'sierx.service','sierx-caddy.service','sierx-postgres.service'}.issubset(runtime['services']):
         raise ValueError('Runtime inventory omits actual installed services')
-    acquisition=scenarios['acquisition']
-    if (acquisition.get('result')!='passed' or acquisition.get('source')!='synthetic-loopback-registry'
-            or any(acquisition.get(name) is not True for name in ('opt_in','https_verified','empty_store','image_identity_verified'))
-            or any(type(acquisition.get(name)) is not int or acquisition[name]<1 for name in ('manifest_requests','blob_requests'))):
-        raise ValueError('Missing explicit trusted HTTPS acquisition control')
+
+
+def validate_runtime_probe(report,bundle,expected,suite_sha256):
+    if (report.get('schema')!=1 or report.get('suite')!='offline-runtime-probe-v1'
+            or report.get('coverage')!='runtime-probe' or report.get('result')!='passed'
+            or report.get('suite_sha256')!=suite_sha256 or report.get('arch')!=bundle['arch']
+            or report.get('release')!=bundle['release'] or report.get('bundle_sha256')!=expected
+            or report.get('virtual_cpu') not in {'tcg','kvm'}
+            or type(report.get('virtual_cpus')) is not int
+            or report['virtual_cpus']!=(4 if report['virtual_cpu']=='tcg' else 2)
+            or type(report.get('lifecycle_check_timeout_seconds')) is not int
+            or report['lifecycle_check_timeout_seconds']!=(10 if report['virtual_cpu']=='tcg' else 1)
+            or not re.fullmatch(r'(?:ubuntu-24\.04|rocky-10(?:\.[0-9]+)?)',report.get('profile',''))
+            or any(not re.fullmatch(r'[a-f0-9]{64}',report.get(name,''))
+                   for name in ('rootfs_sha256','kernel_sha256','archive_sha256'))):
+        raise ValueError('Incomplete or mismatched development runtime probe')
+    validate_runtime(report.get('runtime',{}))

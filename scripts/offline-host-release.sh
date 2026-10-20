@@ -34,20 +34,27 @@ PY
   prepare)
     bash scripts/offline-host-prepare.sh "$profile"
     ;;
-  test)
+  test|runtime-probe)
     rootfs=$PWD/dist/host-fixture-$profile-$arch.tar
     rootfs_hash=$(cut -d ' ' -f1 "$rootfs.sha256")
     bundle_hash=$(sha256sum "$bundle/bundle.lock.json" | cut -d ' ' -f1)
     archive_hash=$(cut -d ' ' -f1 "dist/sierx-offline-$arch.tar.gz.sha256")
-    previous_hash=$(python3 -B -c 'import json,sys; print(json.load(open("deploy/ci/previous-offline-release.json"))["architectures"][sys.argv[1]]["bundle_sha256"])' "$arch")
+    extra=()
+    report=$PWD/dist/host-acceptance-$profile-$arch.json
+    if [[ $1 == runtime-probe ]]; then
+      extra+=(--development --runtime-probe)
+      report=$PWD/dist/runtime-probe-$profile-$arch.json
+    else
+      previous_hash=$(python3 -B -c 'import json,sys; print(json.load(open("deploy/ci/previous-offline-release.json"))["architectures"][sys.argv[1]]["bundle_sha256"])' "$arch")
+      extra+=(--previous-bundle "$PWD/dist/previous/sierx-offline-$arch" --previous-sha256 "$previous_hash"
+        --previous-evidence "$PWD/dist/previous/offline-acceptance-$arch.json")
+    fi
     python3 -B scripts/offline-host-evidence.py receipt --profile "$profile"
     sudo env PATH="$PATH" python3 -B scripts/offline-host.py \
       --bundle "$bundle" --expected-sha256 "$bundle_hash" \
       --archive "$PWD/dist/sierx-offline-$arch.tar.gz" --archive-sha256 "$archive_hash" \
       --rootfs "$rootfs" --rootfs-sha256 "$rootfs_hash" \
-      --previous-bundle "$PWD/dist/previous/sierx-offline-$arch" --previous-sha256 "$previous_hash" \
-      --previous-evidence "$PWD/dist/previous/offline-acceptance-$arch.json" \
-      --report "$PWD/dist/host-acceptance-$profile-$arch.json"
+      "${extra[@]}" --report "$report"
     ;;
-  *) echo 'Usage: offline-host-release.sh local|previous|prepare|test' >&2; exit 1 ;;
+  *) echo 'Usage: offline-host-release.sh local|previous|prepare|test|runtime-probe' >&2; exit 1 ;;
 esac

@@ -210,6 +210,17 @@ replays only that disposable disk's journal before reading evidence.
 It records limited development coverage and cannot satisfy promotion. Keep
 actual exact-candidate/native-profile results distinct from such probes.
 
+For a runtime/timer failure, manually dispatch `offline-delivery` with
+`runtime_probe=true`, or use `make probe-offline-runtime` after preparation.
+This performs the same real installation, restart, runtime observation and
+timer checks while omitting browsers and release-switching scenarios. It
+requires `--development --runtime-probe`, writes a separately named
+`runtime-probe-<profile>-<arch>.json`, and has no **Offline delivery** aggregate.
+Its distinct schema/coverage is rejected by promotion even if renamed.
+PR checks and reusable release calls always run the complete closeout suite.
+Fixed runtime substage names and numeric command exit codes aid diagnosis;
+arguments, output, credentials and journals remain private.
+
 Actual testbed reboot, SELinux/operator-profile acceptance, off-machine physical
 recovery, independent journal/checkpoint custody, chosen-hardware performance,
 phone/screen-reader review and owner real-use/sign-off remain separate records.

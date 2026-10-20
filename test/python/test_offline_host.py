@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +22,23 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_runtime_probe_cannot_be_requested_as_closeout_or_satisfy_it(self):
+        with self.assertRaisesRegex(ValueError,'require --development'):
+            host.main(SimpleNamespace(runtime_probe=True,development=False))
+        previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
+        probe={key:report[key] for key in ('result','suite_sha256','profile','arch','release','bundle_sha256',
+               'virtual_cpus','lifecycle_check_timeout_seconds','virtual_cpu','rootfs_sha256','kernel_sha256','archive_sha256')}
+        probe.update(schema=1,suite='offline-runtime-probe-v1',coverage='runtime-probe',runtime=report['scenarios']['runtime'])
+        evidence.validate_runtime_probe(probe,self.bundle,'d'*64,'c'*64)
+        with self.assertRaises(ValueError):evidence.validate_closeout(probe,self.bundle,'d'*64,'c'*64)
+        for key,value in (('coverage','closeout'),('release',{}),('suite_sha256','e'*64),('virtual_cpu','tcg')):
+            with self.subTest(key=key),self.assertRaises(ValueError):
+                evidence.validate_runtime_probe({**probe,key:value},self.bundle,'d'*64,'c'*64)
+        broken=copy.deepcopy(probe)
+        broken['runtime']['maintenance_timer_triggered']=False
+        with self.assertRaises(ValueError):evidence.validate_runtime_probe(broken,self.bundle,'d'*64,'c'*64)
+
     def test_closeout_timing_budgets_must_match_actual_acceleration(self):
         previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
         report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)

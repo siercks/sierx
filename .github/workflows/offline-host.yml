@@ -6,6 +6,11 @@ on:
     branches: ["codex/**"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      runtime_probe:
+        description: Development runtime/timer probe only; cannot satisfy closeout
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       staged:
@@ -34,7 +39,7 @@ jobs:
   host:
     needs: scope
     if: needs.scope.outputs.required == 'true'
-    name: host (${{ matrix.profile }}, ${{ matrix.arch }})
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_probe && 'runtime probe' || 'host' }} (${{ matrix.profile }}, ${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
@@ -90,25 +95,38 @@ jobs:
         if: ${{ inputs.staged }}
         run: make offline-current-unpack
       - name: Acquire the explicitly retained approved release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
         run: make offline-previous-prepare
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Prepare OS, browser and observer dependencies before isolation
         run: make offline-host-prepare
       - name: Exercise real rootless services in a booted VM with no network device
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
         run: make gate-offline-host
+      - name: Diagnose only runtime and timers in the real isolated guest
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_probe }}
+        run: make probe-offline-runtime
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
         with:
           name: host-evidence-${{ matrix.profile }}-${{ matrix.arch }}
           path: |
             dist/host-input-${{ matrix.profile }}-${{ matrix.arch }}.json
             dist/host-acceptance-${{ matrix.profile }}-${{ matrix.arch }}.json
           if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.runtime_probe }}
+        with:
+          name: development-runtime-probe-${{ matrix.profile }}-${{ matrix.arch }}
+          path: dist/runtime-probe-${{ matrix.profile }}-${{ matrix.arch }}.json
+          if-no-files-found: ignore
 
   aggregate:
     name: Offline delivery
-    if: always()
+    # A development dispatch has no closeout aggregate. Release calls and PRs
+    # always retain the full three-profile gate and all scenario requirements.
+    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
     needs: [scope, host]
     runs-on: ubuntu-24.04
     steps:

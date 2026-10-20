@@ -71,7 +71,9 @@ def run(*args, env=None):
                                 timeout=timeout)
         log.write(result.stdout)
     if result.returncode:
-        raise RuntimeError('Fixture command failed in ' + PHASE)
+        error=RuntimeError('Fixture command failed in ' + PHASE)
+        error.fixture_exit_code=result.returncode
+        raise error
     return result.stdout.decode().strip()
 
 
@@ -215,6 +217,19 @@ def main():
         raise RuntimeError('HTTPS did not recover after real user-service restart')
     require(before == after, 'Item changed after real service restart')
     lock = json.loads((BUNDLE / 'bundle.lock.json').read_text())
+    if OPTIONS.get('runtime_probe'):
+        require(not OPTIONS['closeout'],'Runtime probes cannot produce closeout evidence')
+        spec=importlib.util.spec_from_file_location('host_scenarios','/opt/acceptance/tests/offline-host-scenarios.py')
+        scenario=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(scenario)
+        phase('bounded-runtime')
+        runtime=scenario.runtime(BUNDLE,OPTIONS['soak_seconds'],ENV,run,LOG,request,phase)
+        return {'schema':1,'suite':'offline-runtime-probe-v1','coverage':'runtime-probe',
+                'result':'passed','suite_sha256':OPTIONS['suite_sha256'],
+                'profile':profile['ID']+'-'+profile['VERSION_ID'],'arch':lock['arch'],
+                'release':lock['release'],'bundle_sha256':OPTIONS['bundle_sha256'],
+                'virtual_cpus':os.cpu_count(),'lifecycle_check_timeout_seconds':timeout_seconds,
+                'runtime':runtime}
     phase('network-negative-controls')
     spec = importlib.util.spec_from_file_location('network_controls', '/opt/acceptance/tests/offline-network-controls.py')
     controls = importlib.util.module_from_spec(spec)
@@ -247,7 +262,7 @@ def main():
         scenarios['failed_health']=scenario.failed_health(BUNDLE,ENV,operation,run,LOG)
         phase('bounded-runtime')
         request('/api/v1/auth/login',{'email':'offline@example.test','password':password})
-        scenarios['runtime']=scenario.runtime(BUNDLE,OPTIONS['soak_seconds'],ENV,run,LOG,request)
+        scenarios['runtime']=scenario.runtime(BUNDLE,OPTIONS['soak_seconds'],ENV,run,LOG,request,phase)
         phase('explicit-opt-in-acquisition')
         spec=importlib.util.spec_from_file_location('registry','/opt/acceptance/tests/offline-local-registry.py')
         registry=importlib.util.module_from_spec(spec)
@@ -287,6 +302,8 @@ if __name__ == '__main__':
         with LOG.open('a') as log:
             log.write('\nFailed phase: ' + PHASE + '\n' + type(error).__name__ + ': ' + str(error) + '\n')
         result = {'result':'failed','phase':PHASE,'failure_type':type(error).__name__}
+        code=getattr(error,'fixture_exit_code',None)
+        if type(code) is int and -128<=code<=255:result['command_exit_code']=code
         for name in ('sierx-postgres.service','sierx.service','sierx-caddy.service'):
             with LOG.open('ab') as log:
                 try:

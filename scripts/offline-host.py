@@ -177,7 +177,8 @@ After=basic.target
 ''')
     options = {'bundle_sha256': args.expected_sha256, 'previous_sha256': args.previous_sha256,
                'soak_seconds': args.soak_seconds, 'suite_sha256': args.suite_sha256,
-               'closeout':not args.development,'virtual_cpu':args.virtual_cpu}
+               'closeout':not args.development,'virtual_cpu':args.virtual_cpu,
+               'runtime_probe':getattr(args,'runtime_probe',False)}
     (home / 'options.json').write_text(json.dumps(options))
     os.chown(home / 'options.json', 1001, 1001)
 
@@ -235,6 +236,8 @@ def recover_disk(disk):
 
 
 def main(args):
+    if getattr(args,'runtime_probe',False) and not args.development:
+        raise ValueError('Runtime probes require --development and cannot satisfy promotion')
     args.suite_sha256 = suite_digest()
     report = Path(args.report).absolute()
     report.unlink(missing_ok=True)
@@ -380,9 +383,19 @@ def main(args):
                 elif failed_phase.startswith('negative-'):
                     detail = evidence.control_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
                 suffix = '; detail '+detail if detail else ''
+                code=result.get('command_exit_code')
+                if type(code) is int and -128<=code<=255:suffix+='; command-exit='+str(code)
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             if result.get('virtual_cpus') != (4 if mode=='tcg' else 2):
                 raise ValueError('Guest CPU count differs from its declared emulation profile')
+            if getattr(args,'runtime_probe',False):
+                result.update(virtual_cpu=mode,rootfs_sha256=args.rootfs_sha256,
+                              archive_sha256=args.archive_sha256,kernel_sha256=kernel_digest)
+                evidence.validate_runtime_probe(result,data,args.expected_sha256,args.suite_sha256)
+                report.write_text(json.dumps(result,indent=2)+'\n')
+                report.chmod(0o644)
+                print('offline-host: development runtime probe passed; no closeout claim',flush=True)
+                return
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             trace = (disk_file(disk,'manager.trace') + disk_file(disk,'installer.trace')).decode()
             observation = network_observer.summarize(trace.splitlines(),
@@ -428,6 +441,7 @@ if __name__ == '__main__':
     parser.add_argument('--previous-sha256')
     parser.add_argument('--previous-evidence')
     parser.add_argument('--development',action='store_true',help='Limited fixture development; never valid for promotion')
+    parser.add_argument('--runtime-probe',action='store_true',help='Development-only runtime/timer diagnosis; omits closeout scenarios')
     parser.add_argument('--soak-seconds', type=int, default=120)
     parser.add_argument('--acceleration', choices=('auto', 'kvm', 'tcg'), default='auto')
     try:

@@ -193,9 +193,12 @@ def failed_health(bundle, env, operation, run, log):
     raise ValueError('Previous release did not recover automatically after failed health')
 
 
-def runtime(bundle, seconds, env, run, log, request):
+def runtime(bundle, seconds, env, run, log, request, progress=None):
     if not 120 <= seconds <= 180:
         raise ValueError('Runtime observation must last between 120 and 180 seconds')
+    def step(name):
+        if progress is not None:progress('runtime-'+name)
+    step('reject-implicit-timers')
     # The real timer installer must reject every implicit offline schedule.
     for mode in ('install-timer','install-backup-timer','install-maintenance-timer','install-restore-timer','install-lifecycle-timer'):
         rejection(['python3','-B',bundle/'scripts/deploy.py',mode],env,log)
@@ -211,8 +214,11 @@ OnActiveSec=2s
 AccuracySec=100ms
 Unit=sierx-maintenance.service
 ''')
+    step('reload-units')
     run('systemctl','--user','daemon-reload')
+    step('start-timer')
     run('systemctl','--user','start','sierx-acceptance-maintenance.timer')
+    step('observe')
     started = time.monotonic()
     polls = 0
     while time.monotonic()-started < seconds:
@@ -220,13 +226,17 @@ Unit=sierx-maintenance.service
         request('/api/v1/changes?since_seq=0')
         polls += 1
         time.sleep(5)
+    step('verify-maintenance')
     if run('systemctl','--user','show','sierx-maintenance.service','--property=Result','--value') != 'success':
         raise ValueError('Accelerated local maintenance failed')
     timestamp = run('systemctl','--user','show','sierx-maintenance.service','--property=ExecMainStartTimestampMonotonic','--value')
     if timestamp == '0':
         raise ValueError('Accelerated timer never triggered the shipped service')
+    step('inventory-services')
     services = json.loads(run('systemctl','--user','list-units','--all','--type=service','--output=json','--no-pager'))
+    step('inventory-timers')
     timers = json.loads(run('systemctl','--user','list-timers','--all','--output=json','--no-pager'))
+    step('inventory-enabled')
     enabled = run('systemctl','--user','list-unit-files','--state=enabled','--no-legend','--no-pager')
     if 'sierx-pull.timer' in enabled:
         raise ValueError('An automatic acquisition timer was enabled offline')

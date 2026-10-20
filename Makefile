@@ -392,7 +392,7 @@ release-offline-archive: ## Archive only a bundle with matching native acceptanc
 release-offline-evidence: ## Require both native offline bundles to pass before release promotion
 	@python3 -B scripts/offline-promotion.py verify --repository "$(or $(SIERX_RELEASE_REPOSITORY),ghcr.io/siercks/sierx)" --revision "$(shell git rev-parse HEAD)"
 
-.PHONY: offline-candidate-prepare offline-previous-prepare offline-host-prepare gate-offline-host prove-offline-host
+.PHONY: offline-candidate-prepare offline-previous-prepare offline-host-prepare gate-offline-host probe-offline-runtime prove-offline-host
 offline-candidate-prepare: ## Assemble an exact local native candidate without registry publication
 	@bash scripts/offline-host-release.sh local
 offline-previous-prepare: ## Acquire and verify the explicitly retained approved native release
@@ -401,6 +401,8 @@ offline-host-prepare: ## Connected acquisition of a disposable test OS and brows
 	@bash scripts/offline-host-release.sh prepare
 gate-offline-host: ## Real rootless installer, delivered browsers and observed offline runtime in a no-NIC VM
 	@bash scripts/offline-host-release.sh test
+probe-offline-runtime: ## Development-only runtime/timer diagnosis; never closeout or promotion evidence
+	@bash scripts/offline-host-release.sh runtime-probe
 prove-offline-host: ## Reject stale/incomplete reports, opaque traffic and altered delivery fixtures
 	@python3 -B -m unittest discover -s test/python -p test_offline_host.py
 	@python3 -B -m unittest discover -s test/python -p test_network_observer.py
