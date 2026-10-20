@@ -226,21 +226,36 @@ Unit=sierx-maintenance.service
         request('/api/v1/changes?since_seq=0')
         polls += 1
         time.sleep(5)
+    # Inventory is a separate verification phase, not additional observation.
+    # Under TCG, ListUnitFiles can exceed sd-bus's default reply deadline.
+    elapsed=round(time.monotonic()-started,3)
+    inventory_started=time.monotonic()
     step('verify-maintenance')
-    if run('systemctl','--user','show','sierx-maintenance.service','--property=Result','--value') != 'success':
+    state=dict(line.split('=',1) for line in run('systemctl','--user','show','sierx-maintenance.service',
+        '--property=Result,ActiveState,ExecMainStatus,ExecMainStartTimestampMonotonic','--no-pager').splitlines() if '=' in line)
+    if (state.get('Result')!='success' or state.get('ActiveState')!='inactive'
+            or state.get('ExecMainStatus')!='0'):
         raise ValueError('Accelerated local maintenance failed')
-    timestamp = run('systemctl','--user','show','sierx-maintenance.service','--property=ExecMainStartTimestampMonotonic','--value')
-    if timestamp == '0':
+    timestamp=state.get('ExecMainStartTimestampMonotonic','')
+    if not timestamp.isdigit() or int(timestamp)==0:
         raise ValueError('Accelerated timer never triggered the shipped service')
     step('inventory-services')
     services = json.loads(run('systemctl','--user','list-units','--all','--type=service','--output=json','--no-pager'))
     step('inventory-timers')
     timers = json.loads(run('systemctl','--user','list-timers','--all','--output=json','--no-pager'))
     step('inventory-enabled')
-    enabled = run('systemctl','--user','list-unit-files','--state=enabled','--no-legend','--no-pager')
+    emulated=env.get('SIERX_TEST_EMULATED')=='1'
+    inventory_env={**env}
+    inventory_env.pop('SYSTEMD_BUS_TIMEOUT',None)
+    if emulated:inventory_env['SYSTEMD_BUS_TIMEOUT']='180s'
+    enabled_started=time.monotonic()
+    enabled = run('systemctl','--user','list-unit-files','--state=enabled','--no-legend','--no-pager',env=inventory_env)
+    enabled_elapsed=round(time.monotonic()-enabled_started,3)
     if 'sierx-pull.timer' in enabled:
         raise ValueError('An automatic acquisition timer was enabled offline')
-    return {'seconds':seconds,'elapsed_seconds':round(time.monotonic()-started,3),'change_feed_polls':polls,'maintenance_timer_triggered':True,
+    return {'seconds':seconds,'elapsed_seconds':elapsed,'change_feed_polls':polls,'maintenance_timer_triggered':True,
+            'maintenance_completed':True,'inventory_seconds':round(time.monotonic()-inventory_started,3),
+            'unit_file_inventory_seconds':enabled_elapsed,'unit_file_bus_timeout_seconds':180 if emulated else 0,
             'offline_timer_modes_rejected':5,
             'services':sorted(entry['unit'] for entry in services),
             'timers':sorted(entry['unit'] for entry in timers),

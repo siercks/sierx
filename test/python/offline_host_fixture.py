@@ -26,6 +26,7 @@ def full_host_report(bundle,expected,suite,profile,previous):
             'failed_health':{name:True for name in ('rejected','candidate_started','candidate_health_failed',
                 'accepted_revision_preserved','configuration_restored','data_preserved')},
             'runtime':{'seconds':120,'elapsed_seconds':120.5,'change_feed_polls':24,'maintenance_timer_triggered':True,
+                'maintenance_completed':True,'inventory_seconds':1.0,'unit_file_inventory_seconds':0.5,'unit_file_bus_timeout_seconds':0,
                 'offline_timer_modes_rejected':5,'services':['sierx.service','sierx-caddy.service','sierx-postgres.service'],
                 'timers':['sierx-acceptance-maintenance.timer'],'enabled_units':[]},
             'acquisition':{'result':'passed','opt_in':True,'source':'synthetic-loopback-registry','https_verified':True,

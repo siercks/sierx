@@ -42,6 +42,19 @@ the actual container setting, records `lifecycle_check_timeout_seconds`, and
 rejects reports that differ from the native/emulated profile. Delivered native
 image acceptance and both KVM profiles exercise the default one-second setting.
 
+Runtime observation still requires 120–180 seconds of successful health/change
+polling and at least three polls. Inventory time is measured separately, so a
+slow metadata query cannot substitute for observation. The maintenance timer
+must have triggered and its oneshot must have completed successfully. The
+emulated enabled-unit inventory uses a bounded 180-second
+[`SYSTEMD_BUS_TIMEOUT`](https://github.com/systemd/systemd/blob/v255/docs/ENVIRONMENT.md)
+for that single read-only query after ARM probes failed there after about 28
+seconds. Native queries retain the system default. Reports record this selected
+deadline, the enabled-unit query time and the total inventory time; promotion
+requires the mode-correct deadline and bounds inventory to 60 seconds on KVM or
+360 on TCG. The full workload, observation interval and required inventories
+are unchanged. This setting does not alter shipped services or production.
+
 The GitHub ARM preparer runs on `ubuntu-26.04-arm` for its newer host QEMU;
 the isolated accepted guest remains Ubuntu 24.04 with its own recorded kernel
 and rootfs hashes. Preparation attempts to load KVM, and the launcher still
@@ -217,6 +230,8 @@ timer checks while omitting browsers and release-switching scenarios. It
 requires `--development --runtime-probe`, writes a separately named
 `runtime-probe-<profile>-<arch>.json`, and has no **Offline delivery** aggregate.
 Its distinct schema/coverage is rejected by promotion even if renamed.
+The skipped diagnostic aggregate also uses a separate check name because
+[GitHub treats skipped checks as successful](https://docs.github.com/en/pull-requests/reference/status-checks).
 PR checks and reusable release calls always run the complete closeout suite.
 Fixed runtime substage names and numeric command exit codes aid diagnosis;
 arguments, output, credentials and journals remain private.

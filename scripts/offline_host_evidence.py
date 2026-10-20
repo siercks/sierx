@@ -172,7 +172,7 @@ def validate_closeout(report,bundle,expected,suite_sha256):
     health=scenarios['failed_health']
     if set(health)!=flags or any(health[name] is not True for name in flags):
         raise ValueError('Failed health must restore the previous accepted release and data')
-    validate_runtime(scenarios['runtime'])
+    validate_runtime(scenarios['runtime'],emulated=emulated)
     acquisition=scenarios['acquisition']
     if (acquisition.get('result')!='passed' or acquisition.get('source')!='synthetic-loopback-registry'
             or any(acquisition.get(name) is not True for name in ('opt_in','https_verified','empty_store','image_identity_verified'))
@@ -180,13 +180,23 @@ def validate_closeout(report,bundle,expected,suite_sha256):
         raise ValueError('Missing explicit trusted HTTPS acquisition control')
 
 
-def validate_runtime(runtime):
+def validate_runtime(runtime,emulated=False):
     elapsed=runtime.get('elapsed_seconds')
     if (type(runtime.get('seconds')) is not int or not 120<=runtime['seconds']<=180
             or type(elapsed) not in {int,float} or not math.isfinite(elapsed) or not 120<=elapsed<=180
             or type(runtime.get('change_feed_polls')) is not int or runtime['change_feed_polls']<3
-            or runtime.get('maintenance_timer_triggered') is not True or runtime.get('offline_timer_modes_rejected')!=5):
+            or runtime.get('maintenance_timer_triggered') is not True or runtime.get('maintenance_completed') is not True
+            or runtime.get('offline_timer_modes_rejected')!=5):
         raise ValueError('Bounded runtime and actual timer-trigger evidence is missing')
+    if (type(runtime.get('unit_file_bus_timeout_seconds')) is not int
+            or runtime['unit_file_bus_timeout_seconds']!=(180 if emulated else 0)):
+        raise ValueError('Runtime inventory reply deadline differs from the actual acceleration mode')
+    for name in ('inventory_seconds','unit_file_inventory_seconds'):
+        duration=runtime.get(name)
+        if type(duration) not in {int,float} or not math.isfinite(duration) or not 0<=duration<=(360 if emulated else 60):
+            raise ValueError('Missing bounded runtime inventory timing')
+    if runtime['unit_file_inventory_seconds']>runtime['inventory_seconds']:
+        raise ValueError('Unit-file timing exceeds its enclosing inventory interval')
     for name in ('services','timers','enabled_units'):
         units=runtime.get(name)
         if (not isinstance(units,list) or len(units)>512
@@ -211,4 +221,4 @@ def validate_runtime_probe(report,bundle,expected,suite_sha256):
             or any(not re.fullmatch(r'[a-f0-9]{64}',report.get(name,''))
                    for name in ('rootfs_sha256','kernel_sha256','archive_sha256'))):
         raise ValueError('Incomplete or mismatched development runtime probe')
-    validate_runtime(report.get('runtime',{}))
+    validate_runtime(report.get('runtime',{}),emulated=report['virtual_cpu']=='tcg')

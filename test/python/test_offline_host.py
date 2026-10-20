@@ -46,6 +46,7 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='tcg'
+        report['scenarios']['runtime']['unit_file_bus_timeout_seconds']=180
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['browser']['driver']['timing_mode']='software-emulation'
@@ -55,6 +56,7 @@ class EvidenceTests(unittest.TestCase):
         report['browser']['driver']['recovery_read_retries']=2
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='kvm'
+        report['scenarios']['runtime']['unit_file_bus_timeout_seconds']=0
         report['virtual_cpus']=2
         report['lifecycle_check_timeout_seconds']=1
         report['network']['control_interval_limit_seconds']=20
@@ -62,6 +64,7 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='tcg'
+        report['scenarios']['runtime']['unit_file_bus_timeout_seconds']=180
         report['virtual_cpus']=4
         report['lifecycle_check_timeout_seconds']=10
         report['browser']['driver']['timing_mode']='software-emulation'
@@ -85,6 +88,7 @@ class EvidenceTests(unittest.TestCase):
             with self.subTest(count=count),self.assertRaises(ValueError):
                 evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='tcg'
+        report['scenarios']['runtime']['unit_file_bus_timeout_seconds']=180
         report['browser']['driver']['timing_mode']='software-emulation'
         report['network']['control_interval_limit_seconds']=120
         with self.assertRaises(ValueError):
@@ -102,6 +106,7 @@ class EvidenceTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(ValueError):
                 evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='tcg'
+        report['scenarios']['runtime']['unit_file_bus_timeout_seconds']=180
         report['virtual_cpus']=4
         report['browser']['driver']['timing_mode']='software-emulation'
         report['network']['control_interval_limit_seconds']=120

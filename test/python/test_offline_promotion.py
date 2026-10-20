@@ -174,7 +174,14 @@ class OfflinePromotionTests(unittest.TestCase):
         self.assertIn('uses: ./.github/workflows/offline-host.yml',workflow)
         self.assertIn('pattern: host-evidence-*',workflow)
         host_workflow=(ROOT/'.github/workflows/offline-host.yml').read_text()
-        self.assertIn('name: Offline delivery',host_workflow)
+        aggregate=host_workflow.split('\n  aggregate:\n',1)[1]
+        probe="github.event_name == 'workflow_dispatch' && inputs.runtime_probe"
+        # A skipped diagnostic check must not share the protected check's name.
+        self.assertIn("name: ${{ "+probe+" && 'Development runtime probe (no closeout)' || 'Offline delivery' }}",aggregate)
+        self.assertIn('if: ${{ always() && !('+probe+') }}',aggregate)
+        # Reusable release calls expose only the staged-candidate option.
+        call=host_workflow.split('  workflow_call:\n',1)[1].split('\npermissions:',1)[0]
+        self.assertNotIn('runtime_probe',call)
         self.assertIn('make offline-host-aggregate',host_workflow)
         self.assertIn('profile: rocky10',host_workflow)
         self.assertIn('runner: ubuntu-26.04-arm\n            profile: ubuntu24\n            arch: arm64',host_workflow)
