@@ -371,7 +371,11 @@ def main(args):
                 failure_type=result.get('failure_type','unknown')
                 if failure_type not in {'TimeoutExpired','ValueError','RuntimeError','PermissionError','FileNotFoundError'}:
                     failure_type='unknown'
-                raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+'); inspect private diagnostics')
+                detail = None
+                if failed_phase == 'delivered-browser-workflows':
+                    detail = evidence.browser_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
+                suffix = '; browser '+detail if detail else ''
+                raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             trace = (disk_file(disk,'manager.trace') + disk_file(disk,'installer.trace')).decode()
             observation = network_observer.summarize(trace.splitlines(),

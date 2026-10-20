@@ -163,6 +163,7 @@ def main():
     (tls / 'server.key').chmod(0o600)
     ENV['SSL_CERT_FILE'] = str(ca/'ca.crt')
     ENV['SIERX_TEST_SERVER_CERT']=str(tls/'server.crt')
+    ENV['SIERX_TEST_EMULATED']='1' if OPTIONS['virtual_cpu']=='tcg' else '0'
     ENV['NODE_EXTRA_CA_CERTS'] = ENV['SSL_CERT_FILE']
     app = {key: ENV[key] for key in ('SIERX_ENV','SIERX_AUTH_MODE','SIERX_BASE_URL',
         'SIERX_LISTEN_ADDR','SIERX_SESSION_KEY','SIERX_RUNTIME_DATABASE_URL','SIERX_AUTH_DATABASE_URL')}
@@ -220,7 +221,7 @@ def main():
              '--property=SystemCallErrorNumber=ENOSYS',
              '--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK']
     for name in ('HOME','PATH','PLAYWRIGHT_BROWSERS_PATH','SIERX_BASE_URL','SSL_CERT_FILE','NODE_EXTRA_CA_CERTS',
-                 'SIERX_BOOTSTRAP_ADMIN_EMAIL','SIERX_BOOTSTRAP_ADMIN_PASSWORD','SIERX_TEST_SERVER_CERT'):
+                 'SIERX_BOOTSTRAP_ADMIN_EMAIL','SIERX_BOOTSTRAP_ADMIN_PASSWORD','SIERX_TEST_SERVER_CERT','SIERX_TEST_EMULATED'):
         command.append('--setenv='+name+'='+ENV[name])
     browser = json.loads(run(*command,'/usr/local/bin/node','/opt/acceptance/tests/offline-browser.mjs'))
     evidence.validate_browser(browser)

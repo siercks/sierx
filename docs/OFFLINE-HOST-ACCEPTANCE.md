@@ -32,6 +32,14 @@ requires a successful VM-creation probe before selecting it. Public progress
 contains fixed phase/operation names only; command output and journals remain
 private. A timeout is a failed acceptance, never a passing report.
 
+Software-emulated browser fixtures allow 180 seconds to launch, 120 seconds for
+actions/navigation, and 60 seconds for assertions/worker guards. Standard runs
+retain Playwright's normal 30-second action/launch and five-second assertion
+limits. Reports identify the timing mode. Required actions, TLS verification,
+connection controls and their bounded observation windows are unchanged.
+Failures publish only allowlisted browser stage/exception labels extracted from
+private diagnostics; credentials, work content and exception messages stay private.
+
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64
 software virtualization. The guest verifies the actual selected driver. The

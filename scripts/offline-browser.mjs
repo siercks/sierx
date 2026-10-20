@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 const { chromium, firefox } = await import('/opt/acceptance/node_modules/playwright/index.mjs');
-const { expect } = await import('/opt/acceptance/node_modules/@playwright/test/index.mjs');
+const { expect: baseExpect } = await import('/opt/acceptance/node_modules/@playwright/test/index.mjs');
+assert([undefined, '0', '1'].includes(process.env.SIERX_TEST_EMULATED), 'Invalid fixture timing mode');
+const emulated = process.env.SIERX_TEST_EMULATED === '1';
+const expect = baseExpect.configure({ timeout: emulated ? 60000 : 5000 });
+const launchTimeout = emulated ? 180000 : 30000;
 const base = process.env.SIERX_BASE_URL;
 const certificate = process.env.SSL_CERT_FILE;
 const serverCertificate = process.env.SIERX_TEST_SERVER_CERT;
@@ -56,22 +60,24 @@ async function controls(context, state) {
   const blank = await context.newPage();
   await blank.setContent('<img src="https://192.0.2.10/blocked-image">');
   await blank.evaluate(() => { const socket = new WebSocket('ws://192.0.2.10:18181/blocked-socket'); socket.onerror = () => {}; });
-  await blank.evaluate(async () => {
+  await blank.evaluate(async (controlTimeout) => {
     const source = URL.createObjectURL(new Blob(["fetch('https://192.0.2.10/blocked-worker').then(() => postMessage('unexpected')).catch(() => postMessage('blocked'))"], { type: 'text/javascript' }));
     const worker = new Worker(source);
     try {
       await new Promise((resolve, reject) => {
-        const deadline = setTimeout(() => reject(new Error('Worker control timed out')), 5000);
+        const deadline = setTimeout(() => reject(new Error('Worker control timed out')), controlTimeout);
         worker.onmessage = (event) => { clearTimeout(deadline); event.data === 'blocked' ? resolve() : reject(new Error('Worker fetch escaped the guard')); };
         worker.onerror = () => { clearTimeout(deadline); reject(new Error('Worker control did not execute')); };
       });
     } finally { worker.terminate(); URL.revokeObjectURL(source); }
-  });
+  }, emulated ? 60000 : 5000);
   await expect.poll(() => [...state.controls].sort()).toEqual(['document','document-ipv6', 'fetch', 'image', 'websocket']);
   assert.equal(state.workers, 0, 'Service workers must not hide requests');
 }
 
 async function core(context, engine) {
+  context.setDefaultTimeout(emulated ? 120000 : 30000);
+  context.setDefaultNavigationTimeout(emulated ? 120000 : 30000);
   const observation = await guard(context);
   const page = await context.newPage();
   const prefix = 'OF' + randomUUID().slice(0, 6).toUpperCase();
@@ -148,6 +154,7 @@ async function core(context, engine) {
   assert.deepEqual(waterfall, [], 'First useful content depended on a serialized API request');
   await page.unroute('**/api/v1/**');
   assert.deepEqual(observation.external, [], 'Default workflow attempted a third-party request');
+  phase = engine + '-guard-controls';
   await controls(context, observation);
   return { engine, version: context.browser().version(), external_requests: 0, service_workers: 0,
            tls: engine === 'chromium' ? 'leaf-spki-pin' : 'fixture-ca-nss',
@@ -156,7 +163,9 @@ async function core(context, engine) {
 }
 
 async function networkControl(browser, engine) {
+  phase = engine + '-network-control';
   const context = await browser.newContext();
+  context.setDefaultTimeout(emulated ? 120000 : 30000);
   const page = await context.newPage();
   const start = Date.now() / 1000;
   try {
@@ -206,23 +215,26 @@ async function main() {
   assert.equal(leaf.checkHost(new URL(base).hostname), new URL(base).hostname);
   const spki = createHash('sha256').update(leaf.publicKey.export({ type: 'spki', format: 'der' })).digest('base64');
   const results = [];
-  const chrome = await chromium.launch({ headless: true, args: ['--ignore-certificate-errors-spki-list=' + spki, '--disable-background-networking'] });
+  phase = 'chromium-launch';
+  const chrome = await chromium.launch({ headless: true, timeout: launchTimeout, args: ['--ignore-certificate-errors-spki-list=' + spki, '--disable-background-networking'] });
   try { const context = await chrome.newContext({ baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false }); results.push(await core(context, 'chromium')); await context.close(); await networkControl(chrome, 'chromium'); }
   finally { await chrome.close(); }
   const profile = mkdtempSync(join(tmpdir(), 'sierx-firefox-trust-'));
   try {
+    phase = 'firefox-launch';
     execFileSync('certutil', ['-N', '--empty-password', '-d', 'sql:' + profile], { stdio: 'pipe' });
     execFileSync('certutil', ['-A', '-n', 'Sierx fixture CA', '-t', 'C,,', '-i', certificate, '-d', 'sql:' + profile], { stdio: 'pipe' });
-    const context = await firefox.launchPersistentContext(profile, { headless: true, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false, firefoxUserPrefs });
+    const context = await firefox.launchPersistentContext(profile, { headless: true, timeout: launchTimeout, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false, firefoxUserPrefs });
     try { results.push(await core(context, 'firefox')); }
     finally { await context.close(); }
   } finally { rmSync(profile, { recursive: true, force: true }); }
-  const probe = await firefox.launch({ headless: true, firefoxUserPrefs });
+  phase = 'firefox-network-launch';
+  const probe = await firefox.launch({ headless: true, timeout: launchTimeout, firefoxUserPrefs });
   try { await networkControl(probe, 'firefox'); }
   finally { await probe.close(); }
   return { result: 'passed', playwright: JSON.parse(readFileSync('/opt/acceptance/node_modules/playwright/package.json')).version,
     driver: { node: process.version, policy: 'seccomp-deny-io-uring', policy_verified: true, external_fetch_control: true,
-              ipv4_only_verified:true }, browsers: results };
+              ipv4_only_verified:true, timing_mode: emulated ? 'software-emulation' : 'standard' }, browsers: results };
 }
 
 try { console.log(JSON.stringify(await main())); }

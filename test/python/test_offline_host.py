@@ -21,6 +21,17 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_public_browser_failure_excludes_private_content_and_unknown_labels(self):
+        private = 'password=private-fixture-value\n'
+        marker = 'offline-browser: failed at firefox-login (TimeoutError); no passing report'
+        self.assertEqual(evidence.browser_failure_diagnostic(private+marker+'\nprivate stack trace'),
+                         'firefox-login (TimeoutError)')
+        for message in ('offline-browser: failed at private-fixture-value (Error); no passing report',
+                        'offline-browser: failed at firefox-login (PrivatePassword); no passing report',
+                        marker+' private-fixture-value'):
+            with self.subTest(message=message):
+                self.assertIsNone(evidence.browser_failure_diagnostic(message))
+
     def setUp(self):
         self.bundle = {'arch':'amd64', 'release':{'revision':'a'*40, 'image':'example.test/sierx@sha256:'+'b'*64}}
         self.report = {**self.bundle, 'schema':evidence.SCHEMA, 'suite':evidence.SUITE, 'suite_sha256':'c'*64,
