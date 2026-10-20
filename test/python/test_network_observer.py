@@ -29,6 +29,40 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_real_strace_file_labels_are_opaque_to_message_structure(self):
+        for label in ('mozilla-ipc', 'font-list]', 'texture,{fd}', 'JS(Thing]',
+                      'label,with[bracket]', r'right\76arrow', r'quoted\"file', 'trailing-'):
+            receipt = ('10<firefox> 1.000001 recvmsg(9<UNIX-STREAM:[1->2]>, {msg_name=NULL, msg_iov=[], '
+                       'msg_control=[{cmsg_len=24, cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, '
+                       'cmsg_data=[59</memfd:'+label+'>(deleted), 60<UNIX-STREAM:[3->4]>]}], msg_flags=0}, 0) = 1')
+            send = '10<firefox> 1.000002 sendmsg(60, {msg_name=NULL, msg_iov=[], msg_control=NULL}, 0) = 0'
+            with self.subTest(label=label):
+                self.assertEqual(observer.parse([receipt,send])[0], [])
+                internet = receipt.replace('60<UNIX-STREAM:[3->4]>', '60<TCP:[127.0.0.1:1234->198.51.100.99:443]>')
+                self.assertEqual(observer.parse([internet,send])[0][0].address, '198.51.100.99')
+        self.assertEqual(observer.arguments('0</dev/null<char 1:3>>, F_GETFD'), ['0</dev/null<char 1:3>>', 'F_GETFD'])
+        self.assertEqual(observer.arguments('5<pid:123<firefox>>, F_GETFD'), ['5<pid:123<firefox>>', 'F_GETFD'])
+
+    def test_file_label_cannot_forge_control_fields_or_preserve_a_stale_local_socket(self):
+        old = '10<firefox> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [60, 61]) = 0'
+        label = r'/memfd:fake], cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60\74UNIX:[3]\76]'
+        receipt = ('10<firefox> 1.000001 recvmsg(9<UNIX:[1]>, {msg_control=[{cmsg_level=SOL_SOCKET, '
+                   'cmsg_type=SCM_RIGHTS, cmsg_data=[60<'+label+'>]}], msg_flags=0}, 0) = 1')
+        send = '10<firefox> 1.000002 sendmsg(60, {msg_name=NULL, msg_iov=[], msg_control=NULL}, 0) = 0'
+        with self.assertRaises(ValueError):
+            observer.parse([old,receipt,send])
+        with self.assertRaises(ValueError):
+            observer.parse([old,receipt.replace('>', '', 1),send])
+        with self.assertRaises(ValueError):
+            observer.parse([old,receipt.replace(label+'>', label),send])
+
+    def test_incomplete_control_diagnostic_contains_only_fixed_categories(self):
+        receipt = ('10<firefox> 1.000001 recvmsg(9, {msg_control=[private-payload], msg_flags=0}, 0) = 1')
+        with self.assertRaises(ValueError) as caught:
+            observer.parse([receipt])
+        self.assertIn('shape=other', str(caught.exception))
+        self.assertNotIn('private-payload', str(caught.exception))
+
     def test_kernel_discard_flag_still_requires_complete_metadata_for_every_returned_fd(self):
         receipt='10<firefox> 1.000001 recvmsg(9<UNIX:[1]>, {msg_control=[{cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60<UNIX:[2]>]}], msg_flags=MSG_CTRUNC}, 0) = 1'
         send='10<firefox> 1.000002 sendmsg(60, {msg_name=NULL, msg_iov=[], msg_control=NULL}, 0) = 0'

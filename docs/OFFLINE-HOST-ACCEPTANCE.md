@@ -183,6 +183,11 @@ descriptor is still decoded completely and outside sockets remain rejected;
 an ellipsis or unreadable header is never excused by this flag. Reports count
 these kernel discards separately. Neither observer detaches for import, and
 no phase skips observation.
+Decoded descriptor labels are opaque to argument/control-message splitting,
+including escaped file names, nested device/PID labels and socket peer arrows.
+Real memfd/Unix-socket transfer probes cover punctuation in file labels;
+malformed labels and unreadable state-changing records still reject observation.
+Fixed control-message failure categories omit the original label and payload.
 See the [strace option and precedence rules](https://man7.org/linux/man-pages/man1/strace.1.html).
 
 The Node/browser test service has an explicit seccomp policy denying io_uring

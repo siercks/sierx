@@ -40,18 +40,32 @@ def component(name):
 
 
 def arguments(text):
-    """Split strace arguments, without interpreting quoted payload contents."""
+    """Split strace structure, treating quoted bytes and decoded labels as opaque."""
     result, start, depth, quoted, escaped = [], 0, 0, False, False
+    annotation, socket_annotation = 0, False
     for index, char in enumerate(text):
-        if quoted:
+        if annotation:
+            # Socket peer arrows occur inside -yy annotations. Literal '>' in
+            # file labels is octal-escaped by strace; a trailing '-' in a file
+            # name must not be mistaken for such an arrow.
+            if char == '<':
+                annotation += 1
+            elif char == '>' and not (socket_annotation and text[index-1] == '-'):
+                annotation -= 1
+        elif quoted:
             if escaped: escaped = False
             elif char == '\\': escaped = True
             elif char == '"': quoted = False
+        elif char == '<' and index and (text[index-1].isdigit() or text[:index].endswith('AT_FDCWD')):
+            annotation = 1
+            socket_annotation = bool(re.match(r'<(?:TCPv6|TCP|UDPv6|UDP|UNIX(?:-[A-Z]+)?|NETLINK|socket):', text[index:]))
         elif char == '"': quoted = True
         elif char in '({[': depth += 1
         elif char in ')}]': depth -= 1
         elif char == ',' and depth == 0:
             result.append(text[start:index].strip()); start = index + 1
+    if annotation:
+        raise ValueError('Decoded descriptor annotation is incomplete')
     result.append(text[start:].strip())
     return result
 
@@ -124,8 +138,8 @@ def records(lines):
     for raw in lines:
         line = pattern.match(raw.strip())
         if not line:
-            if re.search(r'\b(connect|sendto|sendmsg|sendmmsg)\(', raw):
-                raise ValueError('An outgoing trace record could not be classified')
+            if re.search(r'\b(connect|sendto|sendmsg|sendmmsg|recvmsg|socket|socketpair|accept4?|getpeername|close|dup[23]?|fcntl|execve(?:at)?|clone3?|fork|vfork|io_uring_\w+)\(', raw):
+                raise ValueError('A state-changing trace record could not be classified')
             continue
         pid, program, timestamp, body = line.groups()
         resumed = re.match(r'<\.\.\. ([a-z0-9_]+) resumed>(.*)', body)
@@ -258,10 +272,13 @@ def parse(lines,stats=None):
                 if not control.startswith('[') or not control.endswith(']'):
                     raise ValueError('Received descriptor control data is unreadable')
                 messages = arguments(control[1:-1]) if control[1:-1].strip() else []
-                for message in messages:
+                for message_index, message in enumerate(messages):
                     if (not message.startswith('{') or not message.endswith('}')
                             or field(message, 'cmsg_level') is None or field(message, 'cmsg_type') is None):
-                        raise ValueError('Received descriptor control message is unreadable')
+                        shape = 'record' if message.startswith('{') and message.endswith('}') else 'ellipsis' if message.startswith('...') else 'other'
+                        raise ValueError('Received descriptor control message is unreadable: role='+role+' shape='+shape+
+                            ' index='+str(message_index)+' level-present='+str(int(field(message,'cmsg_level') is not None))+
+                            ' type-present='+str(int(field(message,'cmsg_type') is not None)))
                     if field(message, 'cmsg_level') != 'SOL_SOCKET' or field(message, 'cmsg_type') != 'SCM_RIGHTS':
                         continue
                     values = field(message, 'cmsg_data') or ''
