@@ -13,6 +13,10 @@ const serverCertificate = process.env.SIERX_TEST_SERVER_CERT;
 assert(base && certificate && serverCertificate, 'Explicit fixture origin, CA and leaf certificate are required');
 const origin = new URL(base).origin;
 let phase = 'launch';
+// Match Mozilla's own desktop test profile: a slow offline run must not
+// trigger the browser updater's aus5.mozilla.org lookup in the background.
+const firefoxUserPrefs = { 'app.update.disabledForTesting': true,
+  'app.update.auto': false, 'app.update.checkInstallTime': false };
 
 async function guard(context) {
   const state = { external: [], workers: 0, negative: false, controls: new Set() };
@@ -209,11 +213,11 @@ async function main() {
   try {
     execFileSync('certutil', ['-N', '--empty-password', '-d', 'sql:' + profile], { stdio: 'pipe' });
     execFileSync('certutil', ['-A', '-n', 'Sierx fixture CA', '-t', 'C,,', '-i', certificate, '-d', 'sql:' + profile], { stdio: 'pipe' });
-    const context = await firefox.launchPersistentContext(profile, { headless: true, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false });
+    const context = await firefox.launchPersistentContext(profile, { headless: true, baseURL: base, serviceWorkers: 'block', ignoreHTTPSErrors: false, firefoxUserPrefs });
     try { results.push(await core(context, 'firefox')); }
     finally { await context.close(); }
   } finally { rmSync(profile, { recursive: true, force: true }); }
-  const probe = await firefox.launch({ headless: true });
+  const probe = await firefox.launch({ headless: true, firefoxUserPrefs });
   try { await networkControl(probe, 'firefox'); }
   finally { await probe.close(); }
   return { result: 'passed', playwright: JSON.parse(readFileSync('/opt/acceptance/node_modules/playwright/package.json')).version,
