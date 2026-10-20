@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 const { chromium, firefox } = await import('/opt/acceptance/node_modules/playwright/index.mjs');
 const { expect: baseExpect } = await import('/opt/acceptance/node_modules/@playwright/test/index.mjs');
+const { createRecoveryNavigator } = await import('./offline-browser-navigation.mjs');
 assert([undefined, '0', '1'].includes(process.env.SIERX_TEST_EMULATED), 'Invalid fixture timing mode');
 const emulated = process.env.SIERX_TEST_EMULATED === '1';
 const defaultExpect = baseExpect.configure({ timeout: emulated ? 60000 : 5000 });
@@ -19,6 +20,7 @@ assert(base && certificate && serverCertificate, 'Explicit fixture origin, CA an
 const origin = new URL(base).origin;
 let phase = 'launch';
 const apiFailures = new Set();
+let recoveryReadRetries = 0;
 // Match Mozilla's own desktop test profile: a slow offline run must not
 // trigger the browser updater's aus5.mozilla.org lookup in the background.
 const firefoxUserPrefs = { 'app.update.disabledForTesting': true,
@@ -94,10 +96,12 @@ async function core(context, engine) {
   // instead of starting an unnecessary second renderer under emulation.
   const page = context.pages()[0] ?? await context.newPage();
   context.setDefaultTimeout(slowFirefox ? 600000 : emulated ? 120000 : 30000);
+  const navigation = createRecoveryNavigator(page, { emulated, origin,
+    navigationTimeout: slowFirefox ? 600000 : emulated ? 120000 : 30000 });
   const prefix = 'OF' + randomUUID().slice(0, 6).toUpperCase();
   const title = 'Offline browser ' + engine + ' ' + prefix;
   phase = engine + '-login-navigation';
-  await page.goto(base + '/login');
+  await navigation.goto(base + '/login');
   phase = engine + '-login-fields';
   await page.getByLabel('Email', { exact: true }).fill(process.env.SIERX_BOOTSTRAP_ADMIN_EMAIL);
   await page.getByLabel('Password', { exact: true }).fill(process.env.SIERX_BOOTSTRAP_ADMIN_PASSWORD);
@@ -160,11 +164,11 @@ async function core(context, engine) {
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByRole('link', { name: target.key, exact: true })).toBeVisible();
   phase = engine + '-search-reload-bootstrap';
-  await page.goto(base + '/?project=' + prefix);
+  await navigation.goto(base + '/?project=' + prefix);
   await page.getByLabel('Search backlog', { exact: true }).fill('status.category = active');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('link', { name: title + ' edited', exact: true })).toBeVisible();
-  await page.reload();
+  await navigation.reload();
   await expect(page.getByRole('link', { name: title + ' edited', exact: true })).toBeVisible();
   const waterfall = [];
   await page.route('**/api/v1/**', (route) => {
@@ -173,7 +177,7 @@ async function core(context, engine) {
     return route.continue();
   });
   for (const [path, name] of [['/', title + ' edited'], ['/?project=' + prefix, title + ' edited'], ['/' + key.toLowerCase() + '/', title + ' edited']]) {
-    await page.goto(base + path);
+    await navigation.goto(base + path);
     if (path.startsWith('/?') || path === '/') await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
     else { await expect(page.getByRole('heading', { name, exact: true })).toBeVisible(); await expect(page).toHaveURL(base + '/' + key); }
   }
@@ -182,6 +186,7 @@ async function core(context, engine) {
   assert.deepEqual(observation.external, [], 'Default workflow attempted a third-party request');
   phase = engine + '-guard-controls';
   await controls(context, observation);
+  recoveryReadRetries += navigation.retries;
   return { engine, version: context.browser().version(), external_requests: 0, service_workers: 0,
            tls: engine === 'chromium' ? 'leaf-spki-pin' : 'fixture-ca-nss',
            observer_controls: [...observation.controls].sort(),
@@ -260,7 +265,8 @@ async function main() {
   finally { await probe.close(); }
   return { result: 'passed', playwright: JSON.parse(readFileSync('/opt/acceptance/node_modules/playwright/package.json')).version,
     driver: { node: process.version, policy: 'seccomp-deny-io-uring', policy_verified: true, external_fetch_control: true,
-              ipv4_only_verified:true, timing_mode: emulated ? 'software-emulation' : 'standard' }, browsers: results };
+              ipv4_only_verified:true, timing_mode: emulated ? 'software-emulation' : 'standard',
+              recovery_read_retries: recoveryReadRetries }, browsers: results };
 }
 
 try { console.log(JSON.stringify(await main())); }
@@ -268,12 +274,13 @@ catch (error) {
   // stderr is retained only in the private, synthetic guest diagnostic log.
   console.error('offline-browser: failed at ' + phase + ' (' + error.name + '); no passing report');
   const message = String(error.message ?? '');
-  const reason = message.includes('strict mode violation') ? 'ambiguous-locator' :
+  const reason = error.code === 'SIERX_RECOVERY_UNAVAILABLE' ? 'recovery-unavailable' : message.includes('strict mode violation') ? 'ambiguous-locator' :
     /timed out|timeout.*exceeded/i.test(message) ? 'wait-timeout' : error.matcherResult ? 'assertion-failed' : 'operation-failed';
   console.error('offline-browser: reason ' + reason);
   const matcher = error.matcherResult?.name;
   if (['toBeVisible','toBeHidden','toHaveValue','toHaveURL','toContainText','toHaveCount','toEqual'].includes(matcher))
     console.error('offline-browser: matcher ' + matcher);
+  if (Number.isInteger(error.httpStatus)) apiFailures.add(error.httpStatus);
   for (const status of [...apiFailures].filter((value) => Number.isInteger(value) && value >= 400 && value <= 599).sort().slice(0, 10))
     console.error('offline-browser: http-status ' + status);
   console.error(error.stack);

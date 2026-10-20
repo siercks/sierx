@@ -40,6 +40,48 @@ async function create(
 }
 test.beforeEach(async ({ context }) => authenticate(context));
 
+test('offline navigation retries only bounded emulated recovery reads', async ({ page, context }) => {
+  const moduleUrl = new URL('../../../scripts/offline-browser-navigation.mjs', import.meta.url).href;
+  const { createRecoveryNavigator } = await import(moduleUrl);
+  await context.clearCookies();
+  const recovery = 'Service unavailable pending operator recovery verification.\n';
+  const origin = new URL(url!).origin;
+  const login = origin + '/login';
+  let requests = 0;
+  let failures = 1;
+  let body = recovery;
+  const methods: string[] = [];
+  await page.route('**/login', async (route) => {
+    requests++;
+    methods.push(route.request().method());
+    if (failures-- > 0) await route.fulfill({ status: 503, contentType: 'text/plain', body });
+    else await route.continue();
+  });
+  const recovered = createRecoveryNavigator(page, { emulated: true, origin });
+  await recovered.goto(login);
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  expect(recovered.retries).toBe(1);
+  expect(requests).toBe(2);
+  for (const [emulated, responseBody] of [[false, recovery], [true, 'Unrelated outage']] as const) {
+    requests = 0;
+    failures = 10;
+    body = responseBody;
+    const single = createRecoveryNavigator(page, { emulated, origin });
+    await expect(single.goto(login)).rejects.toMatchObject({ httpStatus: 503, code: 'SIERX_READ_HTTP_STATUS' });
+    expect(requests).toBe(1);
+    expect(single.retries).toBe(0);
+  }
+  requests = 0;
+  failures = 10;
+  body = recovery;
+  const bounded = createRecoveryNavigator(page, { emulated: true, origin });
+  await expect(bounded.goto(login)).rejects.toMatchObject({ httpStatus: 503, code: 'SIERX_RECOVERY_UNAVAILABLE' });
+  expect(requests).toBe(6);
+  expect(bounded.retries).toBe(5);
+  expect(new Set(methods)).toEqual(new Set(['GET']));
+  await expect(bounded.goto('https://example.invalid/login')).rejects.toThrow('exact origin');
+});
+
 async function navigationProjects(context: BrowserContext, count: number) {
   const navigationSessions = JSON.parse(process.env.SIERX_TEST_NAV_SESSIONS ?? '{}') as Record<string, string>;
   const token = navigationSessions[test.info().project.name];

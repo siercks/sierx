@@ -35,7 +35,7 @@ def browser_failure_diagnostic(text):
     for phase, error in re.findall(r'^offline-browser: failed at ([a-z-]+) \(([A-Za-z]+)\); no passing report$', text, re.MULTILINE):
         if phase in phases and error in errors:
             result = phase+' ('+error+')'
-            reason = re.search(r'^offline-browser: reason (ambiguous-locator|wait-timeout|assertion-failed|operation-failed)$',text,re.MULTILINE)
+            reason = re.search(r'^offline-browser: reason (ambiguous-locator|wait-timeout|assertion-failed|operation-failed|recovery-unavailable)$',text,re.MULTILINE)
             matcher = re.search(r'^offline-browser: matcher (toBeVisible|toBeHidden|toHaveValue|toHaveURL|toContainText|toHaveCount|toEqual)$',text,re.MULTILINE)
             statuses = sorted(set(re.findall(r'^offline-browser: http-status ([45][0-9]{2})$',text,re.MULTILINE)))[:10]
             if reason:result += ' reason='+reason[1]
@@ -67,7 +67,8 @@ def validate_browser(report):
     driver=report.get('driver',{})
     if (not re.fullmatch(r'v24\.[0-9]+\.[0-9]+',driver.get('node',''))
             or driver.get('policy')!='seccomp-deny-io-uring' or driver.get('policy_verified') is not True
-            or driver.get('external_fetch_control') is not True or driver.get('ipv4_only_verified') is not True):
+            or driver.get('external_fetch_control') is not True or driver.get('ipv4_only_verified') is not True
+            or type(driver.get('recovery_read_retries')) is not int or not 0<=driver['recovery_read_retries']<=10):
         raise ValueError('Browser driver configuration and its real controls are missing')
     for engine, result in zip(('chromium', 'firefox'), report['browsers']):
         if (result.get('engine') != engine or not result.get('version')
@@ -126,7 +127,8 @@ def validate_closeout(report,bundle,expected,suite_sha256):
         raise ValueError('Development evidence cannot satisfy closeout promotion')
     emulated = report['virtual_cpu']=='tcg'
     if (report['network']['control_interval_limit_seconds'] != (120 if emulated else 20)
-            or report['browser']['driver'].get('timing_mode') != ('software-emulation' if emulated else 'standard')):
+            or report['browser']['driver'].get('timing_mode') != ('software-emulation' if emulated else 'standard')
+            or (not emulated and report['browser']['driver']['recovery_read_retries'] != 0)):
         raise ValueError('Fixture timing budgets differ from the recorded acceleration mode')
     scenarios=report.get('scenarios',{})
     if set(scenarios)!={'invalid_deliveries','two_release','failed_health','runtime','acquisition'}:

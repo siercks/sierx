@@ -32,6 +32,15 @@ class EvidenceTests(unittest.TestCase):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['browser']['driver']['timing_mode']='software-emulation'
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['browser']['driver']['recovery_read_retries']=2
+        evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['virtual_cpu']='kvm'
+        report['network']['control_interval_limit_seconds']=20
+        report['browser']['driver']['timing_mode']='standard'
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['virtual_cpu']='tcg'
+        report['browser']['driver']['timing_mode']='software-emulation'
         report['network']['control_interval_limit_seconds']=121
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
@@ -71,7 +80,17 @@ class EvidenceTests(unittest.TestCase):
              'tls':'leaf-spki-pin' if engine=='chromium' else 'fixture-ca-nss',
              'service_workers':0, 'observer_controls':['document','document-ipv6','fetch','image','websocket']}
             for engine in ('chromium','firefox')]}
-        self.report['browser']['driver']={'node':'v24.22.0','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True}
+        self.report['browser']['driver']={'node':'v24.22.0','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True,'recovery_read_retries':0}
+
+    def test_browser_read_recovery_count_is_required_and_bounded(self):
+        for value in (-1,11,True,'1',None):
+            report=copy.deepcopy(self.report)
+            report['browser']['driver']['recovery_read_retries']=value
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                evidence.validate(report,self.bundle,'d'*64,'c'*64)
+        del self.report['browser']['driver']['recovery_read_retries']
+        with self.assertRaises(ValueError):
+            evidence.validate(self.report,self.bundle,'d'*64,'c'*64)
 
     def test_complete_report_is_bound_to_exact_fixture_and_native_candidate(self):
         evidence.validate(self.report, self.bundle, 'd'*64, 'c'*64)

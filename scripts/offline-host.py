@@ -25,7 +25,7 @@ import network_observer
 import offline_archive
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs',
+SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs', 'offline-browser-navigation.mjs',
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py')
 

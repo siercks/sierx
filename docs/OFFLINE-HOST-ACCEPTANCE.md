@@ -43,7 +43,12 @@ safe failure labels. The complete emulated browser command has a 90-minute cap
 within the three-hour workload cap. Standard runs retain Playwright's normal
 30-second action/launch and five-second assertion limits. Reports identify the
 timing mode. Required actions, TLS verification and connection controls remain
-mandatory. Native control windows remain bounded at 20
+mandatory. Only software-emulated positive navigations may repeat a same-origin
+GET after the server's exact plain-text recovery-gate 503 response, with at most
+five retries per engine and a ten-minute navigation recovery bound. The report
+records the total `recovery_read_retries` (zero for native runs). Unrelated
+503s, write requests and negative controls are not retried. The server's
+recovery check and deadlines are unchanged. Native control windows remain bounded at 20
 seconds; TCG allows 120 seconds including emulated process startup, with
 60-second control command limits. The observer selects this budget from the
 root launcher's actual acceleration mode and records it in the report; input
