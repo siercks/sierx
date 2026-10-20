@@ -3,8 +3,8 @@
 const recoveryMessage = 'Service unavailable pending operator recovery verification.';
 const maxRetries = 5;
 
-async function recoveryResponse(response) {
-  if (response.status() !== 503 || response.request().method() !== 'GET') return false;
+export async function recoveryResponse(response) {
+  if (response.status() !== 503) return false;
   const headers = response.headers();
   if (!(headers['content-type'] ?? '').startsWith('text/plain')) return false;
   if (Number(headers['content-length']) > 4096) return false;

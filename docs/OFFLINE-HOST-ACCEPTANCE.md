@@ -25,6 +25,13 @@ including connected preparation and evidence collection. TCG uses QEMU's `max` C
 model rather than limiting Arm execution to Cortex-A72; see the
 [QEMU CPU model documentation](https://www.qemu.org/docs/master/system/arm/virt.html).
 These functional checks make no native-speed/performance claim.
+TCG guests use four virtual CPUs so the browser, database and ordinary syscall
+observer can use the [four cores on GitHub's public ARM runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+[Multi-threaded TCG](https://www.qemu.org/docs/master/devel/multi-thread-tcg.html)
+runs each virtual CPU on a host thread. KVM guests retain two virtual CPUs.
+Reports record the guest's actual `virtual_cpus` count; promotion rejects a
+count that differs from its acceleration profile. Memory remains 4 GiB and
+server deadlines are unchanged.
 
 The GitHub ARM preparer runs on `ubuntu-26.04-arm` for its newer host QEMU;
 the isolated accepted guest remains Ubuntu 24.04 with its own recorded kernel
@@ -59,6 +66,13 @@ and retain their 180-second native limit; a timeout never counts as rejection.
 Failures publish only allowlisted browser stage/exception labels extracted from
 private diagnostics; network-control failures publish fixed reason codes only.
 Credentials, work content and exception messages stay private.
+Failure diagnostics distinguish fixed HTTP method/recovery-body/problem-body
+categories without publishing response contents. Item creation separately
+requires its first POST response to be 201 before checking the resulting view.
+For recovery rejections present in the private service journal, `recovery-late`
+counts unmatched 503 requests lasting at least 1,000 milliseconds;
+`recovery-early` counts shorter requests. These counts help identify deadline
+pressure without publishing journals or changing the server's deadlines.
 
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64

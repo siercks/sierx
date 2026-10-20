@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 const { chromium, firefox } = await import('/opt/acceptance/node_modules/playwright/index.mjs');
 const { expect: baseExpect } = await import('/opt/acceptance/node_modules/@playwright/test/index.mjs');
-const { createRecoveryNavigator } = await import('./offline-browser-navigation.mjs');
+const { createRecoveryNavigator, recoveryResponse } = await import('./offline-browser-navigation.mjs');
 assert([undefined, '0', '1'].includes(process.env.SIERX_TEST_EMULATED), 'Invalid fixture timing mode');
 const emulated = process.env.SIERX_TEST_EMULATED === '1';
 const defaultExpect = baseExpect.configure({ timeout: emulated ? 60000 : 5000 });
@@ -20,6 +20,8 @@ assert(base && certificate && serverCertificate, 'Explicit fixture origin, CA an
 const origin = new URL(base).origin;
 let phase = 'launch';
 const apiFailures = new Set();
+const unavailableKinds = new Set();
+const pendingDiagnostics = new Set();
 let recoveryReadRetries = 0;
 // Match Mozilla's own desktop test profile: a slow offline run must not
 // trigger the browser updater's aus5.mozilla.org lookup in the background.
@@ -37,8 +39,18 @@ async function guard(context) {
   context.on('serviceworker', () => { state.workers++; });
   context.on('response', (response) => {
     const target = new URL(response.url());
-    if (target.origin === origin && target.pathname.startsWith('/api/v1/') && response.status() >= 400)
+    if (target.origin === origin && target.pathname.startsWith('/api/v1/') && response.status() >= 400) {
       apiFailures.add(response.status());
+      const method = response.request().method();
+      if (response.status() === 503 && ['GET','POST','PATCH','PUT','DELETE','HEAD'].includes(method)) {
+        const check = recoveryResponse(response).then((recovery) => {
+          const problem = (response.headers()['content-type'] ?? '').startsWith('application/problem+json');
+          unavailableKinds.add(method + '-' + (recovery ? 'recovery' : problem ? 'problem' : 'other'));
+        }).catch(() => { unavailableKinds.add(method + '-other'); });
+        pendingDiagnostics.add(check);
+        void check.finally(() => pendingDiagnostics.delete(check));
+      }
+    }
   });
   context.on('request', (request) => {
     if (!allowed(request.url()) && !state.negative) state.external.push(request.resourceType());
@@ -130,7 +142,16 @@ async function core(context, engine) {
   await dialog.getByLabel('Title', { exact: true }).fill(title);
   await dialog.getByRole('combobox', { name: 'Type', exact: true }).selectOption('story');
   await dialog.getByLabel('Description', { exact: true }).fill('**Local delivered Markdown**');
-  await dialog.getByRole('button', { name: 'Create item', exact: true }).click();
+  phase = engine + '-create-item-submit';
+  const [created] = await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).origin === origin &&
+      new URL(response.url()).pathname === '/api/v1/items' && response.request().method() === 'POST'),
+    dialog.getByRole('button', { name: 'Create item', exact: true }).click(),
+  ]);
+  phase = engine + '-create-item-response';
+  await created.finished();
+  assert.equal(created.status(), 201, 'Item creation must succeed on its single write attempt');
+  phase = engine + '-create-item-ready';
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   const key = new URL(page.url()).pathname.slice(1);
   phase = engine + '-edit-item';
@@ -271,6 +292,7 @@ async function main() {
 
 try { console.log(JSON.stringify(await main())); }
 catch (error) {
+  await Promise.allSettled([...pendingDiagnostics]);
   // stderr is retained only in the private, synthetic guest diagnostic log.
   console.error('offline-browser: failed at ' + phase + ' (' + error.name + '); no passing report');
   const message = String(error.message ?? '');
@@ -283,6 +305,8 @@ catch (error) {
   if (Number.isInteger(error.httpStatus)) apiFailures.add(error.httpStatus);
   for (const status of [...apiFailures].filter((value) => Number.isInteger(value) && value >= 400 && value <= 599).sort().slice(0, 10))
     console.error('offline-browser: http-status ' + status);
+  for (const kind of [...unavailableKinds].sort())
+    console.error('offline-browser: unavailable ' + kind);
   console.error(error.stack);
   process.exitCode = 1;
 }

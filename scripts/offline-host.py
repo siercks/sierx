@@ -202,9 +202,12 @@ def qemu_command(arch, mode, disk, kernel, initrd, serial):
     # performance fixture. Expose TCG's available instructions (including Arm
     # atomics/crypto) instead of constraining software execution to Cortex-A72.
     cpu = 'host' if mode == 'kvm' else 'max'
+    # Leave room for the ordinary syscall observer alongside the browser,
+    # application and database on GitHub's four-core public runners.
+    cpus = '4' if mode == 'tcg' else '2'
     console = 'ttyS0' if arch == 'amd64' else 'ttyAMA0'
     board = 'q35' if arch == 'amd64' else 'virt'
-    return [emulator, '-machine', board, '-accel', mode, '-cpu', cpu, '-m', '4096', '-smp', '2',
+    return [emulator, '-machine', board, '-accel', mode, '-cpu', cpu, '-m', '4096', '-smp', cpus,
             '-nodefaults', '-nic', 'none', '-display', 'none', '-monitor', 'none',
             '-serial', 'file:' + str(serial), '-no-reboot',
             '-drive', 'file=' + str(disk) + ',format=raw,if=none,id=acceptance',
@@ -378,6 +381,8 @@ def main(args):
                     detail = evidence.control_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
                 suffix = '; detail '+detail if detail else ''
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
+            if result.get('virtual_cpus') != (4 if mode=='tcg' else 2):
+                raise ValueError('Guest CPU count differs from its declared emulation profile')
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             trace = (disk_file(disk,'manager.trace') + disk_file(disk,'installer.trace')).decode()
             observation = network_observer.summarize(trace.splitlines(),

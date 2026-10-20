@@ -1,6 +1,7 @@
 """Fail-closed contract for the real rootless-installer acceptance report."""
 import re
 import math
+import json
 from network_observer import CONTROLS, PROCESSES
 
 SCHEMA = 2
@@ -29,7 +30,8 @@ def browser_failure_diagnostic(text):
         engine+'-'+stage for engine in ('chromium','firefox') for stage in (
             'launch','context-setup','new-page','login','create-project','edit-project','create-edit-transition-comment-link',
             'login-navigation','login-fields','login-submit','login-ready',
-            'create-item','edit-item','transition','comment','create-link-target','link',
+            'create-item','create-item-submit','create-item-response','create-item-ready',
+            'edit-item','transition','comment','create-link-target','link',
             'search-reload-bootstrap','guard-controls','network-control')}
     errors = {'Error','TimeoutError','AssertionError','TypeError','ProtocolError','TargetClosedError'}
     for phase, error in re.findall(r'^offline-browser: failed at ([a-z-]+) \(([A-Za-z]+)\); no passing report$', text, re.MULTILINE):
@@ -41,6 +43,19 @@ def browser_failure_diagnostic(text):
             if reason:result += ' reason='+reason[1]
             if matcher:result += ' matcher='+matcher[1]
             if statuses:result += ' http='+','.join(statuses)
+            kinds=sorted(set(re.findall(r'^offline-browser: unavailable ((?:GET|POST|PATCH|PUT|DELETE|HEAD)-(?:recovery|problem|other))$',text,re.MULTILINE)))
+            if kinds:result += ' unavailable='+','.join(kinds)
+            late=early=0
+            for line in text.splitlines():
+                try:
+                    record=json.loads(line[line.index('{'):])
+                except (ValueError,TypeError):
+                    continue
+                if (isinstance(record,dict) and record.get('msg')=='request' and record.get('route')=='unmatched'
+                        and record.get('status')==503 and type(record.get('duration_ms')) is int and record['duration_ms']>=0):
+                    if record['duration_ms']>=1000:late+=1
+                    else:early+=1
+            if late or early:result += ' recovery-late='+str(late)+' recovery-early='+str(early)
             return result
     return None
 
@@ -84,6 +99,7 @@ def validate(report, bundle, expected, suite_sha256):
             or report.get('suite_sha256') != suite_sha256
             or not re.fullmatch(r'[a-f0-9]{64}', suite_sha256)
             or report.get('result') != 'passed' or report.get('arch') != bundle['arch']
+            or type(report.get('virtual_cpus')) is not int or report['virtual_cpus'] not in {2,4}
             or report.get('release') != bundle['release'] or report.get('bundle_sha256') != expected
             or report.get('coverage') not in {'development','closeout'}
             or report.get('checks') != CHECKS + (CLOSEOUT_CHECKS if report.get('coverage')=='closeout' else [])
@@ -126,7 +142,8 @@ def validate_closeout(report,bundle,expected,suite_sha256):
             or any(not re.fullmatch(r'[a-f0-9]{64}',report.get(name,'')) for name in ('rootfs_sha256','kernel_sha256','archive_sha256'))):
         raise ValueError('Development evidence cannot satisfy closeout promotion')
     emulated = report['virtual_cpu']=='tcg'
-    if (report['network']['control_interval_limit_seconds'] != (120 if emulated else 20)
+    if (report['virtual_cpus'] != (4 if emulated else 2)
+            or report['network']['control_interval_limit_seconds'] != (120 if emulated else 20)
             or report['browser']['driver'].get('timing_mode') != ('software-emulation' if emulated else 'standard')
             or (not emulated and report['browser']['driver']['recovery_read_retries'] != 0)):
         raise ValueError('Fixture timing budgets differ from the recorded acceleration mode')

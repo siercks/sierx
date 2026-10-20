@@ -31,15 +31,18 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['browser']['driver']['timing_mode']='software-emulation'
+        report['virtual_cpus']=4
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['browser']['driver']['recovery_read_retries']=2
         evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='kvm'
+        report['virtual_cpus']=2
         report['network']['control_interval_limit_seconds']=20
         report['browser']['driver']['timing_mode']='standard'
         with self.assertRaises(ValueError):
             evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
         report['virtual_cpu']='tcg'
+        report['virtual_cpus']=4
         report['browser']['driver']['timing_mode']='software-emulation'
         report['network']['control_interval_limit_seconds']=121
         with self.assertRaises(ValueError):
@@ -51,6 +54,22 @@ class EvidenceTests(unittest.TestCase):
                          'control-window-timeout')
         self.assertIsNone(evidence.control_failure_diagnostic(message+' password=private'))
         self.assertIsNone(evidence.control_failure_diagnostic('ValueError: password=private'))
+
+    def test_guest_cpu_count_must_match_acceleration(self):
+        previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
+        for count in (None,True,'2',0,4):
+            broken=copy.deepcopy(report)
+            broken['virtual_cpus']=count
+            with self.subTest(count=count),self.assertRaises(ValueError):
+                evidence.validate_closeout(broken,self.bundle,'d'*64,'c'*64)
+        report['virtual_cpu']='tcg'
+        report['browser']['driver']['timing_mode']='software-emulation'
+        report['network']['control_interval_limit_seconds']=120
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['virtual_cpus']=4
+        evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
 
     def test_public_browser_failure_excludes_private_content_and_unknown_labels(self):
         private = 'password=private-fixture-value\n'
@@ -68,11 +87,24 @@ class EvidenceTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertIsNone(evidence.browser_failure_diagnostic(message))
 
+    def test_browser_failure_classifies_recovery_without_exposing_responses_or_journals(self):
+        marker='offline-browser: failed at firefox-create-item-response (AssertionError); no passing report'
+        records=[{'msg':'request','route':'unmatched','status':503,'duration_ms':1200,'private':'secret'},
+                 {'msg':'request','route':'unmatched','status':503,'duration_ms':20},
+                 {'msg':'request','route':'/api/v1/items','status':503,'duration_ms':1500},
+                 {'msg':'request','route':'unmatched','status':503,'duration_ms':'private'},
+                 {'msg':'private','route':'unmatched','status':503,'duration_ms':1500}]
+        labels='\noffline-browser: unavailable POST-recovery\noffline-browser: unavailable GET-problem\n'
+        labels+='offline-browser: unavailable POST-recovery private\noffline-browser: unavailable PRIVATE-other\n'
+        journal='\n'.join('private-journal-prefix '+json.dumps(record) for record in records)
+        self.assertEqual(evidence.browser_failure_diagnostic(marker+labels+journal),
+                         'firefox-create-item-response (AssertionError) unavailable=GET-problem,POST-recovery recovery-late=1 recovery-early=1')
+
     def setUp(self):
         self.bundle = {'arch':'amd64', 'release':{'revision':'a'*40, 'image':'example.test/sierx@sha256:'+'b'*64}}
         self.report = {**self.bundle, 'schema':evidence.SCHEMA, 'suite':evidence.SUITE, 'suite_sha256':'c'*64,
                        'bundle_sha256':'d'*64, 'result':'passed', 'profile':'ubuntu-24.04',
-                       'checks':evidence.CHECKS, 'isolation':evidence.ISOLATION}
+                       'checks':evidence.CHECKS, 'isolation':evidence.ISOLATION,'virtual_cpus':2}
         self.report['coverage']='development'
         self.report['host_versions']={'kernel':'6.8.0-fixture','systemd':'systemd 255','podman':'podman version 4.9.3','selinux':'disabled'}
         self.report['browser'] = {'result':'passed', 'playwright':'1.63.0', 'browsers':[
@@ -163,6 +195,9 @@ class PreparedOSTests(unittest.TestCase):
             command=host.qemu_command(arch,'tcg',Path('/fixture/disk'),Path('/fixture/kernel'),Path('/fixture/initrd'),Path('/fixture/serial'))
             self.assertEqual(command[command.index('-nic')+1],'none')
             self.assertIn('-nodefaults',command)
+            self.assertEqual(command[command.index('-smp')+1],'4')
+            native=host.qemu_command(arch,'kvm',Path('/fixture/disk'),Path('/fixture/kernel'),Path('/fixture/initrd'),Path('/fixture/serial'))
+            self.assertEqual(native[native.index('-smp')+1],'2')
             self.assertNotIn('-netdev',command)
             self.assertIn('console='+('ttyS0' if arch=='amd64' else 'ttyAMA0'),command[-1])
             self.assertFalse(any('hostfwd' in field or '/run/user/' in field or 'virtfs' in field for field in command))

@@ -265,6 +265,7 @@ def main():
             'arch':lock['arch'], 'release':lock['release'], 'bundle_sha256':OPTIONS['bundle_sha256'],
             'isolation':evidence.ISOLATION, 'checks':evidence.CHECKS + (evidence.CLOSEOUT_CHECKS if OPTIONS['closeout'] else []),
             'coverage':'closeout' if OPTIONS['closeout'] else 'development','browser':browser,
+            'virtual_cpus':os.cpu_count(),
             'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions}
 
 
