@@ -13,10 +13,14 @@ checks namespace/identity evidence and observes processes. Connected OS/browser
 preparation happens before isolation, in the preparer's Podman store.
 
 KVM runs have a 1,900-second workload limit. A host without nested virtualization
-uses native-architecture TCG with a bounded 4,500-second workload limit and
-1,800-second command limits for initial image import and database setup. Other
-commands retain their 600-second limit; KVM commands retain that limit in every
-phase. The workflow remains capped at 90 minutes. TCG uses QEMU's `max` CPU
+uses native-architecture TCG with a bounded 10,800-second workload limit and
+1,800-second command limits. A measured emulated run spent 21 minutes importing,
+27 minutes setting up the database and eight minutes migrating/bootstraping,
+then exceeded the former 600-second plan/apply command limit. The longer
+software-emulation budget leaves time for browser, rollback and runtime checks;
+their assertions and scenario durations are unchanged. KVM commands retain
+their 600-second limit in every phase. The workflow is capped at 210 minutes,
+including connected preparation and evidence collection. TCG uses QEMU's `max` CPU
 model rather than limiting Arm execution to Cortex-A72; see the
 [QEMU CPU model documentation](https://www.qemu.org/docs/master/system/arm/virt.html).
 These functional checks make no native-speed/performance claim.

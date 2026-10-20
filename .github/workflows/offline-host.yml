@@ -50,7 +50,7 @@ jobs:
             profile: rocky10
             arch: amd64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 210
     env:
       PROFILE: ${{ matrix.profile }}
       ARCH: ${{ matrix.arch }}

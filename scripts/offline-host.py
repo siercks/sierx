@@ -166,7 +166,7 @@ Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 Environment=PATH=/usr/lib/postgresql/18/bin:/usr/pgsql-18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=+/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py --manager-proof
 ExecStart=+/usr/sbin/sierx-trace-installer
-TimeoutStartSec=4400
+TimeoutStartSec=10700
 StandardOutput=journal+console
 StandardError=journal
 ''')
@@ -319,7 +319,7 @@ def main(args):
             with private.open('wb') as log:
                 process = subprocess.Popen(command, stdout=log, stderr=log, start_new_session=True)
                 print('offline-host: boot ' + arch + '/' + mode + ' with native overlay storage',flush=True)
-                deadline = time.monotonic() + (4500 if mode=='tcg' else 1900)
+                deadline = time.monotonic() + (10800 if mode=='tcg' else 1900)
                 startup_deadline = time.monotonic() + (180 if mode == 'kvm' else 600)
                 last_phase = None
                 last_operation = None
