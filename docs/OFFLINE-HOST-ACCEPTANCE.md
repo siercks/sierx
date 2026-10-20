@@ -36,9 +36,17 @@ Software-emulated browser fixtures allow 180 seconds to launch, 120 seconds for
 actions/navigation, and 60 seconds for assertions/worker guards. Standard runs
 retain Playwright's normal 30-second action/launch and five-second assertion
 limits. Reports identify the timing mode. Required actions, TLS verification,
-connection controls and their bounded observation windows are unchanged.
+connection controls are unchanged. Native control windows remain bounded at 20
+seconds; TCG allows 120 seconds including emulated process startup, with
+60-second control command limits. The observer selects this budget from the
+root launcher's actual acceleration mode and records it in the report; input
+control records cannot choose a larger allowance. Exact role/address/port and
+unique-window matching, all 11 required controls, and rejection of other
+attempts still apply. Invalid-delivery commands allow up to 30 minutes on TCG
+and retain their 180-second native limit; a timeout never counts as rejection.
 Failures publish only allowlisted browser stage/exception labels extracted from
-private diagnostics; credentials, work content and exception messages stay private.
+private diagnostics; network-control failures publish fixed reason codes only.
+Credentials, work content and exception messages stay private.
 
 The main guest store uses native rootless overlay on its private ext4 disk.
 This avoids the repeated full-layer copying of vfs, particularly under arm64

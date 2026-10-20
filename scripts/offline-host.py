@@ -374,13 +374,16 @@ def main(args):
                 detail = None
                 if failed_phase == 'delivered-browser-workflows':
                     detail = evidence.browser_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
-                suffix = '; browser '+detail if detail else ''
+                elif failed_phase.startswith('negative-'):
+                    detail = evidence.control_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
+                suffix = '; detail '+detail if detail else ''
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             trace = (disk_file(disk,'manager.trace') + disk_file(disk,'installer.trace')).decode()
             observation = network_observer.summarize(trace.splitlines(),
                 json.loads(disk_file(disk,'network-controls.json')), result.pop('internal_addresses'),
-                (disk_file(disk,'manager.stderr')+disk_file(disk,'installer.stderr')).decode())
+                (disk_file(disk,'manager.stderr')+disk_file(disk,'installer.stderr')).decode(),
+                control_interval_limit=120 if mode=='tcg' else 20)
             result['network'] = observation
             result['rootfs_sha256'] = args.rootfs_sha256
             result['archive_sha256'] = args.archive_sha256

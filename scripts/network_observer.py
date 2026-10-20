@@ -266,7 +266,9 @@ def parse(lines,stats=None):
     return attempts, executed
 
 
-def summarize(lines, controls, internal_addresses=(), trace_errors=''):
+def summarize(lines, controls, internal_addresses=(), trace_errors='', control_interval_limit=20):
+    if type(control_interval_limit) is not int or control_interval_limit not in {20,120}:
+        raise ValueError('Unsupported control observation budget')
     if trace_errors.strip():
         raise ValueError('Tracer reported incomplete process coverage')
     stats={}
@@ -278,7 +280,7 @@ def summarize(lines, controls, internal_addresses=(), trace_errors=''):
     for entry in controls:
         start, end = entry.get('start'), entry.get('end')
         if (not isinstance(start, (int,float)) or not isinstance(end,(int,float))
-                or not math.isfinite(start) or not math.isfinite(end) or not 0 <= end-start <= 20):
+                or not math.isfinite(start) or not math.isfinite(end) or not 0 <= end-start <= control_interval_limit):
             raise ValueError('Control interval is invalid or unbounded')
     # RFC 1918 ranges, expressed numerically so the no-host-topology gate still
     # rejects actual private addresses everywhere in committable source.
@@ -310,4 +312,4 @@ def summarize(lines, controls, internal_addresses=(), trace_errors=''):
     if any(count == 0 for count in counts.values()): raise ValueError('A planted external attempt escaped observation')
     return {'result':'passed','observer':'strace-network-v1','processes':sorted(PROCESSES),
             'external_attempts':0,'negative_controls':counts,'attempts_examined':len(attempts),
-            'browser_driver_policy':'seccomp-deny-io-uring',**stats}
+            'browser_driver_policy':'seccomp-deny-io-uring','control_interval_limit_seconds':control_interval_limit,**stats}

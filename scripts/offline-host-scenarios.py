@@ -46,7 +46,8 @@ def smoke_fingerprint(output):
 
 def rejection(args, env, log):
     with log.open('ab') as stream:
-        result = subprocess.run(list(map(str,args)),env=env,stdout=stream,stderr=stream,timeout=180)
+        result = subprocess.run(list(map(str,args)),env=env,stdout=stream,stderr=stream,
+                                timeout=1800 if env.get('SIERX_TEST_EMULATED')=='1' else 180)
     if result.returncode == 0:
         raise ValueError('Deliberately invalid delivery unexpectedly succeeded')
 

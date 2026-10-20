@@ -21,6 +21,28 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_closeout_timing_budgets_must_match_actual_acceleration(self):
+        previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',previous)
+        report['network']['control_interval_limit_seconds']=120
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['virtual_cpu']='tcg'
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['browser']['driver']['timing_mode']='software-emulation'
+        evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+        report['network']['control_interval_limit_seconds']=121
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report,self.bundle,'d'*64,'c'*64)
+
+    def test_public_control_reason_excludes_private_content(self):
+        message = 'ValueError: Network negative control exceeded its bounded interval'
+        self.assertEqual(evidence.control_failure_diagnostic('password=private\n'+message+'\nprivate journal'),
+                         'control-window-timeout')
+        self.assertIsNone(evidence.control_failure_diagnostic(message+' password=private'))
+        self.assertIsNone(evidence.control_failure_diagnostic('ValueError: password=private'))
+
     def test_public_browser_failure_excludes_private_content_and_unknown_labels(self):
         private = 'password=private-fixture-value\n'
         marker = 'offline-browser: failed at firefox-login (TimeoutError); no passing report'

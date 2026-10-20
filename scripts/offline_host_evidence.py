@@ -36,6 +36,20 @@ def browser_failure_diagnostic(text):
     return None
 
 
+def control_failure_diagnostic(text):
+    messages = {
+        'Synthetic network command exceeded its bounded timeout':'control-command-timeout',
+        'Network negative control exceeded its bounded interval':'control-window-timeout',
+        'Synthetic application must fail on its forbidden database connection':'application-control-did-not-fail',
+        'Planted forbidden connection unexpectedly succeeded':'forbidden-control-succeeded',
+        'Gateway negative-control listener did not start':'gateway-control-not-ready',
+    }
+    for message, label in messages.items():
+        if re.search(r'^ValueError: '+re.escape(message)+r'$', text, re.MULTILINE):
+            return label
+    return None
+
+
 def validate_browser(report):
     if (not isinstance(report, dict) or report.get('result') != 'passed'
             or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', report.get('playwright', ''))
@@ -85,7 +99,9 @@ def validate_network(report):
             or set(report['negative_controls'])!=set(CONTROLS)
             or any(type(count) is not int or count<1 for count in report['negative_controls'].values())
             or type(report.get('attempts_examined')) is not int
-            or report['attempts_examined']<sum(report['negative_controls'].values())):
+            or report['attempts_examined']<sum(report['negative_controls'].values())
+            or type(report.get('control_interval_limit_seconds')) is not int
+            or report['control_interval_limit_seconds'] not in {20,120}):
         raise ValueError('Missing attempted-connection coverage or real negative controls')
     if (report.get('browser_driver_policy')!='seccomp-deny-io-uring'
             or type(report.get('blocked_io_uring_setups')) is not int or report['blocked_io_uring_setups']<1
@@ -99,6 +115,10 @@ def validate_closeout(report,bundle,expected,suite_sha256):
     if (report['coverage']!='closeout' or report.get('virtual_cpu') not in {'kvm','tcg'}
             or any(not re.fullmatch(r'[a-f0-9]{64}',report.get(name,'')) for name in ('rootfs_sha256','kernel_sha256','archive_sha256'))):
         raise ValueError('Development evidence cannot satisfy closeout promotion')
+    emulated = report['virtual_cpu']=='tcg'
+    if (report['network']['control_interval_limit_seconds'] != (120 if emulated else 20)
+            or report['browser']['driver'].get('timing_mode') != ('software-emulation' if emulated else 'standard')):
+        raise ValueError('Fixture timing budgets differ from the recorded acceleration mode')
     scenarios=report.get('scenarios',{})
     if set(scenarios)!={'invalid_deliveries','two_release','failed_health','runtime','acquisition'}:
         raise ValueError('Missing required real installer scenarios')

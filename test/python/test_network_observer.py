@@ -29,6 +29,20 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_long_control_window_requires_explicit_bounded_emulation_budget(self):
+        lines, controls = evidence()
+        controls[0]['end'] = controls[0]['start'] + 60
+        with self.assertRaises(ValueError):
+            observer.summarize(lines, controls)
+        report = observer.summarize(lines, controls, control_interval_limit=120)
+        self.assertEqual(report['control_interval_limit_seconds'], 120)
+        for limit in (121, float('inf'), True):
+            with self.subTest(limit=limit), self.assertRaises(ValueError):
+                observer.summarize(lines, controls, control_interval_limit=limit)
+        controls[0]['end'] = controls[0]['start'] + 121
+        with self.assertRaises(ValueError):
+            observer.summarize(lines, controls, control_interval_limit=120)
+
     def test_linux_all_zero_source_address_probes_are_local_but_dns_still_fails(self):
         lines,controls=evidence()
         for value in ('0.0.0.0','::'):
