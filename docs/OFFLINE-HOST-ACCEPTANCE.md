@@ -171,8 +171,13 @@ The installer observer uses strace's kernel syscall selection (`--seccomp-bpf`)
 to avoid stopping on unselected archive reads/writes. The service manager
 retains ordinary ptrace observation, including the browser service's seccomp
 denials: seccomp-denied calls are not visible through `RET_TRACE` filtering.
-The traced socket/process/descriptor calls and required external controls are
-unchanged. Neither observer detaches for import, and no phase skips observation.
+The required external controls remain unchanged. Descriptor receipts are also
+observed through `recvmsg`: successful SCM_RIGHTS output annotations establish
+the received socket's family and peer before a later send can omit its annotation.
+Blocking receipts install descriptors at return, after any intervening close of
+the previous descriptor. Failed, opaque, malformed or truncated receipts do not
+grant a local socket classification. Neither observer detaches for import, and
+no phase skips observation.
 See the [strace option and precedence rules](https://man7.org/linux/man-pages/man1/strace.1.html).
 
 The Node/browser test service has an explicit seccomp policy denying io_uring

@@ -114,7 +114,7 @@ def setup(root, args):
     # Root observers can follow subordinate-UID container processes. -u drops
     # each tracee to the actual acceptance identity, retaining root only in the
     # observer. Nothing contacts the host's ordinary user bus or image store.
-    trace_calls = 'socket,socketpair,connect,accept,accept4,getpeername,sendto,sendmsg,sendmmsg,close,dup,dup2,dup3,fcntl,execve,execveat,clone,clone3,fork,vfork,io_uring_setup,io_uring_enter,io_uring_register'
+    trace_calls = 'socket,socketpair,connect,accept,accept4,getpeername,sendto,sendmsg,sendmmsg,recvmsg,close,dup,dup2,dup3,fcntl,execve,execveat,clone,clone3,fork,vfork,io_uring_setup,io_uring_enter,io_uring_register'
     trace_calls=','.join('?'+name for name in trace_calls.split(','))
     for name, command in (('manager','/usr/lib/systemd/systemd --user'),
                           ('installer','/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py')):

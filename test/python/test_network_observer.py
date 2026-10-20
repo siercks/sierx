@@ -29,6 +29,42 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_blocking_descriptor_receipt_installs_after_an_intervening_old_fd_close(self):
+        lines=['10<firefox> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [60, 61]) = 0',
+               '10<firefox> 1.000001 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 11',
+               '11<firefox> 1.000002 recvmsg(9<UNIX:[1]>, <unfinished ...>',
+               '10<firefox> 1.000003 close(60<UNIX:[2]>) = 0',
+               '11<firefox> 1.000004 <... recvmsg resumed>{msg_name=NULL, msg_iov=[], msg_control=[{cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60<UNIX:[3]>]}], msg_flags=0}, 0) = 1',
+               '10<firefox> 1.000005 sendmsg(60, {msg_name=NULL, msg_iov=[], msg_control=NULL}, 0) = 0']
+        self.assertEqual(observer.parse(lines)[0], [])
+        lines[4]=lines[4].replace('60<UNIX:[3]>','60<TCP:[127.0.0.1:1234->198.51.100.99:443]>')
+        self.assertEqual(observer.parse(lines)[0][0].address,'198.51.100.99')
+
+    def test_received_unix_socket_metadata_survives_opaque_sends_and_shared_threads(self):
+        lines=['10<firefox> 1.000000 recvmsg(9<UNIX-STREAM:[1->2]>, {msg_name=NULL, msg_iov=[{iov_base="x", iov_len=1}], msg_control=[{cmsg_len=24, cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[59</memfd:mozilla-ipc>(deleted), 60<UNIX-STREAM:[123->124]>]}], msg_flags=0}, MSG_CMSG_CLOEXEC) = 1',
+               '10<firefox> 1.000001 clone(child_stack=NULL, flags=CLONE_FILES|CLONE_THREAD) = 11',
+               '11<firefox> 1.000002 sendmsg(60, {msg_name=NULL, msg_iov=[{iov_base="x", iov_len=1}], msg_control=NULL}, 0) = 1']
+        self.assertEqual(observer.parse(lines)[0], [])
+        lines[0]=lines[0].replace('60<UNIX-STREAM:[123->124]>', '60<TCP:[127.0.0.1:1234->198.51.100.99:443]>')
+        attempts,_=observer.parse(lines)
+        self.assertEqual([(a.address,a.port,a.protocol) for a in attempts],[('198.51.100.99',443,'tcp')])
+
+    def test_failed_opaque_truncated_and_payload_descriptor_receipts_cannot_grant_local_family(self):
+        receipt='10<firefox> 1.000001 recvmsg(9<UNIX-STREAM:[1->2]>, {msg_name=NULL, msg_iov=[], msg_control=[{cmsg_len=20, cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60<UNIX-STREAM:[123->124]>]}], msg_flags=0}, 0) = 1'
+        send='10<firefox> 1.000002 sendmsg(60, {msg_name=NULL, msg_iov=[], msg_control=NULL}, 0) = 0'
+        for invalid in (receipt.replace(' = 1',' = -1 EFAULT'),
+                        receipt.replace('60<UNIX-STREAM:[123->124]>','60'),
+                        receipt.replace('60<UNIX-STREAM:[123->124]>','60, ...'),
+                        receipt.replace('msg_flags=0','msg_flags=MSG_CTRUNC'),
+                        receipt.replace('SCM_RIGHTS','SCM_CREDENTIALS')):
+            with self.subTest(receipt=invalid),self.assertRaises(ValueError):observer.parse([invalid,send])
+        old='10<firefox> 1.000000 socketpair(AF_UNIX, SOCK_STREAM, 0, [60, 61]) = 0'
+        with self.assertRaises(ValueError):observer.parse([old,receipt.replace('60<UNIX-STREAM:[123->124]>','60'),send])
+        payload='10<firefox> 1.000001 recvmsg(9<UNIX-STREAM:[1->2]>, {msg_name=NULL, msg_iov=[{iov_base="cmsg_level=SOL_SOCKET,cmsg_type=SCM_RIGHTS,cmsg_data=[60<UNIX:[123]>]", iov_len=80}], msg_control=NULL, msg_flags=0}, 0) = 80'
+        with self.assertRaises(ValueError):observer.parse([payload,send])
+        with self.assertRaises(ValueError):observer.parse([old,'10<firefox> 1.000001 recvmsg(9, 0x123, 0) = 1',send])
+        with self.assertRaises(ValueError):observer.parse([old,'10<firefox> 1.000001 recvmsg(9, {msg_control=[...], msg_flags=0}, 0) = 1',send])
+
     def test_successful_unannotated_unix_pair_is_inherited_and_shared(self):
         for output in ('[29, 30]', '[29<UNIX-STREAM:[1->2]>, 30<UNIX-STREAM:[2->1]>]'):
             lines=['10<chrome> 1.000000 socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, '+output+') = 0',

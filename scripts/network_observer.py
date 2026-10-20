@@ -112,11 +112,12 @@ class Attempt:
 
 
 def records(lines):
-    """Join unfinished/resumed syscalls, retaining the entry timestamp.
+    """Join unfinished calls with timestamps needed for descriptor ownership.
 
-    Results for socket creation, accepts and forks are decoded at return. Replay
-    them at entry order so inherited/shared descriptor tables exist before a
-    child sends a reply. Incomplete outgoing entries still count as attempts.
+    Forks replay at entry so inherited/shared tables exist before a child sends
+    a reply. A blocking recvmsg installs its received descriptors at return;
+    replaying them at entry can let an intervening close of the old descriptor
+    erase the new receipt. Incomplete outgoing entries still count as attempts.
     """
     pending, result = {}, []
     pattern = re.compile(r'^(\d+)(?:<([^>]+)>)?\s+([0-9]+\.[0-9]+)\s+(.*)$')
@@ -131,7 +132,8 @@ def records(lines):
         if resumed:
             entry=pending.pop((pid,resumed[1]),None)
             if entry is None:raise ValueError('Trace is missing a resumed syscall entry')
-            result.append((*entry[:3],entry[3]+resumed[2]))
+            replay_time=float(timestamp) if resumed[1]=='recvmsg' else entry[2]
+            result.append((entry[0],entry[1],replay_time,entry[3]+resumed[2]))
             continue
         call=re.match(r'([a-z0-9_]+)\(',body)
         if not call:continue
@@ -240,6 +242,50 @@ def parse(lines,stats=None):
                 connected[key]=destination
                 owned.add(key[1])
                 if identity:inode_peer[identity]=destination
+        if name == 'recvmsg' and returned is not None and returned >= 0 and len(args) > 1:
+            if not args[1].startswith('{') or not args[1].endswith('}'):
+                raise ValueError('Received message header is unreadable')
+            if 'MSG_CTRUNC' in (field(args[1], 'msg_flags') or ''):
+                raise ValueError('Received descriptor control data was truncated')
+            control = field(args[1], 'msg_control')
+            if control is None and field(args[1], 'msg_controllen') not in {None, '0'}:
+                raise ValueError('Received descriptor control data is unreadable')
+            if control and control != 'NULL':
+                if not control.startswith('[') or not control.endswith(']'):
+                    raise ValueError('Received descriptor control data is unreadable')
+                messages = arguments(control[1:-1]) if control[1:-1].strip() else []
+                for message in messages:
+                    if (not message.startswith('{') or not message.endswith('}')
+                            or field(message, 'cmsg_level') is None or field(message, 'cmsg_type') is None):
+                        raise ValueError('Received descriptor control message is unreadable')
+                    if field(message, 'cmsg_level') != 'SOL_SOCKET' or field(message, 'cmsg_type') != 'SCM_RIGHTS':
+                        continue
+                    values = field(message, 'cmsg_data') or ''
+                    descriptors = arguments(values[1:-1]) if values.startswith('[') and values.endswith(']') else []
+                    if not descriptors or any(not re.fullmatch(r'[0-9]+(?:<.*>(?:\(deleted\))?)?', value) for value in descriptors):
+                        raise ValueError('Received socket descriptors are unreadable')
+                    for value in descriptors:
+                        received = (owner, fd(value))
+                        # Receiving a descriptor replaces any previous table
+                        # entry; an opaque/file descriptor grants no local family.
+                        sockets.pop(received, None); connected.pop(received, None)
+                        owned.add(received[1])
+                        kind = re.match(r'[0-9]+<(TCPv6|TCP|UDPv6|UDP|UNIX(?:-[A-Z]+)?|NETLINK):', value)
+                        if not kind:
+                            continue
+                        kind = kind[1]
+                        if kind.startswith('UNIX'): domain, protocol = 'AF_UNIX', 'local'
+                        elif kind == 'NETLINK': domain, protocol = 'AF_NETLINK', 'local'
+                        else:
+                            domain = 'AF_INET6' if kind.endswith('v6') else 'AF_INET'
+                            protocol = 'udp' if kind.startswith('UDP') else 'tcp'
+                        sockets[received] = (domain, protocol)
+                        received_inode = socket_identity(value)
+                        destination = inline_endpoint(value) or inode_peer.get(received_inode)
+                        if destination: connected[received] = destination
+                        if received_inode:
+                            inode_family[received_inode] = (domain, protocol)
+                            if destination: inode_peer[received_inode] = destination
         if (name in {'dup','dup2','dup3'} or name=='fcntl' and len(args)>1 and args[1] in {'F_DUPFD','F_DUPFD_CLOEXEC'}) and returned is not None and returned>=0:
             duplicate=(owner,returned)
             family=sockets.get(key) or inode_family.get(identity)
