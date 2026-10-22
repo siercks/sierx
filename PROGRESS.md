@@ -2122,10 +2122,17 @@ Bootstrap rejects older or prerelease runtimes while allowing later stable
 Node 24 patches/minors. Offline-host guests reject old prepared Node before
 application import; acceptance/promotion also rejects reports from old drivers.
 
-Validation before publication: all 125 Python tests pass, including stale
-runtime rejection and selector consistency; the shell bootstrap regression,
-existing CI isolation boundary proof, ShellCheck, shell syntax, secret scan,
-and diff whitespace checks pass. The downloaded official Node image reports
-v24.22.1. The isolated local CI image is being refreshed; full source/native
-host gates require results for the new commit. No phase acceptance or
-production deployment is claimed by this toolchain update.
+Current security scans also identified GO-2026-6809 in Go 1.27.2 and the
+markdown-it denial-of-service advisories GHSA-gfr2-rv44-r23c and
+GHSA-vfgh-jcmw-g37q in 15.0.2. Update the compiler to 1.27.3 and markdown-it
+to 15.0.3, including its required argparse patch and registry integrity data.
+
+Validation: all 125 Python tests pass, including stale runtime rejection and
+selector consistency; the shell bootstrap regression, existing CI isolation
+boundary proof, ShellCheck, shell syntax, secret scan and whitespace checks
+pass. An isolated run on the official Node 24.22.1 image, with its version
+asserted before execution, passes the production frontend build, all 45 unit
+tests and the hostile-Markdown proof. npm audit reports zero vulnerabilities.
+Prepared environments must be rebuilt for the new inputs; full source/native
+host gates require results for the updated commit. No phase acceptance or
+production deployment is claimed by this security update.
