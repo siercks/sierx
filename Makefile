@@ -46,6 +46,7 @@ help: ## List targets
 # `make gate-0` before asking for sign-off — `check` passing is not a claim
 # that the phase gate passes.
 check: ## Fast dev loop: vet, SQL invariants, store tests, generated-code and source gates
+	@bash test/shell/bootstrap-check_test.sh
 	@bash test/shell/test-go_test.sh
 	@bash test/shell/ci-local_test.sh
 	@python3 -m unittest discover -s test/python -p "test_*.py"
@@ -229,6 +230,7 @@ bench-http: ## Record 500-sample authenticated HTTP latency/byte evidence on an 
 # order: cheap checks first, so a broken toolchain fails in seconds rather
 # than after the benchmarks.
 gate-0: web-build ## The phase-0 gate: every check that must pass before phase 1
+	@bash test/shell/bootstrap-check_test.sh
 	@python3 scripts/secret-scan.py --root . --self-test
 	@$(MAKE) --no-print-directory gate-units
 	@bash test/shell/postgres-tools_test.sh

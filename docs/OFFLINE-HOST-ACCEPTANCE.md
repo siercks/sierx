@@ -12,6 +12,12 @@ operations run as the synthetic UID 1001. Guest root only prepares fault copies,
 checks namespace/identity evidence and observes processes. Connected OS/browser
 preparation happens before isolation, in the preparer's Podman store.
 
+The preparer uses the exact Node version in `.nvmrc`, currently 24.22.1.
+The guest rejects an older Node 24 runtime before importing the application,
+and report validation rejects evidence from an unpatched browser driver.
+After changing this pin, rerun `make ci-local-prepare` and
+`make offline-host-prepare`; existing prepared images do not update themselves.
+
 KVM runs have a 1,900-second workload limit. A host without nested virtualization
 uses native-architecture TCG with a bounded 10,800-second workload limit and
 1,800-second command limits (5,400 seconds for the complete browser command).

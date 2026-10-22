@@ -6,6 +6,8 @@ from network_observer import CONTROLS, PROCESSES
 
 SCHEMA = 2
 SUITE = 'offline-host-v2'
+# Keep the acceptance runtime aligned with .nvmrc; the contract test checks it.
+NODE_MIN_VERSION = (24, 22, 1)
 CHECKS = ['checksum-approved-delivery-archive','rootless-import', 'real-quadlet-db', 'migrations-bootstrap', 'actual-plan-apply',
           'provided-tls-login-write-deep-link', 'repeat-apply-noop', 'all-service-restart-persistence',
           'delivered-browser-workflows','observed-connection-attempts']
@@ -78,14 +80,21 @@ def control_failure_diagnostic(text):
     return None
 
 
+def validate_node(version):
+    match = re.fullmatch(r'v([0-9]+)\.([0-9]+)\.([0-9]+)', version) if isinstance(version, str) else None
+    parsed = tuple(map(int, match.groups())) if match else ()
+    if not parsed or parsed[0] != NODE_MIN_VERSION[0] or parsed < NODE_MIN_VERSION:
+        raise ValueError('Prepared browser driver requires stable Node 24 >= 24.22.1; refresh the test OS')
+
+
 def validate_browser(report):
     if (not isinstance(report, dict) or report.get('result') != 'passed'
             or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', report.get('playwright', ''))
             or not isinstance(report.get('browsers'), list) or len(report['browsers']) != 2):
         raise ValueError('Missing delivered browser workflow evidence')
     driver=report.get('driver',{})
-    if (not re.fullmatch(r'v24\.[0-9]+\.[0-9]+',driver.get('node',''))
-            or driver.get('policy')!='seccomp-deny-io-uring' or driver.get('policy_verified') is not True
+    validate_node(driver.get('node'))
+    if (driver.get('policy')!='seccomp-deny-io-uring' or driver.get('policy_verified') is not True
             or driver.get('external_fetch_control') is not True or driver.get('ipv4_only_verified') is not True
             or type(driver.get('recovery_read_retries')) is not int or not 0<=driver['recovery_read_retries']<=10):
         raise ValueError('Browser driver configuration and its real controls are missing')

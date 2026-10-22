@@ -2112,3 +2112,20 @@ rootless Podman: separate graph/runtime paths, zero images and rejection of an
 image present in the normal store. Native overlay selection is now explicit and
 verified. Full matching-candidate/profile acceptance remains pending; do not
 substitute these development results for it.
+
+## 2026-10-22 — Node.js security toolchain update
+
+The October 21 Node.js security release fixes the affected Node 24.22.0
+build/test runtime. Pin setup and prepared container acquisition to 24.22.1,
+and require >=24.22.1 <25 in the root/frontend manifests and lock metadata.
+Bootstrap rejects older or prerelease runtimes while allowing later stable
+Node 24 patches/minors. Offline-host guests reject old prepared Node before
+application import; acceptance/promotion also rejects reports from old drivers.
+
+Validation before publication: all 125 Python tests pass, including stale
+runtime rejection and selector consistency; the shell bootstrap regression,
+existing CI isolation boundary proof, ShellCheck, shell syntax, secret scan,
+and diff whitespace checks pass. The downloaded official Node image reports
+v24.22.1. The isolated local CI image is being refreshed; full source/native
+host gates require results for the new commit. No phase acceptance or
+production deployment is claimed by this toolchain update.

@@ -22,6 +22,26 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_node_security_minimum_matches_all_toolchain_selectors(self):
+        pin = (ROOT / '.nvmrc').read_text().strip()
+        self.assertEqual(tuple(map(int, pin.split('.'))), evidence.NODE_MIN_VERSION)
+        expected = '>=' + pin + ' <' + str(evidence.NODE_MIN_VERSION[0] + 1)
+        for name in ('package.json', 'web/package.json'):
+            self.assertEqual(json.loads((ROOT / name).read_text())['engines']['node'], expected)
+        self.assertEqual(json.loads((ROOT / 'web/package-lock.json').read_text())['packages']['']['engines']['node'], expected)
+
+    def test_old_or_incompatible_browser_node_cannot_satisfy_acceptance(self):
+        for version in ('v24.21.0', 'v24.22.0', 'v22.23.4', 'v26.12.1',
+                        'v24.22.1-rc.1', '24.22.1', None, 24):
+            report = copy.deepcopy(self.report)
+            report['browser']['driver']['node'] = version
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'refresh the test OS'):
+                evidence.validate(report, self.bundle, 'd'*64, 'c'*64)
+        for version in ('v24.22.1', 'v24.22.2', 'v24.23.0'):
+            report = copy.deepcopy(self.report)
+            report['browser']['driver']['node'] = version
+            evidence.validate(report, self.bundle, 'd'*64, 'c'*64)
+
     def test_runtime_probe_cannot_be_requested_as_closeout_or_satisfy_it(self):
         with self.assertRaisesRegex(ValueError,'require --development'):
             host.main(SimpleNamespace(runtime_probe=True,development=False))
@@ -158,7 +178,7 @@ class EvidenceTests(unittest.TestCase):
              'tls':'leaf-spki-pin' if engine=='chromium' else 'fixture-ca-nss',
              'service_workers':0, 'observer_controls':['document','document-ipv6','fetch','image','websocket']}
             for engine in ('chromium','firefox')]}
-        self.report['browser']['driver']={'node':'v24.22.0','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True,'recovery_read_retries':0}
+        self.report['browser']['driver']={'node':'v24.22.1','policy':'seccomp-deny-io-uring','policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True,'recovery_read_retries':0}
 
     def test_browser_read_recovery_count_is_required_and_bounded(self):
         for value in (-1,11,True,'1',None):

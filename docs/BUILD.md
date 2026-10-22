@@ -235,7 +235,7 @@ Where an ADR in §4 knowingly departs from a higher tier, it says so and carries
 | Dev host | RHEL-family Linux, Podman (rootless) | No Docker, no docker-compose |
 | Database | PostgreSQL 18, self-hosted container, dev and prod | Full control of extensions and `pg_stat_statements` |
 | Go | **1.27.x** — pin `go 1.27.2` in `go.mod` | Go 1.27.0 released 2026-08-19; 1.27.2 on 2026-10-08 includes security fixes. Supported lines are 1.27 and 1.26. **high (verified)** |
-| Node | **24.x (Active LTS)** — pin in `.nvmrc` and `package.json` `engines` | Node 22 entered Maintenance 2025-10-21; Node 24 Active LTS since 2025-10-28, Maintenance 2026-10-20, EOL 2028-04-30. Node 26 becomes LTS in October 2026 — schedule a bump task then, don't chase it now. **high (verified)** |
+| Node | **24.22.1 minimum, Node 24 only** — exact setup/image version in `.nvmrc`; minimum in both `package.json` `engines` | October 21, 2026 security release. Bootstrap and offline-host acceptance reject older Node 24 runtimes. Refresh prepared CI and host-test images after changing the pin. Node 26 migration remains a separate task. **high (verified)** |
 | JSON | Golden files are generated and verified under the pinned toolchain only | Go 1.27 backs `encoding/json` with the v2 engine: behaviour preserved, but escaping bytes and error text differ from 1.26. `GOEXPERIMENT=nojsonv2` is a comparison escape hatch, not a shipping configuration. **high (verified)** |
 | Frontend | Vite + React 19 + Sierx semantic CSS/tokens + Base UI interaction primitives | Sierx owns its visual contract and themes; Base UI supplies headless behavior for accessible interactions. Its render API and @floating-ui/react dependency matter to the section 9.1 budget. **high (verified)** |
 | Markdown | `markdown-it`, `html: false`, lazy-loaded | ADR-014 |
@@ -1303,7 +1303,7 @@ against in one command.
    noise the license gate does not need.
 1. `go mod init github.com/siercks/sierx`; set `go 1.27.2`. The module path
    matches the repository's `go-import` metadata, so it must be exactly this.
-2. `.nvmrc` → `24`; `package.json` `engines.node` → `>=24 <25`.
+2. `.nvmrc` → `24.22.1`; root/frontend `package.json` `engines.node` → `>=24.22.1 <25`.
 3. Copy the specification to `docs/SPEC.md` verbatim and this guide to
    `docs/BUILD.md`.
 4. Seed `docs/DECISIONS.md` with ADR-001 … ADR-016 from §4, verbatim, all at

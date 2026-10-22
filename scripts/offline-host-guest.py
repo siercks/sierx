@@ -107,6 +107,7 @@ def await_database():
 def main():
     os.umask(0o077)
     require(os.getuid() == 1001, 'Guest fixture requires the unprivileged synthetic account')
+    evidence.validate_node(run('/usr/local/bin/node', '--version'))
     require(Path('/proc/1/comm').read_text().strip() == 'systemd', 'Guest system manager is not real systemd')
     require(any(line in {'0::/', '0::/init.scope'} for line in Path('/proc/1/cgroup').read_text().splitlines()),
             'Guest system manager lacks its own unified cgroup namespace')
