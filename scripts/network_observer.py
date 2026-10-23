@@ -77,6 +77,31 @@ def field(text, name):
     return None
 
 
+def control_failure_detail(header, messages, index):
+    """Bounded structural evidence only; never print trace text or addresses.
+
+    strace can use an ellipsis for several different ancillary-buffer shapes.
+    Retain enough numeric structure to distinguish them after an ephemeral
+    runner disappears, without accepting an unreadable descriptor receipt.
+    """
+    def number(value):
+        if value and re.fullmatch(r'[0-9]{1,10}', value):
+            parsed = int(value)
+            if parsed <= 0xffffffff:
+                return str(parsed)
+        return 'unknown'
+
+    lengths = [number(field(message, 'cmsg_len')) for message in messages[:min(index, 4)]]
+    message = messages[index]
+    tail = ('bare' if message == '...' else 'address-comment'
+            if re.fullmatch(r'\.\.\. /\* 0x[0-9a-fA-F]{1,16} \*/', message) else 'other')
+    return ('control-bytes=' + number(field(header, 'msg_controllen')) +
+            ' leading-lengths=' + (','.join(lengths) or 'none') +
+            ' leading-lengths-capped=' + str(int(index > 4)) +
+            ' tail=' + tail + ' terminal=' + str(int(index == len(messages)-1)) +
+            ' kernel-ctrunc=' + str(int('MSG_CTRUNC' in (field(header, 'msg_flags') or ''))))
+
+
 def fd(text):
     match = re.match(r'([0-9]+)', text)
     return int(match[1]) if match else None
@@ -138,8 +163,21 @@ def records(lines):
     for raw in lines:
         line = pattern.match(raw.strip())
         if not line:
-            if re.search(r'\b(connect|sendto|sendmsg|sendmmsg|recvmsg|socket|socketpair|accept4?|getpeername|close|dup[23]?|fcntl|execve(?:at)?|clone3?|fork|vfork|io_uring_\w+)\(', raw):
-                raise ValueError('A state-changing trace record could not be classified')
+            changed = re.search(r'\b(connect|sendto|sendmsg|sendmmsg|recvmsg|socket|socketpair|accept4?|getpeername|close|dup[23]?|fcntl|execve(?:at)?|clone3?|fork|vfork|io_uring_\w+)(?:\(| resumed>)', raw)
+            if changed:
+                # A failed ephemeral runner cannot retain its private trace.
+                # Report only fixed header/completion categories, never the
+                # process label, arguments, path, payload or raw trace prefix.
+                call = changed[1] if changed[1] in {'connect','sendto','sendmsg','sendmmsg','recvmsg','socket',
+                    'socketpair','accept','accept4','getpeername','close','dup','dup2','dup3','fcntl',
+                    'execve','execveat','clone','clone3','fork','vfork'} else 'io_uring'
+                prefix = ('numbered' if re.match(r'^\d+(?:<|\s)',raw.strip()) else
+                          'bracketed' if re.match(r'^\[pid\s+[0-9]+\]',raw.strip()) else 'other')
+                raise ValueError('A state-changing trace record could not be classified: call='+call+
+                    ' prefix='+prefix+' timestamp='+str(int(bool(re.search(r'\s[0-9]+\.[0-9]+\s',raw[:256]))))+
+                    ' return='+str(int(bool(re.search(r'\)\s*=\s*-?[0-9]+',raw))))+
+                    ' unfinished='+str(int('<unfinished ...>' in raw))+
+                    ' resumed='+str(int(bool(re.search(r'<\.\.\. [a-z0-9_]+ resumed>',raw)))))
             continue
         pid, program, timestamp, body = line.groups()
         resumed = re.match(r'<\.\.\. ([a-z0-9_]+) resumed>(.*)', body)
@@ -278,7 +316,8 @@ def parse(lines,stats=None):
                         shape = 'record' if message.startswith('{') and message.endswith('}') else 'ellipsis' if message.startswith('...') else 'other'
                         raise ValueError('Received descriptor control message is unreadable: role='+role+' shape='+shape+
                             ' index='+str(message_index)+' level-present='+str(int(field(message,'cmsg_level') is not None))+
-                            ' type-present='+str(int(field(message,'cmsg_type') is not None)))
+                            ' type-present='+str(int(field(message,'cmsg_type') is not None))+' '+
+                            control_failure_detail(args[1], messages, message_index))
                     if field(message, 'cmsg_level') != 'SOL_SOCKET' or field(message, 'cmsg_type') != 'SCM_RIGHTS':
                         continue
                     values = field(message, 'cmsg_data') or ''

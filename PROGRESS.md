@@ -2226,3 +2226,62 @@ separate. No production migration or Phase 2 acceptance is claimed here.
 --- PASS: TestBrowserAcceptance (122.42s)
 gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
 ```
+
+## 2026-10-22 — Deployment and actionable observer failure evidence
+
+At the owner's explicit request, native-tested AMD64 revision `3f82b6d` was
+deployed before the remaining emulated ARM64 release-host check completed.
+This is an operator-approved candidate deployment, not full release promotion or
+Phase 2 acceptance. Ubuntu AMD64 and Rocky AMD64 release-host checks passed;
+release run 39881909523 remains separate from the failed PR run 39878095151.
+
+A protected populated restore rehearsed schema 15 to 16 before deployment.
+The paused live upgrade preserved every existing row fingerprint across 31
+tables, including both accounts/memberships and all 10 items. The exact image,
+clean production source, HTTPS pages/assets and three services were verified.
+Andrew's existing HTTPS login and assignee roster passed; Member access to the
+administrator page and GET/POST member-management APIs was denied. The matching
+scheduled recovery code was installed and a fresh encrypted backup restored all
+10 items/31 tables in an isolated database, with wrong-key rejection and rollup
+verification. An administrator HTTP sign-in was not tested; no account reset or
+fabricated administrator session was used. Owner walkthrough and independent
+off-machine recovery remain open.
+
+PR job 120168610750 completed its functional scenarios, then rejected a Firefox
+received-descriptor control record containing an ellipsis at index 2. Its raw
+trace was intentionally private and disappeared with the ephemeral runner; the
+public diagnostic lacked the buffer/header lengths needed to distinguish causes.
+A bounded actual Linux strace 6.8 sweep (2,056 Unix-socket receipts with rights,
+credentials and varied control-buffer sizes) did not reproduce it. The cause is
+therefore still unproven; interpreting all ellipses as benign would be unsafe.
+
+The corrective change retains bounded numeric control-buffer/preceding-header
+lengths, terminal position, a fixed ellipsis category and kernel-truncation flag
+in the rejection diagnostic. It prints no payload, descriptor labels or memory
+addresses. Oversized/non-numeric fields become `unknown`; preceding lengths are
+capped at four. Regression fixtures require both bare and address-comment
+ellipses to remain rejected and prove that hostile labels/oversized numbers
+cannot leak into diagnostics. This fixes the evidence gap so the next attempt
+can establish a cause; it does not claim to fix the underlying Firefox record.
+
+Failed checks now follow an explicit loop: preserve the failure, state what was
+learned, make a supported correction (including diagnostics when evidence is
+insufficient), validate it locally, then run a new attempt. Do not repeat an
+unchanged failure or weaken the network audit to obtain a passing result.
+
+The completed PR ARM64 job 120168610678 also reached `complete`, then rejected
+an unclassified state-changing trace record. It was not a database-startup
+timeout or an OOM: the final resource markers showed zero OOM kills and adequate
+memory/disk. Add fixed syscall/header/timestamp/return/unfinished/resumed
+categories to that rejection as well. Unknown io_uring operation names are
+normalized instead of printing raw text. A malformed-resumed-header regression
+initially exposed an additional rejection gap: resumed state-changing calls
+without a valid trace header could be ignored. Detect and reject them, then
+require the fixture to pass. This strengthens rejection; valid decoded records
+retain their existing interpretation.
+
+Validation for this diagnostic increment: all 35 observer tests and the full
+128-test Python suite pass; secret-scan/self-test and whitespace checks pass.
+Full source/native/host checks for the new revision remain pending. Preserve
+both old failures rather than rewriting their results; use the new evidence
+to choose the next correction if the new attempt fails.

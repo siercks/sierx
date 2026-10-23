@@ -29,6 +29,23 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_unclassified_trace_diagnostic_reports_fixed_categories_without_leaking_prefix(self):
+        private = 'private-password-or-process-label'
+        for raw,prefix in (('[pid 10] 1.000001 connect(3, "'+private+'", 16) = -1 EFAULT','bracketed'),
+                           ('10<'+private+'> no-timestamp recvmsg(9, <unfinished ...>','numbered'),
+                           (private+' <... recvmsg resumed>{msg_name=NULL}, 0) = 1','other')):
+            with self.subTest(prefix=prefix), self.assertRaises(ValueError) as caught:
+                observer.parse([raw])
+            detail=str(caught.exception)
+            self.assertIn('prefix='+prefix,detail)
+            self.assertNotIn(private,detail)
+            self.assertLess(len(detail),220)
+        operation='private_secret_operation'
+        with self.assertRaises(ValueError) as caught:
+            observer.parse(['invalid io_uring_'+operation+'(1) = 0'])
+        self.assertIn('call=io_uring',str(caught.exception))
+        self.assertNotIn(operation,str(caught.exception))
+
     def test_real_strace_file_labels_are_opaque_to_message_structure(self):
         for label in ('mozilla-ipc', 'font-list]', 'texture,{fd}', 'JS(Thing]',
                       'label,with[bracket]', r'right\76arrow', r'quoted\"file', 'trailing-'):
@@ -62,6 +79,41 @@ class NetworkObserverTests(unittest.TestCase):
             observer.parse([receipt])
         self.assertIn('shape=other', str(caught.exception))
         self.assertNotIn('private-payload', str(caught.exception))
+
+    def test_ellipsis_diagnostic_preserves_bounded_structure_without_accepting_receipt(self):
+        # This is a diagnostic fixture, not a claim to reproduce the lost CI
+        # trace or prove that the trailing bytes are harmless kernel padding.
+        prefix = ('10<firefox> 1.000001 recvmsg(9, {msg_control=['
+                  '{cmsg_len=28, cmsg_level=SOL_SOCKET, cmsg_type=SCM_CREDENTIALS, cmsg_data={pid=10, uid=1, gid=1}}, '
+                  '{cmsg_len=20, cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60<UNIX:[2]>]}, ')
+        for tail, category in (('...', 'bare'), ('... /* 0x7ff123abc */', 'address-comment')):
+            receipt = prefix + tail + '], msg_controllen=60, msg_flags=MSG_CTRUNC}, 0) = 1'
+            with self.subTest(tail=category), self.assertRaises(ValueError) as caught:
+                observer.parse([receipt])
+            detail = str(caught.exception)
+            for expected in ('shape=ellipsis index=2', 'control-bytes=60', 'leading-lengths=28,20',
+                             'leading-lengths-capped=0', 'tail='+category, 'terminal=1', 'kernel-ctrunc=1'):
+                self.assertIn(expected, detail)
+            self.assertNotIn('0x7ff123abc', detail)
+            self.assertLess(len(detail), 400)
+
+    def test_control_diagnostic_cannot_leak_payload_labels_or_unbounded_numeric_fields(self):
+        private = 'private-password-or-payload'
+        records = ', '.join('{cmsg_len='+('9'*1000 if i==0 else '20')+
+                            ', cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, '
+                            'cmsg_data=[60</memfd:'+private+'>]}' for i in range(8))
+        receipt = ('10<firefox> 1.000001 recvmsg(9, {msg_control=['+records+', ... /* '+private+
+                   ' */], msg_controllen='+private+', msg_flags=0}, 0) = 1')
+        with self.assertRaises(ValueError) as caught:
+            observer.parse([receipt])
+        detail = str(caught.exception)
+        self.assertIn('control-bytes=unknown', detail)
+        self.assertIn('leading-lengths=unknown,20,20,20', detail)
+        self.assertIn('leading-lengths-capped=1', detail)
+        self.assertIn('tail=other terminal=1 kernel-ctrunc=0', detail)
+        self.assertNotIn(private, detail)
+        self.assertNotIn('9'*11, detail)
+        self.assertLess(len(detail), 400)
 
     def test_kernel_discard_flag_still_requires_complete_metadata_for_every_returned_fd(self):
         receipt='10<firefox> 1.000001 recvmsg(9<UNIX:[1]>, {msg_control=[{cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[60<UNIX:[2]>]}], msg_flags=MSG_CTRUNC}, 0) = 1'
