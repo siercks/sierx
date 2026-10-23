@@ -1,5 +1,5 @@
 import { Dialog as Primitive } from '@base-ui/react/dialog';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 // Base UI supplies dialog behavior; Sierx owns the component structure and style.
 export function Dialog({
@@ -9,27 +9,29 @@ export function Dialog({
   triggerVariant = 'outline',
   open,
   onOpenChange,
+  finalFocus,
 }: {
-  trigger: string;
+  trigger?: string;
   title: string;
   children: ReactNode;
   triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive';
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  finalFocus?: ComponentProps<typeof Primitive.Popup>['finalFocus'];
 }) {
   return (
     <Primitive.Root open={open} onOpenChange={onOpenChange}>
-      <Primitive.Trigger
+      {trigger && <Primitive.Trigger
         aria-label={trigger}
         className={`sx-btn button button-${triggerVariant}`}
         data-variant={triggerVariant === 'default' ? 'primary' : triggerVariant}
       >
         {trigger}
-      </Primitive.Trigger>
+      </Primitive.Trigger>}
       <Primitive.Portal>
         <Primitive.Backdrop className="dialog-backdrop" />
         <Primitive.Viewport className="dialog-viewport">
-          <Primitive.Popup className="dialog">
+          <Primitive.Popup className="dialog" finalFocus={finalFocus}>
             <div className="dialog-head">
               <Primitive.Title className="dialog-title">{title}</Primitive.Title>
               <Primitive.Close

@@ -1952,3 +1952,336 @@ A controlled six-second PostgreSQL initialization script reproduced an early rol
 Release artifact/offline jobs now explicitly install/select PostgreSQL 18 clients rather than depending on different runner defaults. The root offline test preserves the reviewed client PATH. Failure output now identifies a safe program name/exit status and separate readiness/role/migration stages without publishing arguments or stderr. Acceptance evidence requirements remain intact.
 
 Verification: all 50 Python tooling tests passed, including six new readiness/client/timeout/stale-evidence/privacy cases; the delayed real rootless amd64 artifact passed. Bash syntax passed. Local ShellCheck was unavailable in the cached tool image; the existing hosted workflow-lint job enforces ShellCheck/actionlint. Runtime code is unchanged. New hosted checks and a fresh release run must validate the pushed correction; no new promoted release or server change is claimed.
+
+## 2026-10-18 — Owner-reported usability fixes
+
+Implemented the first follow-up increment from the owner's near-daily trial, based
+on 4e0c216. Backlog titles now keep a fixed starting column across status widths;
+footers center and wrap; successful item edits close with focus return and a live
+confirmation, while failures/conflicts keep the draft. Platinum restores content
+gutters and mobile form padding/text; Plain Text item details override its narrow
+document measure. Regenerated theme metadata. No new dependencies or data/API
+changes. Details-pane field editing and administrator/workflow tooling remain
+separate planned increments.
+
+The five new browser regressions reproduced all five reports against the baseline:
+status-dependent title shift, left-aligned footer, 513px Plain Text detail in
+1236px available space, 1px Platinum mobile content inset, and a successful save
+leaving its dialog open. They pass on the updated build in both engines. Existing
+concurrent-update, explicit retry and expired-session draft checks also pass with
+the intended successful-save close behavior.
+
+Local network-disabled disposable Linux/PostgreSQL/HTTPS fixture output:
+
+```text
+make gate-browser gate-stylelint gate-routes
+Test Files  7 passed (7)
+Tests  41 passed (41)
+[chromium] 46 passed (1.9m)
+[firefox] 46 passed (2.6m)
+--- PASS: TestBrowserAcceptance (271.42s)
+selected-test: required test and subtests passed
+style/focus gates: PASS
+gate-routes: OK
+
+make gate-virtualization
+[chromium] 1 passed
+[firefox] 1 passed (13.3s)
+--- PASS: TestBrowserAcceptance (142.06s)
+selected-test: required test and subtests passed
+```
+
+Production build, generated theme checks, bundle budgets and offline-resource
+checks passed; initial Brotli JS 101496 bytes, CSS 19164 bytes. Alignment coverage
+includes all 23 appearances; narrow-screen checks use 320px/390px viewports and
+synthetic-data screenshots. Physical mobile-device review, hosted/native release
+acceptance and production deployment were not performed for this increment.
+Actual-use evidence is near-daily from October 9, not a claim of seven consecutive
+days as the primary backlog. Phase 2 acceptance remains open.
+
+## 2026-10-18 — Remaining owner priority changes
+
+Implemented focused Assignee/Start date/Due date editors using the existing
+item-version and mutation paths, with active-workspace member search and date
+clearing. Added selected-text Markdown formatting, keyboard shortcuts and a
+lazy safe preview to create/edit descriptions and comments; successful comment
+submission resets its controlled draft. Project creation is directly accessible
+beside project navigation and reuses the existing form.
+
+Added administrator `/settings`, workspace-name versioning and scoped update
+policy (migration 0015), plus additive per-project item-workflow snapshots:
+custom statuses, display order, visual outgoing-flow cards, allowed transitions
+and requirements, per-type initial statuses and explicit reviewed save. Existing
+definitions/history are retained. Stale and concurrent writes are rejected;
+only one save from a common base version can publish. See ADR-029 and
+`docs/WORKSPACE-SETTINGS.md` for scope, API ownership and use. No Kanban surface,
+YAML reconcile service, cross-project moves or new dependencies were added.
+
+Successful status changes now close with stable keyboard focus even when their
+destination has no outgoing transition. Visual review also found a shared Button
+class collision: the default size unintentionally applied the primary variant
+class to outline buttons, hiding labels. Variant/size classes are separated;
+real computed text/background contrast is checked across all 23 appearances.
+
+Final network-disabled `make ci-local` validation passed the complete gate-2,
+including gate-0, gate-1, 50 Chromium and 50 Firefox workflow checks and the
+separate real 10k scrolling/focus check in both engines. API tests
+cover tenant/admin boundaries, roster minimization, optimistic conflicts,
+immutable definitions, rejected drafts, initial statuses, required fields,
+history/config retention and two concurrent workflow saves. Golden route coverage,
+generated schema/types/routes, migration reversibility, RLS/privilege checks,
+offline resources and bundle limits remain enforced. Current initial Brotli JS
+102702 bytes, CSS 19236 bytes; 43 frontend unit tests pass.
+
+```text
+gate-0: GREEN
+gate-1: GREEN (automated; human walkthrough remains required)
+[chromium workflow] 50 passed (2.1m)
+[firefox workflow] 50 passed (2.9m)
+--- PASS: TestBrowserAcceptance (302.42s)
+[chromium 10k] 1 passed (8.1s)
+[firefox 10k] 1 passed (12.6s)
+--- PASS: TestBrowserAcceptance (122.33s)
+gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
+```
+
+No GitHub push, native release promotion or production deployment was performed.
+Owner/manual/host recovery acceptance and Phase 2 exit remain separate.
+
+## 2026-10-18 — navigation follow-up and closeout engineering
+
+The requested usability changes were subsequently released/deployed at `6dac24f`
+with migration 15. Native baseline release/offline run 39144952489 passed. The
+testbed deployment and server-local recovery rehearsal are recorded separately;
+this does not establish off-machine recovery or owner phase-exit sign-off.
+
+- [x] `67b1d98` fixes stale HTML bootstrap reuse after project-list cache eviction.
+  Real browser regressions cover pagination beyond 100 projects, obsolete
+  responses, warm/back-forward navigation, bounded retained lists, browser-frame
+  timing, and a 650 ms failed-save/retry that preserves the draft.
+- [x] A focused project creation/metadata-edit case passes in both engines.
+  It verifies the selected dashboard and reload after editing.
+- [ ] Expanded rootless host/delivery closeout: implementation and rejection
+  proofs are in progress. Require the actual matching candidate/profile reports
+  described in `docs/OFFLINE-HOST-ACCEPTANCE.md`; development VM probes and unit
+  fixtures do not close native/profile acceptance.
+
+Development source evidence for the navigation increment:
+
+```text
+[chromium workflow] 54 passed (2.4m)
+[firefox workflow] 54 passed (3.2m)
+--- PASS: TestBrowserAcceptance (339.20s)
+style/focus gates: PASS
+gate-routes: OK
+[chromium project metadata] 1 passed (3.5s)
+[firefox project metadata] 1 passed (4.3s)
+--- PASS: TestBrowserAcceptance (11.10s)
+```
+
+These results preserve the distinction between source browser checks, delivered
+artifact/host checks, and remaining operator/manual acceptance. The October 18
+closeout coding work has not changed the live deployment.
+
+Closeout harness development checks at this increment: all 90 Python tests
+passed; pinned actionlint and ShellCheck accepted the workflow/wrappers. The
+isolated Ubuntu amd64 probe passed real import, database/bootstrap, plan/apply,
+no-op/restart checks and both engines' delivered editing/query/deep-link
+workflows. Its Firefox control-window lifecycle failure was corrected; a full
+matching-candidate run is still required before checking the closeout box above.
+
+The complete network-disabled local source gate subsequently passed, including
+55 Chromium and 55 Firefox workflow tests and the separate 10k scrolling/focus
+case in each engine. Native source CI also passed on both architectures at
+`5da3544` (run 39182777001). Python rejection/contract coverage is now 91 tests.
+
+```text
+[chromium workflow] 55 passed (2.4m)
+[firefox workflow] 55 passed (3.1m)
+--- PASS: TestBrowserAcceptance (332.79s)
+[chromium 10k] 1 passed (8.5s)
+[firefox 10k] 1 passed (12.6s)
+--- PASS: TestBrowserAcceptance (123.31s)
+gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
+```
+
+Initial host runs correctly remained red: they exposed an ineffective empty-store
+control, a missing Rocky boot-kernel copy/tool path, and slow vfs copying under
+arm64 software virtualization. The store correction was checked with actual
+rootless Podman: separate graph/runtime paths, zero images and rejection of an
+image present in the normal store. Native overlay selection is now explicit and
+verified. Full matching-candidate/profile acceptance remains pending; do not
+substitute these development results for it.
+
+## 2026-10-22 — Node.js security toolchain update
+
+The October 21 Node.js security release fixes the affected Node 24.22.0
+build/test runtime. Pin setup and prepared container acquisition to 24.22.1,
+and require >=24.22.1 <25 in the root/frontend manifests and lock metadata.
+Bootstrap rejects older or prerelease runtimes while allowing later stable
+Node 24 patches/minors. Offline-host guests reject old prepared Node before
+application import; acceptance/promotion also rejects reports from old drivers.
+
+Current security scans also identified GO-2026-6809 in Go 1.27.2 and the
+markdown-it denial-of-service advisories GHSA-gfr2-rv44-r23c and
+GHSA-vfgh-jcmw-g37q in 15.0.2. Update the compiler to 1.27.3 and markdown-it
+to 15.0.3, including its required argparse patch and registry integrity data.
+
+Validation: all 125 Python tests pass, including stale runtime rejection and
+selector consistency; the shell bootstrap regression, existing CI isolation
+boundary proof, ShellCheck, shell syntax, secret scan and whitespace checks
+pass. An isolated run on the official Node 24.22.1 image, with its version
+asserted before execution, passes the production frontend build, all 45 unit
+tests and the hostile-Markdown proof. npm audit reports zero vulnerabilities.
+Prepared environments must be rebuilt for the new inputs; full source/native
+host gates require results for the updated commit. No phase acceptance or
+production deployment is claimed by this security update.
+
+## 2026-10-22 — Administrator Home and private Add Member
+
+Owner request: expose Administrator Home through the userbar profile control,
+with an Add Member section. The administrator-only page links workspace/workflow
+settings and lists/searches current-workspace members, including role and active
+state. Creation admits only a new regular Member under local sign-in; existing
+identities, credentials, roles and memberships cannot be overwritten. Proxy
+identities retain operator provisioning. See ADR-030 and WORKSPACE-SETTINGS.md.
+
+The browser generates an initial credential before submitting, keeps it only in
+component memory until explicit dismissal, and retains it after an uncertain
+response. The API hashes it with the existing bounded Argon2id work slot, commits
+before success and never returns plaintext. Duplicate rejection cannot replace
+an existing password. No invitation sender, public signup or role promotion is
+introduced. The administrator must save/share login details privately before
+leaving the page; a forced first-login password reset is not claimed.
+
+Migration 0016 gives runtime EXECUTE on two administrator-checked functions
+owned by an isolated NOLOGIN/non-superuser role. It grants no direct runtime
+account/membership write or password-read permission. Independent active-admin
+membership checks reject forged/missing/foreign tenant contexts. Normal assignee
+rosters retain only active display names/IDs. The member-list cursor binds search
+and tenant scope, bounds the traversal and includes inactive accounts for review.
+
+Targeted disposable PostgreSQL acceptance:
+
+```text
+--- PASS: TestAdminMemberProvisioningAuthorizationAndCredentials
+--- PASS: TestAdminMemberFunctionRejectsForgedOrMissingScope
+--- PASS: TestAdminMemberListIsolationAndPagination
+--- PASS: TestAdminMemberMigrationPreservesPopulatedAccountsAndItems
+Populated 15→16→15→16 preserved accounts, credential hashes, memberships,
+projects and items; member login passed.
+gate-db-privileges: application role attributes, ownership, DDL, secret columns and RLS catalog passed
+```
+
+The first browser pass exposed narrow-phone profile-menu overflow; position the
+mobile panel relative to the full header controls rather than the avatar alone.
+Ledger's wider brand also exposed the header grid's automatic minimum width;
+allow the mobile track to shrink, wrap brand navigation, and bound the panel to
+its containing controls. Both engines' focused checks pass all 23 appearances
+at 320/390px, including header-content bounds.
+The full gate also exposed a pre-existing rollback-test race: it compared global
+item counts while another package could commit to another workspace. Scope the
+assertion to its own items, rollups, events and counter, and deliberately commit
+an unrelated workspace item inside the test. This strengthens rollback evidence
+without serializing packages or changing production mutation behavior.
+
+```text
+--- PASS: TestMutateCallbackErrorRollsBack
+[chromium administrator/profile cases] 3 passed
+[firefox administrator/profile cases] 3 passed
+--- PASS: TestBrowserAcceptance (24.47s)
+```
+
+Recovery review identified a further bootstrap prerequisite: logical archives
+reference the new function owner and RLS policies before migrations can run.
+`db-roles.sh` now creates and validates that isolated NOLOGIN role on an empty
+cluster, and native artifact acceptance requires it before applying migrations.
+A separate synthetic PostgreSQL cluster reproduced restore rejection with the
+previous role helper, then restored with the corrected helper. Two accounts and
+memberships, password hashes, a project and item were preserved; restored member
+login and the restricted runtime list function passed. The artifact prerequisite
+also rejected the old setup and accepted the corrected setup.
+
+```text
+Prior role setup reproduced missing-provisioner restore failure.
+Fresh-cluster role bootstrap and logical restore passed: 2 members, 1 item;
+hashes/memberships preserved, login and runtime function passed.
+--- PASS: TestAdminFreshClusterLogicalRestore (2.39s)
+artifact fixture regression suite: 6 tests passed
+```
+
+The complete offline application gate passed. Its
+snapshot precedes the follow-up role-bootstrap/artifact prerequisite change;
+the fresh-cluster proof and fixture suite above validate that change separately.
+New exact-revision native/release checks, a protected populated deployment
+rehearsal, recovery operator revision/schema revalidation and owner review remain
+separate. No production migration or Phase 2 acceptance is claimed here.
+
+```text
+[chromium workflow] 61 passed (2.6m)
+[firefox workflow] 61 passed (3.5m)
+--- PASS: TestBrowserAcceptance (371.04s)
+[chromium 10k] 1 passed (7.8s)
+[firefox 10k] 1 passed (12.9s)
+--- PASS: TestBrowserAcceptance (122.42s)
+gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
+```
+
+## 2026-10-22 — Deployment and actionable observer failure evidence
+
+At the owner's explicit request, native-tested AMD64 revision `3f82b6d` was
+deployed before the remaining emulated ARM64 release-host check completed.
+This is an operator-approved candidate deployment, not full release promotion or
+Phase 2 acceptance. Ubuntu AMD64 and Rocky AMD64 release-host checks passed;
+release run 39881909523 remains separate from the failed PR run 39878095151.
+
+A protected populated restore rehearsed schema 15 to 16 before deployment.
+The paused live upgrade preserved every existing row fingerprint across 31
+tables, including both accounts/memberships and all 10 items. The exact image,
+clean production source, HTTPS pages/assets and three services were verified.
+Andrew's existing HTTPS login and assignee roster passed; Member access to the
+administrator page and GET/POST member-management APIs was denied. The matching
+scheduled recovery code was installed and a fresh encrypted backup restored all
+10 items/31 tables in an isolated database, with wrong-key rejection and rollup
+verification. An administrator HTTP sign-in was not tested; no account reset or
+fabricated administrator session was used. Owner walkthrough and independent
+off-machine recovery remain open.
+
+PR job 120168610750 completed its functional scenarios, then rejected a Firefox
+received-descriptor control record containing an ellipsis at index 2. Its raw
+trace was intentionally private and disappeared with the ephemeral runner; the
+public diagnostic lacked the buffer/header lengths needed to distinguish causes.
+A bounded actual Linux strace 6.8 sweep (2,056 Unix-socket receipts with rights,
+credentials and varied control-buffer sizes) did not reproduce it. The cause is
+therefore still unproven; interpreting all ellipses as benign would be unsafe.
+
+The corrective change retains bounded numeric control-buffer/preceding-header
+lengths, terminal position, a fixed ellipsis category and kernel-truncation flag
+in the rejection diagnostic. It prints no payload, descriptor labels or memory
+addresses. Oversized/non-numeric fields become `unknown`; preceding lengths are
+capped at four. Regression fixtures require both bare and address-comment
+ellipses to remain rejected and prove that hostile labels/oversized numbers
+cannot leak into diagnostics. This fixes the evidence gap so the next attempt
+can establish a cause; it does not claim to fix the underlying Firefox record.
+
+Failed checks now follow an explicit loop: preserve the failure, state what was
+learned, make a supported correction (including diagnostics when evidence is
+insufficient), validate it locally, then run a new attempt. Do not repeat an
+unchanged failure or weaken the network audit to obtain a passing result.
+
+The completed PR ARM64 job 120168610678 also reached `complete`, then rejected
+an unclassified state-changing trace record. It was not a database-startup
+timeout or an OOM: the final resource markers showed zero OOM kills and adequate
+memory/disk. Add fixed syscall/header/timestamp/return/unfinished/resumed
+categories to that rejection as well. Unknown io_uring operation names are
+normalized instead of printing raw text. A malformed-resumed-header regression
+initially exposed an additional rejection gap: resumed state-changing calls
+without a valid trace header could be ignored. Detect and reject them, then
+require the fixture to pass. This strengthens rejection; valid decoded records
+retain their existing interpretation.
+
+Validation for this diagnostic increment: all 35 observer tests and the full
+128-test Python suite pass; secret-scan/self-test and whitespace checks pass.
+Full source/native/host checks for the new revision remain pending. Preserve
+both old failures rather than rewriting their results; use the new evidence
+to choose the next correction if the new attempt fails.

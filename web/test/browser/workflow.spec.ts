@@ -39,6 +39,590 @@ async function create(
   return response.json();
 }
 test.beforeEach(async ({ context }) => authenticate(context));
+
+test('offline navigation retries only bounded emulated recovery reads', async ({ page, context }) => {
+  const moduleUrl = new URL('../../../scripts/offline-browser-navigation.mjs', import.meta.url).href;
+  const { createRecoveryNavigator } = await import(moduleUrl);
+  await context.clearCookies();
+  const recovery = 'Service unavailable pending operator recovery verification.\n';
+  const origin = new URL(url!).origin;
+  const login = origin + '/login';
+  let requests = 0;
+  let failures = 1;
+  let body = recovery;
+  const methods: string[] = [];
+  await page.route('**/login', async (route) => {
+    requests++;
+    methods.push(route.request().method());
+    if (failures-- > 0) await route.fulfill({ status: 503, contentType: 'text/plain', body });
+    else await route.continue();
+  });
+  const recovered = createRecoveryNavigator(page, { emulated: true, origin });
+  await recovered.goto(login);
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  expect(recovered.retries).toBe(1);
+  expect(requests).toBe(2);
+  for (const [emulated, responseBody] of [[false, recovery], [true, 'Unrelated outage']] as const) {
+    requests = 0;
+    failures = 10;
+    body = responseBody;
+    const single = createRecoveryNavigator(page, { emulated, origin });
+    await expect(single.goto(login)).rejects.toMatchObject({ httpStatus: 503, code: 'SIERX_READ_HTTP_STATUS' });
+    expect(requests).toBe(1);
+    expect(single.retries).toBe(0);
+  }
+  requests = 0;
+  failures = 10;
+  body = recovery;
+  const bounded = createRecoveryNavigator(page, { emulated: true, origin });
+  await expect(bounded.goto(login)).rejects.toMatchObject({ httpStatus: 503, code: 'SIERX_RECOVERY_UNAVAILABLE' });
+  expect(requests).toBe(6);
+  expect(bounded.retries).toBe(5);
+  expect(new Set(methods)).toEqual(new Set(['GET']));
+  await expect(bounded.goto('https://example.invalid/login')).rejects.toThrow('exact origin');
+});
+
+async function navigationProjects(context: BrowserContext, count: number) {
+  const navigationSessions = JSON.parse(process.env.SIERX_TEST_NAV_SESSIONS ?? '{}') as Record<string, string>;
+  const token = navigationSessions[test.info().project.name];
+  if (!token) throw new Error('The dedicated navigation workspace is required.');
+  await context.clearCookies();
+  await context.addCookies([{ name: '__Host-sierx_session', value: token, url: url!, secure: true, httpOnly: true, sameSite: 'Lax' }]);
+  const group = 'NV' + randomUUID().slice(0, 4).toUpperCase();
+  const projects: { key_prefix: string; name: string; title: string }[] = [];
+  for (let index = 0; index < count; index++) {
+    const prefix = group + index.toString(36).padStart(2, '0').toUpperCase();
+    const name = `${group} navigation ${index}`;
+    const response = await context.request.post('/api/v1/projects', { data: { key_prefix: prefix, name, kind: index % 2 ? 'discovery' : 'delivery' } });
+    expect(response.status()).toBe(201);
+    const title = `${group} item ${index}`;
+    const item = await context.request.post('/api/v1/items', { data: { project: prefix, type: 'story', title } });
+    expect(item.status()).toBe(201);
+    projects.push({ key_prefix: prefix, name, title });
+  }
+  return { group, projects };
+}
+
+test('project navigation bounds retained contexts and restores warm back-forward views', async ({ page, context }, info) => {
+  const { group, projects } = await navigationProjects(context, 6);
+  const itemRequests: string[] = [];
+  page.on('request', (request) => { const target = new URL(request.url()); if (target.pathname === '/api/v1/items') itemRequests.push(target.searchParams.get('project') ?? ''); });
+  await page.goto('/?project=' + projects[0].key_prefix);
+  const nav = page.getByRole('navigation', { name: 'Project navigation' });
+  async function choose(index: number) {
+    await nav.getByRole('searchbox', { name: 'Find a project' }).fill(group);
+    await expect(nav.locator(`option[value="${projects[index].key_prefix}"]`)).toHaveCount(1);
+    await nav.getByRole('combobox', { name: 'Project', exact: true }).selectOption(projects[index].key_prefix);
+    await expect(page.getByRole('link', { name: projects[index].title, exact: true })).toBeVisible();
+  }
+  for (let index = 1; index < projects.length; index++) {
+    const before = itemRequests.length;
+    await choose(index);
+    expect(itemRequests.slice(before)).toEqual([projects[index].key_prefix]);
+  }
+  const warmStart = itemRequests.length;
+  const samples: number[] = [];
+  await page.evaluate(() => {
+    const timings = { samples: [] as number[], stop: () => {} };
+    const changed = (event: Event) => {
+      const select = event.target;
+      if (!(select instanceof HTMLSelectElement) || !select.closest('nav[aria-label="Project navigation"]')) return;
+      const prefix = select.value;
+      const start = performance.now();
+      const frame = () => {
+        const link = document.querySelector<HTMLAnchorElement>(`a.item-title[href^="/${prefix}-"]`);
+        if (link && link.getBoundingClientRect().height > 0) timings.samples.push(performance.now() - start);
+        else requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    };
+    document.addEventListener('change', changed);
+    timings.stop = () => document.removeEventListener('change', changed);
+    (window as unknown as { navigationTimings: typeof timings }).navigationTimings = timings;
+  });
+  for (let sample = 0; sample < 20; sample++) {
+    const start = performance.now();
+    await choose(sample % 2 ? 5 : 4);
+    samples.push(performance.now() - start);
+    await expect.poll(() => page.evaluate(() => (window as unknown as { navigationTimings: { samples: number[] } }).navigationTimings.samples.length)).toBe(sample + 1);
+  }
+  expect(itemRequests.length).toBe(warmStart);
+  const frames = await page.evaluate(() => {
+    const timings = (window as unknown as { navigationTimings: { samples: number[]; stop: () => void } }).navigationTimings;
+    timings.stop();
+    return timings.samples;
+  });
+  expect(frames).toHaveLength(20);
+  // Revisiting the oldest context requires one page again; the whole navigation
+  // history must not keep every previously visited list indefinitely.
+  const freshTitle = group + ' created while the oldest context was evicted';
+  expect((await context.request.post('/api/v1/items', { data: { project: projects[0].key_prefix, type: 'story', title: freshTitle } })).status()).toBe(201);
+  await choose(0);
+  await expect(page.getByRole('link', { name: freshTitle, exact: true })).toBeVisible();
+  expect(itemRequests.slice(warmStart)).toEqual([projects[0].key_prefix]);
+  await page.goBack();
+  await expect(page.getByRole('link', { name: projects[5].title, exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('link', { name: projects[0].title, exact: true })).toBeVisible();
+  expect(itemRequests.slice(warmStart)).toEqual([projects[0].key_prefix]);
+  const sorted = [...samples].sort((a, b) => a - b);
+  const orderedFrames = [...frames].sort((a,b) => a-b);
+  await info.attach('warm-navigation-observation', { body: JSON.stringify({ samples: samples.length, p50Ms: sorted[Math.ceil(sorted.length * 0.5) - 1], p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1], maxMs: sorted.at(-1), includesAutomationOverhead: true, browserChangeToRenderFrame: { samples: frames.length, p50Ms: orderedFrames[9], p95Ms: orderedFrames[18], maxMs: orderedFrames.at(-1), excludesControllerAndProjectSearchOverhead: true, measuresRenderFrameNotPhysicalDisplayPaint: true }, platform: process.platform, architecture: process.arch, warmItemRequests: 0, evictedContextRefetches: 1 }), contentType: 'application/json' });
+});
+
+test('project navigation ignores obsolete responses during rapid switching', async ({ page, context }) => {
+  const { group, projects } = await navigationProjects(context, 3);
+  await page.goto('/?project=' + projects[0].key_prefix);
+  let release!: () => void;
+  let arrived!: () => void;
+  let finished!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  const intercepted = new Promise<void>((resolve) => { arrived = resolve; });
+  const settled = new Promise<void>((resolve) => { finished = resolve; });
+  await page.route('**/api/v1/items?*', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('project') !== projects[1].key_prefix) { await route.continue(); return; }
+    try { const response = await route.fetch(); arrived(); await blocked; await route.fulfill({ response }); }
+    catch { /* An obsolete fetch may be cancelled before its response is delivered. */ }
+    finally { finished(); }
+  });
+  const nav = page.getByRole('navigation', { name: 'Project navigation' });
+  for (const index of [1, 2]) {
+    await nav.getByRole('searchbox', { name: 'Find a project' }).fill(group);
+    await nav.getByRole('combobox', { name: 'Project', exact: true }).selectOption(projects[index].key_prefix);
+    if (index === 1) { await intercepted; await expect(page.getByRole('status').filter({ hasText: 'Loading items' })).toBeVisible(); }
+  }
+  await expect(page.getByRole('link', { name: projects[2].title, exact: true })).toBeVisible();
+  release();
+  await settled;
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(projects[2].key_prefix);
+  await expect(page.getByRole('link', { name: projects[1].title, exact: true })).toHaveCount(0);
+  await page.unroute('**/api/v1/items?*');
+});
+
+test('a project beyond the first page bootstraps directly and remains reachable through pagination', async ({ page, context }) => {
+  test.setTimeout(120000);
+  const { projects } = await navigationProjects(context, 102);
+  const initial = await (await context.request.get('/api/v1/projects?limit=100')).json();
+  const first = new Set(initial.data.map((project: { key_prefix: string }) => project.key_prefix));
+  const outside = projects.filter((project) => !first.has(project.key_prefix));
+  expect(outside.length).toBeGreaterThanOrEqual(2);
+  const target = outside[0];
+  const requests: string[] = [];
+  await page.route('**/api/v1/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/items' || path.startsWith('/api/v1/projects')) { requests.push(path); return route.abort(); }
+    return route.continue();
+  });
+  await page.goto('/?project=' + target.key_prefix);
+  await expect(page.getByRole('heading', { name: target.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: target.title, exact: true })).toBeVisible();
+  expect(requests).toEqual([]);
+  await page.unroute('**/api/v1/**');
+  const nav = page.getByRole('navigation', { name: 'Project navigation' });
+  for (let pageNumber = 0; pageNumber < 5 && await nav.locator(`option[value="${outside[1].key_prefix}"]`).count() === 0; pageNumber++) {
+    const response = page.waitForResponse((entry) => new URL(entry.url()).pathname === '/api/v1/projects');
+    await nav.getByRole('button', { name: 'More', exact: true }).click();
+    expect((await response).ok()).toBe(true);
+  }
+  await expect(nav.locator(`option[value="${outside[1].key_prefix}"]`)).toHaveCount(1);
+});
+
+test('650ms response latency preserves a failed edit draft and shows pending feedback on retry', async ({ page, context }, info) => {
+  const item = await create(context, 'Slow connection edit');
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Edit item', exact: true }).click();
+  const title = 'Retained slow-link draft ' + randomUUID().slice(0, 8);
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  let attempts = 0;
+  await page.route('**/api/v1/items/' + item.key, async (route) => {
+    if (route.request().method() !== 'PATCH') { await route.continue(); return; }
+    attempts++;
+    const response = attempts === 1 ? null : await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    if (response) await route.fulfill({ response });
+    else await route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ status: 503, title: 'Temporary test outage', detail: 'Test connection interrupted. Your draft is retained.' }) });
+  });
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('alert')).toContainText('Test connection interrupted');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
+  const started = performance.now();
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  const elapsedMs = performance.now() - started;
+  expect(elapsedMs).toBeGreaterThanOrEqual(650);
+  expect(attempts).toBe(2);
+  await info.attach('slow-link-observation', { body: JSON.stringify({ imposedResponseDelayMs: 650, successElapsedMs: elapsedMs, attempts, includesNetworkAndAutomation: true }), contentType: 'application/json' });
+});
+
+test('project creation and metadata editing refresh the selected dashboard', async ({ page }) => {
+  const prefix='PM'+randomUUID().slice(0,6).toUpperCase();
+  await page.goto('/');
+  await page.getByRole('button',{name:'Create project',exact:true}).click();
+  let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Project name',{exact:true}).fill('Acceptance project '+prefix);
+  await dialog.getByLabel('Key prefix',{exact:true}).fill(prefix);
+  await dialog.getByRole('button',{name:'Create project',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole('button',{name:'Manage projects',exact:true}).click();
+  await page.getByRole('button',{name:'Edit project',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Project name',{exact:true}).fill('Edited acceptance project '+prefix);
+  await dialog.getByRole('button',{name:'Save project',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading',{name:'Edited acceptance project '+prefix,exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Edited acceptance project '+prefix,exact:true})).toBeVisible();
+});
+
+test('usability: item titles align across status widths in every appearance', async ({ page, context }) => {
+  const todo = await create(context, 'Aligned title');
+  const doing = await create(context, 'Aligned title');
+  const me = await (await context.request.get('/api/v1/me')).json();
+  expect((await context.request.post(`/api/v1/items/${doing.key}/transition`, {
+    headers: { 'If-Match': `"${doing.version}"` },
+    data: { to_status: 'doing', fields: { assignee: me.id } },
+  })).ok()).toBe(true);
+  await page.goto('/?q=' + encodeURIComponent(`key in ("${todo.key}", "${doing.key}")`));
+  for (const { id } of appearanceThemes) {
+    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+    await page.evaluate(() => document.fonts.ready);
+    const a = page.locator(`.item-title[href="/${todo.key}"]`);
+    const b = page.locator(`.item-title[href="/${doing.key}"]`);
+    await expect(a).toBeVisible();
+    await expect(b).toBeVisible();
+    expect(Math.abs((await a.boundingBox())!.x - (await b.boundingBox())!.x), id).toBeLessThan(1);
+  }
+});
+
+test('usability: footer links are centered and wrap within the viewport', async ({ page, context }) => {
+  const item = await create(context, 'Footer alignment');
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/', '/' + item.key, '/login', '/privacy', '/copyright', '/third-party']) {
+      await page.goto(path);
+      const footer = page.locator('.legal-footer').last();
+      await expect(footer).toBeVisible();
+      const geometry = await footer.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const children = Array.from(element.querySelectorAll('a')).map((a) => a.getBoundingClientRect());
+        return { center: (box.left + box.right) / 2, left: Math.min(...children.map((b) => b.left)), right: Math.max(...children.map((b) => b.right)), viewport: innerWidth };
+      });
+      expect(Math.abs((geometry.left + geometry.right) / 2 - geometry.center), path).toBeLessThan(2);
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
+    }
+  }
+});
+
+test('usability: plain item detail uses workspace width', async ({ page, context }) => {
+  const item = await create(context, 'Full width plain detail');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await context.request.patch('/api/v1/me', { data: { theme: 'plain' } });
+  await page.goto('/' + item.key);
+  const sizes = await page.locator('.item-document').evaluate((element) => {
+    const main = element.parentElement!;
+    const style = getComputedStyle(main);
+    return { document: element.getBoundingClientRect().width, available: main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) };
+  });
+  expect(sizes.document).toBeGreaterThanOrEqual(sizes.available - 2);
+});
+
+test('usability: platinum mobile keeps content inset and controls readable', async ({ page, context }, info) => {
+  const item = await create(context, 'Mobile spacing and a long item title for wrapping');
+  await context.request.patch('/api/v1/me', { data: { theme: 'platinum' } });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const path of ['/', '/' + item.key]) {
+      await page.goto(path);
+      const geometry = await page.locator('.app-main').evaluate((element) => {
+        const main = element.getBoundingClientRect();
+        const content = element.querySelector('.page-heading, .breadcrumbs')!.getBoundingClientRect();
+        return { left: content.left - main.left, right: main.right - content.right, scroll: document.documentElement.scrollWidth, viewport: innerWidth };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(8);
+      expect(geometry.right).toBeGreaterThanOrEqual(8);
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport);
+      await page.screenshot({ path: info.outputPath(`platinum-${width}-${path === '/' ? 'list' : 'detail'}.png`), fullPage: true });
+    }
+    await keyboardActivate(page, 'Edit item');
+    const title = page.getByLabel('Title', { exact: true });
+    await expect(title).toBeVisible();
+    const padding = await title.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { left: parseFloat(style.paddingLeft), top: parseFloat(style.paddingTop), height: element.clientHeight, font: parseFloat(style.fontSize) };
+    });
+    expect(padding.left).toBeGreaterThanOrEqual(8);
+    expect(padding.top).toBeGreaterThanOrEqual(6);
+    expect(padding.height).toBeGreaterThan(padding.font * 1.5);
+    await page.keyboard.press('Escape');
+  }
+});
+
+test('usability: item save closes only on success and returns focus', async ({ page, context }) => {
+  const item = await create(context, 'Save and close');
+  await page.goto('/' + item.key);
+  await keyboardActivate(page, 'Edit item');
+  await page.getByLabel('Title', { exact: true }).fill('Saved without another click');
+  await page.route('**/api/v1/items/' + item.key, (route) => route.request().method() === 'PATCH'
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ title: 'Temporarily unavailable' }) })
+    : route.continue());
+  await keyboardActivate(page, 'Save changes');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Temporarily unavailable');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Saved without another click');
+  await page.unroute('**/api/v1/items/' + item.key);
+  await keyboardActivate(page, 'Save changes');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Saved without another click' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit item', exact: true })).toBeFocused();
+});
+test('saved item remains current through failed refresh before the next transition', async ({ page, context }) => {
+  const item = await create(context, 'Committed response survives refresh');
+  await page.goto('/' + item.key);
+  const title = item.title + ' edited';
+  const itemPath = '/api/v1/items/' + item.key;
+  const writes: { method: string; version: string | undefined }[] = [];
+  page.on('request', (request) => {
+    if ([itemPath, itemPath + '/transition'].includes(new URL(request.url()).pathname) && ['PATCH', 'POST'].includes(request.method()))
+      writes.push({ method: request.method(), version: request.headers()['if-match'] });
+  });
+  await page.route('**/api/v1/items/' + item.key + '**', (route) =>
+    route.request().method() === 'GET' && new URL(route.request().url()).pathname === itemPath
+      ? route.fulfill({ status: 503, contentType: 'text/plain', body: 'Service unavailable pending operator recovery verification.\n' })
+      : route.continue());
+  await page.getByRole('button', { name: 'Edit item', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Change status', exact: true }).click();
+  await page.getByRole('combobox', { name: 'New status', exact: true }).selectOption('doing');
+  const [response] = await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === itemPath + '/transition' && response.request().method() === 'POST'),
+    page.getByRole('dialog').getByRole('button', { name: 'Change status', exact: true }).click(),
+  ]);
+  expect(response.status()).toBe(200);
+  await expect(page.getByRole('dialog')).toBeHidden();
+  expect(writes).toEqual([{ method: 'PATCH', version: `"${item.version}"` }, { method: 'POST', version: `"${item.version + 1}"` }]);
+  const saved = await (await context.request.get(itemPath)).json();
+  expect(saved.title).toBe(title); expect(saved.status.key).toBe('doing'); expect(saved.version).toBe(item.version + 2);
+  await page.unroute('**/api/v1/items/' + item.key + '**');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+});
+
+test('priorities: Details edits change only assignee or the selected date', async ({ page, context }) => {
+  const item = await create(context, 'Quick field edits', 'story', { body: 'Keep this description' });
+  const me = await (await context.request.get('/api/v1/me')).json();
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Edit assignee', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(me.id);
+  await page.getByRole('button', { name: 'Save assignee', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  for (const [label, field, value] of [['Start date', 'start_date', '2026-11-01'], ['Due date', 'due_date', '2026-11-08']]) {
+    await page.getByRole('button', { name: `Edit ${label.toLowerCase()}`, exact: true }).click();
+    await page.getByLabel(label, { exact: true }).fill(value);
+    await page.getByRole('button', { name: `Save ${label.toLowerCase()}`, exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    const saved = await (await context.request.get('/api/v1/items/' + item.key)).json();
+    expect(saved[field]).toBe(value); expect(saved.body).toBe('Keep this description'); expect(saved.title).toBe(item.title);
+  }
+  await page.getByRole('button', { name: 'Edit due date', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear date', exact: true }).click();
+  await page.getByRole('button', { name: 'Save due date', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  const saved = await (await context.request.get('/api/v1/items/' + item.key)).json();
+  expect(saved.assignee.id).toBe(me.id); expect(saved.start_date).toBe('2026-11-01'); expect(saved.due_date).toBeNull();
+  await audit(page);
+});
+
+test('priorities: Markdown toolbar and preview preserve source and clear submitted comments', async ({ page, context }) => {
+  const item = await create(context, 'Markdown editing');
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Edit item', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const description = dialog.getByLabel('Description', { exact: true });
+  await description.fill('Selected words');
+  await description.selectText();
+  await dialog.getByRole('button', { name: 'Bold', exact: true }).click();
+  await expect(description).toHaveValue('**Selected words**');
+  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Description preview' }).locator('strong')).toHaveText('Selected words');
+  await audit(page);
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.description-card strong')).toHaveText('Selected words');
+  const comment = page.getByLabel('New comment', { exact: true });
+  await comment.fill('Comment draft');
+  await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+  await expect(comment).toHaveValue('');
+  await expect(page.locator('.comment-body')).toContainText('Comment draft');
+});
+
+test('priorities: project creation and admin settings publish a usable custom workflow', async ({ page, context }, info) => {
+  const prefix = 'UX' + randomUUID().slice(0, 6).toUpperCase();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create project', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Project name', { exact: true }).fill('Custom workflow project ' + prefix);
+  await dialog.getByLabel('Key prefix', { exact: true }).fill(prefix);
+  await audit(page);
+  await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Create project', exact: true })).toBeFocused();
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(prefix);
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Workspace settings', exact: true })).toBeVisible();
+  await page.getByLabel('Workspace name', { exact: true }).fill('Team workspace');
+  await page.getByRole('button', { name: 'Save workspace', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Workspace details saved');
+  await page.reload();
+  await expect(page.getByLabel('Workspace name', { exact: true })).toHaveValue('Team workspace');
+  await page.getByRole('combobox', { name: 'Workflow project', exact: true }).selectOption(prefix);
+  await page.getByRole('button', { name: 'Add suggested statuses', exact: true }).click();
+  await page.getByLabel('Allow To Do → Planned', { exact: true }).check();
+  await page.getByLabel(`I reviewed this flow and its required fields for ${prefix}.`, { exact: true }).check();
+  await audit(page);
+  await page.screenshot({ path: info.outputPath('workspace-workflow-settings.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Save workflow', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Workflow version 2');
+  const config = await (await context.request.get(`/api/v1/projects/${prefix}/config`)).json();
+  expect(config.statuses.map((status: { name: string }) => status.name)).toEqual(expect.arrayContaining(['Unassigned', 'To Do', 'On Hold', 'Planned', 'In Progress', 'Blocked', 'Completed']));
+  const result = await context.request.post('/api/v1/items', { data: { project: prefix, type: 'story', title: 'Uses custom flow' } });
+  expect(result.ok()).toBe(true);
+  const item = await result.json();
+  await page.goto('/' + item.key);
+  await page.getByRole('button', { name: 'Change status', exact: true }).click();
+  await page.getByRole('combobox', { name: 'New status', exact: true }).selectOption('planned');
+  await page.getByRole('dialog').getByRole('button', { name: 'Change status', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edit item', exact: true })).toBeFocused();
+  await expect(page.locator('.item-heading .badge')).toContainText('Planned');
+});
+
+test('priorities: default-size settings buttons have readable labels in every appearance', async ({ page }) => {
+  await page.goto('/settings');
+  await page.getByRole('combobox', { name: 'Workflow project', exact: true }).selectOption('SRX');
+  await page.getByLabel('I reviewed this flow and its required fields for SRX.', { exact: true }).check();
+  await page.evaluate(() => { document.documentElement.dataset.motion = 'reduce'; });
+  for (const { id } of appearanceThemes) {
+    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+    for (const name of ['Save workspace', 'Add status', 'Add suggested statuses', 'Save workflow']) {
+      const colors = await page.getByRole('button', { name, exact: true }).evaluate((element) => {
+        const style = getComputedStyle(element);
+        let ancestor: Element | null = element;
+        let background = style.backgroundColor;
+        while (ancestor) {
+          background = getComputedStyle(ancestor).backgroundColor;
+          const components = background.match(/[\d.]+/g)?.map(Number) ?? [];
+          if (components.length < 4 || components[3] !== 0) break;
+          ancestor = ancestor.parentElement;
+        }
+        return { text: style.color, background };
+      });
+      expect(contrastRatio(colors.text, colors.background), `${id}: ${name}`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+test('administrator profile opens Home and provisions an assignable regular member', async ({ page, context, browser }, info) => {
+  await page.goto('/');
+  const profile = page.getByRole('button', { name: /^Profile for / });
+  await profile.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Profile', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(profile).toBeFocused();
+  await expect(page.getByRole('navigation', { name: 'Profile', exact: true })).toBeHidden();
+  await profile.click();
+  await page.getByRole('link', { name: 'Administrator Home', exact: true }).click();
+  await expect(page).toHaveTitle('Administrator Home · Sierx');
+  await expect(page.getByRole('heading', { name: 'Administrator Home', exact: true })).toBeVisible();
+  const email = `member-${randomUUID()}@example.test`;
+  await page.getByLabel('Display name', { exact: true }).fill('Browser member');
+  await page.getByLabel('Email address', { exact: true }).fill(email);
+  await keyboardActivate(page, 'Add Member');
+  await expect(page.getByRole('status')).toContainText('was added as a Member');
+  const password = await page.getByLabel('Initial password', { exact: true }).inputValue();
+  await expect(page.getByLabel('Initial password', { exact: true })).toHaveAttribute('type', 'password');
+  expect(password.length).toBeGreaterThanOrEqual(32);
+  const memberRow = page.locator('.admin-member-list li').filter({ hasText: email });
+  await expect(memberRow).toContainText('Role: Member');
+  await audit(page);
+  await page.screenshot({ path: info.outputPath('administrator-home.png'), fullPage: true });
+  const memberContext = await browser.newContext({ baseURL: url, ignoreHTTPSErrors: true });
+  try {
+    expect((await memberContext.request.post('/api/v1/auth/login', { data: { email, password } })).status()).toBe(200);
+    expect((await memberContext.request.get('/api/v1/admin/members')).status()).toBe(403);
+    const memberPage = await memberContext.newPage();
+    await memberPage.goto('/');
+    await memberPage.getByRole('button', { name: /^Profile for / }).click();
+    await expect(memberPage.getByRole('link', { name: 'Administrator Home', exact: true })).toBeHidden();
+    expect((await memberContext.request.get('/admin')).status()).toBe(403);
+    await memberContext.request.post('/api/v1/auth/logout');
+  } finally { await memberContext.close(); }
+  await page.getByRole('button', { name: 'I saved the login details', exact: true }).click();
+  await expect(page.getByLabel('Initial password', { exact: true })).toBeHidden();
+  await page.getByLabel('Display name', { exact: true }).fill('Duplicate member');
+  await page.getByLabel('Email address', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Add Member', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('That email cannot be added');
+  await expect(page.getByLabel('Initial password', { exact: true })).toBeHidden();
+  const lookup = await context.request.get('/api/v1/admin/members?q='+encodeURIComponent(email));
+  expect(lookup.status()).toBe(200);
+  const memberID = (await lookup.json()).data[0].id;
+  const item = await create(context, 'Assign to newly added member');
+  await page.goto('/'+item.key);
+  await page.getByRole('button', { name: 'Edit assignee', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(memberID);
+  await page.getByRole('button', { name: 'Save assignee', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.locator('.item-sidebar')).toContainText('Browser member');
+});
+
+test('member setup keeps its generated credential after a lost committed response', async ({ page, context }) => {
+  await page.goto('/admin');
+  const email = `uncertain-${randomUUID()}@example.test`;
+  let writes = 0;
+  await page.route('**/api/v1/admin/members', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    writes++;
+    await route.fetch();
+    await route.abort('failed');
+  });
+  await page.getByLabel('Display name', { exact: true }).fill('Retained member');
+  await page.getByLabel('Email address', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Add Member', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('request may have completed');
+  const password = await page.getByLabel('Initial password', { exact: true }).inputValue();
+  await expect(page.locator('.admin-member-list')).toContainText(email);
+  expect(writes).toBe(1);
+  const login = await context.request.post('/api/v1/auth/login', { data: { email, password } });
+  expect(login.status()).toBe(200);
+  await context.request.post('/api/v1/auth/logout');
+});
+
+test('profile navigation fits phone widths across every appearance', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /^Profile for / }).click();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const { id } of appearanceThemes) {
+      await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+      const geometry = await page.getByRole('navigation', { name: 'Profile', exact: true }).evaluate((element) => {
+        const r = element.getBoundingClientRect();
+        const header = element.closest('header')!;
+        return { left: r.left, right: r.right, viewport: innerWidth, headerWidth: header.clientWidth, headerContent: header.scrollWidth };
+      });
+      expect(geometry.left, id).toBeGreaterThanOrEqual(0);
+      expect(geometry.right, id).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.headerContent, id).toBeLessThanOrEqual(geometry.headerWidth);
+    }
+  }
+});
+
 test('login supports keyboard, passwords and expired sessions', async ({
   page,
   context,
@@ -162,6 +746,7 @@ for (const [index, theme] of themeIDs.entries()) {
     );
     await keyboardActivate(page, 'Create item');
     await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('dialog').getByRole('combobox', { name: 'Project', exact: true }).selectOption('SRX');
     await expect(
       page.getByRole('combobox', { name: 'Type', exact: true }),
     ).toBeVisible();
@@ -288,11 +873,12 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
   });
   await page.goto('/');
   await keyboardActivate(page, 'Create item');
+  await page.getByRole('dialog').getByRole('combobox', { name: 'Project', exact: true }).selectOption('SRX');
   await page.getByRole('combobox', { name: 'Type', exact: true }).focus();
   await page.keyboard.press('s');
   await page.keyboard.press('Tab');
   await page.keyboard.type('Keyboard acceptance story');
-  await page.keyboard.press('Tab');
+  await page.getByLabel('Description', { exact: true }).focus();
   await page.keyboard.type('**Safe** description');
   await keyboardActivate(page, 'Create item');
   await expect(
@@ -306,15 +892,14 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
     page.getByRole('combobox', { name: 'Assign to', exact: true }),
   ).toHaveValue(me.id);
   await keyboardActivate(page, 'Change status');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await keyboardActivate(page, 'Move or reorder');
   await page.getByLabel('Parent item key').fill(parent.key);
   await page.getByLabel('Place after item key').fill(sibling.key);
   await keyboardActivate(page, 'Move item');
   await expect(page.getByRole('status')).toContainText('completed');
   await page.keyboard.press('Escape');
-  await page.getByLabel('New comment').focus();
+  await page.getByLabel('New comment', { exact: true }).focus();
   await page.keyboard.type('Keyboard-only comment');
   await keyboardActivate(page, 'Add comment');
   await expect(
@@ -329,6 +914,41 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
   // disallowed by this test's use of keyboard/focus rather than pointer APIs.
   await audit(page);
 });
+test('comment completion waits for item refresh before follow-up linking', async ({ page, context }) => {
+  const item = await create(context, 'Comment then link');
+  const target = await create(context, 'Follow-up link target');
+  await page.goto('/' + item.key);
+  let posted = false;
+  let releaseItem!: () => void;
+  const itemGate = new Promise<void>((resolve) => { releaseItem = resolve; });
+  await page.route((url) => url.pathname === '/api/v1/comments', async (route) => {
+    if (route.request().method() === 'POST') posted = true;
+    await route.continue();
+  });
+  await page.route((url) => url.pathname === '/api/v1/items/' + item.key, async (route) => {
+    if (posted && route.request().method() === 'GET') await itemGate;
+    await route.continue();
+  });
+  const comment = page.getByLabel('New comment', { exact: true });
+  await comment.fill('Posted before item refresh');
+  try {
+    await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+    await expect(page.locator('.comment-body')).toContainText('Posted before item refresh');
+    await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+    await expect(comment).toHaveValue('Posted before item refresh');
+  } finally {
+    releaseItem();
+  }
+  await expect(comment).toHaveValue('');
+  await page.getByRole('button', { name: 'Link item', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Item key', { exact: true }).fill(target.key);
+  await dialog.getByRole('button', { name: 'Add link', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('completed');
+  const links = await (await context.request.get('/api/v1/items/' + item.key + '/links')).json();
+  expect(links.data.some((link: { to: { key: string } }) => link.to.key === target.key)).toBe(true);
+});
+
 test('parent displays sibling order and destination can remove a link', async ({
   page,
   context,
@@ -364,12 +984,32 @@ test('parent displays sibling order and destination can remove a link', async ({
     },
   );
   expect(linked.status()).toBe(201);
+  const link = await linked.json();
+  const linkPath = '/api/v1/links/' + link.id;
+  let releaseDelete!: () => void;
+  const deleteGate = new Promise<void>((resolve) => { releaseDelete = resolve; });
+  await page.route((target) => target.pathname === linkPath, async (route) => {
+    if (route.request().method() === 'DELETE') await deleteGate;
+    await route.continue();
+  });
   await page.goto('/' + second.key);
   await page.getByRole('button', { name: 'Remove link' }).first().click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Remove link' })
-    .click();
+  const dialog = page.getByRole('dialog');
+  const deleted = page.waitForResponse((response) =>
+    response.request().method() === 'DELETE' && new URL(response.url()).pathname === linkPath,
+  );
+  try {
+    await dialog.getByRole('button', { name: 'Remove link' }).click();
+    await expect(dialog.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    const pending = await (await context.request.get('/api/v1/items/' + second.key + '/links')).json();
+    expect(pending.data).toHaveLength(1);
+  } finally {
+    releaseDelete();
+  }
+  // While saving, the submit label changes and the modal hides background
+  // buttons from role queries. Their absence alone is not deletion success.
+  expect((await deleted).status()).toBe(200);
+  await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remove link' })).toHaveCount(0);
   const remaining = await (
     await context.request.get('/api/v1/items/' + second.key + '/links')
@@ -395,7 +1035,7 @@ test('two real sessions retain conflicts and deliberately retry', async ({
   await keyboardActivate(other, 'Edit item');
   await other.getByLabel('Title', { exact: true }).fill('Their committed edit');
   await keyboardActivate(other, 'Save changes');
-  await expect(other.getByRole('status')).toContainText('completed');
+  await expect(other.getByRole('dialog')).toBeHidden();
   await keyboardActivate(page, 'Save changes');
   await expect(page.getByRole('alert')).toContainText('Someone else changed');
   await expect(
@@ -410,8 +1050,7 @@ test('two real sessions retain conflicts and deliberately retry', async ({
     'My retained draft',
   );
   await keyboardActivate(page, 'Save changes');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(
     page.getByRole('heading', { name: 'My retained draft' }),
   ).toBeVisible();
@@ -435,7 +1074,7 @@ test('deleted item has a dated banner and no mutation controls', async ({
   await expect(
     page.getByRole('button', { name: 'Edit item', exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByLabel('New comment')).toHaveCount(0);
+  await expect(page.getByLabel('New comment', { exact: true })).toHaveCount(0);
   await audit(page);
 });
 test('query errors, copied URLs, reload and history navigation', async ({
@@ -585,8 +1224,7 @@ test('explicit conflict retry applies only the retained draft', async ({
   await keyboardActivate(page, 'Save changes');
   await expect(page.getByRole('alert')).toContainText('Someone else changed');
   await keyboardActivate(page, 'Retry my changes');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(
     page.getByRole('heading', { name: 'Explicitly accepted draft' }),
   ).toBeVisible();
@@ -635,8 +1273,7 @@ test('an expired session preserves the open dialog draft through reauthenticatio
   );
   await authenticate(context);
   await keyboardActivate(page, 'Save changes');
-  await expect(page.getByRole('status')).toContainText('completed');
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(
     page.getByRole('heading', { name: 'Draft after sign-in' }),
   ).toBeVisible();

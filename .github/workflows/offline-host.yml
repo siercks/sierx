@@ -1,0 +1,148 @@
+# Local candidates on PRs; exact staged artifacts before release promotion.
+name: offline-delivery
+
+on:
+  push:
+    branches: ["codex/**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      runtime_probe:
+        description: Development runtime/timer probe only; cannot satisfy closeout
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      staged:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        run: make offline-host-scope
+        env:
+          SIERX_STAGED: ${{ inputs.staged && 'true' || 'false' }}
+
+  host:
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_probe && 'runtime probe' || 'host' }} (${{ matrix.profile }}, ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            profile: ubuntu24
+            arch: amd64
+          # The guest remains Ubuntu 24.04; use the current host emulator.
+          - runner: ubuntu-26.04-arm
+            profile: ubuntu24
+            arch: arm64
+          - runner: ubuntu-24.04
+            profile: rocky10
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 210
+    env:
+      PROFILE: ${{ matrix.profile }}
+      ARCH: ${{ matrix.arch }}
+      SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: ${{ !inputs.staged }}
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ !inputs.staged }}
+        with:
+          node-version-file: .nvmrc
+      - name: Install disposable VM preparation prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman python3 curl qemu-system-x86 qemu-system-arm e2fsprogs
+          qemu-system-aarch64 --version
+          if ! sudo modprobe kvm; then
+            echo 'KVM module unavailable; acceptance will probe and use bounded emulation if needed.'
+          fi
+      - name: Build native local candidate without package publication
+        if: ${{ !inputs.staged }}
+        run: make release-binaries release-image sbom offline-candidate-prepare
+        env:
+          SBOM_OUT: dist/sbom-${{ matrix.arch }}.cdx.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ inputs.staged }}
+        with:
+          name: offline-delivery-${{ matrix.arch }}
+          path: dist
+      - name: Verify staged candidate before host acceptance
+        if: ${{ inputs.staged }}
+        run: make offline-current-unpack
+      - name: Acquire the explicitly retained approved release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
+        run: make offline-previous-prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Prepare OS, browser and observer dependencies before isolation
+        run: make offline-host-prepare
+      - name: Exercise real rootless services in a booted VM with no network device
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
+        run: make gate-offline-host
+      - name: Diagnose only runtime and timers in the real isolated guest
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_probe }}
+        run: make probe-offline-runtime
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
+        with:
+          name: host-evidence-${{ matrix.profile }}-${{ matrix.arch }}
+          path: |
+            dist/host-input-${{ matrix.profile }}-${{ matrix.arch }}.json
+            dist/host-acceptance-${{ matrix.profile }}-${{ matrix.arch }}.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.runtime_probe }}
+        with:
+          name: development-runtime-probe-${{ matrix.profile }}-${{ matrix.arch }}
+          path: dist/runtime-probe-${{ matrix.profile }}-${{ matrix.arch }}.json
+          if-no-files-found: ignore
+
+  aggregate:
+    # Even the skipped development job must have a different check name:
+    # GitHub treats skipped jobs as successful for required-check purposes.
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_probe && 'Development runtime probe (no closeout)' || 'Offline delivery' }}
+    # A development dispatch has no closeout aggregate. Release calls and PRs
+    # always retain the full three-profile gate and all scenario requirements.
+    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.runtime_probe) }}
+    needs: [scope, host]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.scope.outputs.required == 'true'
+        with:
+          pattern: host-evidence-*
+          path: dist
+          merge-multiple: true
+      - run: make offline-host-aggregate
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          HOST_REQUIRED: ${{ needs.scope.outputs.required }}
+          HOST_RESULT: ${{ needs.host.result }}

@@ -20,6 +20,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ProjectNavigation } from '../components/ProjectNavigation';
 const ProjectManagement = lazy(() => import('../components/ProjectManagement').then((module) => ({ default: module.ProjectManagement })));
+const ProjectCreation = lazy(() => import('../components/ProjectManagement').then((module) => ({ default: module.ProjectCreation })));
 type State = {
   me: Me;
   auth_mode: string;
@@ -121,7 +122,11 @@ export function Rows({ items }: { items: Item[] }) {
   );
 }
 export default function List() {
+  const [creating, setCreating] = useState(false);
+  const [creationLoaded, setCreationLoaded] = useState(false);
   const state = useState(() => bootstrap<State>())[0];
+  const bootstrapAvailable = useRef(true);
+  useEffect(() => { bootstrapAvailable.current = false; }, []);
   const [query, setQuery] = useState(state.query);
   const [project, setProject] = useState(state.project ?? '');
   const [managing, setManaging] = useState(false);
@@ -133,7 +138,7 @@ export default function List() {
     queryKey: [state.me.workspace_id, 'project', project],
     queryFn: ({ signal }) => request<Project>(`/projects/${encodeURIComponent(project)}`, { signal }),
     enabled: !!project,
-    initialData: state.selected_project?.key_prefix === project ? state.selected_project : undefined,
+    initialData: bootstrapAvailable.current && state.selected_project?.key_prefix === project ? state.selected_project : undefined,
   });
   const result = useInfiniteQuery({
     queryKey: listKey(state.me.workspace_id, query, project),
@@ -144,7 +149,7 @@ export default function List() {
         { signal },
       ),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    initialData: !initialMatches || initialProblem
+    initialData: !bootstrapAvailable.current || !initialMatches || initialProblem
       ? undefined
       : { pages: [state.items as Page<Item>], pageParams: [null] },
     enabled: !initialProblem,
@@ -218,7 +223,8 @@ export default function List() {
           selectedProject={selected}
         />
       </section>
-      <ProjectNavigation workspace={state.me.workspace_id} me={state.me} projectPage={state.projects} selected={selected} onNavigate={navigateProject} onManage={() => setManaging(true)} />
+      <ProjectNavigation workspace={state.me.workspace_id} me={state.me} projectPage={state.projects} selected={selected} onNavigate={navigateProject} onManage={() => setManaging(true)} onCreate={() => { setCreationLoaded(true); setCreating(true); }} />
+      {creationLoaded && state.me.role === 'admin' && <Suspense fallback={<p role="status">Loading project creation…</p>}><ProjectCreation workspace={state.me.workspace_id} open={creating} onOpenChange={setCreating} onSaved={projectSaved} /></Suspense>}
       {managing && state.me.role === 'admin' && <Suspense fallback={<p role="status">Loading project management…</p>}><ProjectManagement project={selected ?? undefined} workspace={state.me.workspace_id} onSaved={projectSaved} onDismiss={() => setManaging(false)} /></Suspense>}
       <form action="/" method="get" className="search-panel">
         {project && <input type="hidden" name="project" value={project} />}

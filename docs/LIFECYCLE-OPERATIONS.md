@@ -20,6 +20,13 @@ SIERX_LIFECYCLE_CHECKPOINT=/var/lib/sierx/lifecycle/guard/checkpoint.json
 SIERX_LIFECYCLE_GUARD_KEY_FILE=/var/lib/sierx/lifecycle/guard/verification.key
 ```
 
+`SIERX_LIFECYCLE_CHECK_TIMEOUT` optionally bounds each request's recovery
+verification wait. It defaults to `1s` and accepts durations from `1s` through
+`10s`. Every request still verifies the current checkpoint against the database;
+a mismatch, deadline expiry or canceled request returns 503 before its handler
+runs. Only fixed failure categories enter the log; private verification causes
+are not included. HTTP read/write deadlines are independent and unchanged.
+
 The container maps the rootless host owner to the unprivileged image user and mounts this directory read-only. For native execution, use the real protected file paths. Existing app environment must contain runtime and auth role URLs, never operator/maintenance credentials or the journal master key. A release without guard initialization intentionally fails startup. Make an encrypted, access-controlled off-machine copy of the current journal, key and checkpoint after decisions; keep ownership and trust records private.
 
 ## Plan and apply a reviewed action

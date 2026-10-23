@@ -1,0 +1,7 @@
+{
+  "display_name": "New member",
+  "email": "new-member@example.test",
+  "id": "member-1",
+  "is_active": true,
+  "role": "member"
+}

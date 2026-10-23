@@ -1,6 +1,40 @@
 # Phase 2 acceptance record
 
-Status: historical Phase 2 code merged; the current lifecycle uplift is an implementation candidate. Exact-candidate automated results, host recovery and full owner acceptance must be recorded before exit.
+Status (October 18, 2026): the requested usability changes are deployed at
+`6dac24f723f5092697aa7ad8bed7673684f47042`, with migration 15. The broader
+closeout engineering is being verified on `codex/usability-followup`. Phase 2
+owner acceptance remains open.
+
+## October 18 reconciliation
+
+- Native baseline release/offline acceptance passed in
+  [run 39144952489](https://github.com/siercks/sierx/actions/runs/39144952489).
+  The operator testbed runs Rocky 10.2 amd64 with SELinux Enforcing.
+- Connected deployment, encrypted server-local backup verification, isolated
+  database restore/migration rehearsal and migration 14→15 passed without
+  changing existing application-row fingerprints. This does not certify
+  off-machine physical recovery or independent custody.
+- Project metadata/ownership, focused assignee/date editing, workspace naming,
+  additive custom item workflows, Markdown controls and the reported appearance
+  fixes are implemented. Real backlog data exists; cutover is not pending merely
+  because historical entries below describe it as pending.
+- Navigation regression coverage exposed stale HTML bootstrap data being reused
+  after cache eviction. The fix and focused pagination, switching, retention and
+  650 ms delayed-save coverage are committed in `67b1d98`. Development source
+  runs passed 54 Chromium and 54 Firefox tests, plus the added project metadata
+  case separately in both engines. Initial JS/CSS remain within their budgets.
+- The new [host acceptance contract](OFFLINE-HOST-ACCEPTANCE.md) requires actual
+  rootless installation, delivered browsers, process observation, two-release
+  scenarios and complete native-profile evidence. Implementation/unit proofs
+  alone do not establish that this expanded contract has passed.
+- ADR-028 lifecycle controls are implemented. Their bounded operator/export
+  scope does not imply a complete person-wide self-service export or erasure.
+- The owner's October 9–18 near-daily-use account is real feedback, not a record
+  of seven consecutive primary-backlog days. Human approval/deferrals and the
+  remaining operator/manual evidence must be recorded explicitly.
+
+The September reconciliation and later dated entries below remain historical;
+they must not override this current status or accept subsequent revisions.
 
 September 23 reconciliation: the owner-supplied September 22 post-mortem reports
 successful offline gate-2 at PR head `1c14c0246b0bb3ee1b2819f61caa841f90ac4527`,

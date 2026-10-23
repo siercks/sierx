@@ -6,6 +6,6 @@
   "license": "Apache-2.0",
   "repository": "github:siercks/sierx",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24.22.1 <25"
   }
 }

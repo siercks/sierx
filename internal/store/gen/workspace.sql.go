@@ -37,7 +37,7 @@ func (q *Queries) AllocateSeq(ctx context.Context, arg AllocateSeqParams) (int64
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspace (slug, name, origin_id)
 VALUES ($1, $2, $3)
-RETURNING id, slug, name, origin_id, created_at
+RETURNING id, slug, name, origin_id, created_at, version
 `
 
 type CreateWorkspaceParams struct {
@@ -56,13 +56,14 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.Name,
 		&i.OriginID,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
 
-SELECT id, slug, name, origin_id, created_at FROM workspace WHERE slug = $1
+SELECT id, slug, name, origin_id, created_at, version FROM workspace WHERE slug = $1
 `
 
 // Queries the unit of work needs for tenancy and sequence allocation (§5.1).
@@ -75,6 +76,7 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.Name,
 		&i.OriginID,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }

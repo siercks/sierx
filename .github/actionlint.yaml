@@ -1,0 +1,7 @@
+# The pinned actionlint predates this official GitHub-hosted runner label.
+# https://github.com/actions/runner-images/blob/main/README.md
+# actionlint's extra-label setting is named self-hosted-runner; this does not
+# select a self-hosted runner or suppress other workflow checks.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04-arm
