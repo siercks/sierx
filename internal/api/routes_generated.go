@@ -11,6 +11,7 @@ func (s *Server) documentRoutes() map[string]http.HandlerFunc {
 		"/copyright": s.bootstrapCopyright,
 		"/third-party": s.bootstrapThirdParty,
 		"/settings": s.bootstrapSettings,
+		"/admin": s.bootstrapAdmin,
 		"/:key": s.bootstrapItem,
 	}
 }

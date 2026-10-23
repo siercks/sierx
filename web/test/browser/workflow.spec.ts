@@ -528,6 +528,101 @@ test('priorities: default-size settings buttons have readable labels in every ap
   }
 });
 
+test('administrator profile opens Home and provisions an assignable regular member', async ({ page, context, browser }, info) => {
+  await page.goto('/');
+  const profile = page.getByRole('button', { name: /^Profile for / });
+  await profile.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Profile', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(profile).toBeFocused();
+  await expect(page.getByRole('navigation', { name: 'Profile', exact: true })).toBeHidden();
+  await profile.click();
+  await page.getByRole('link', { name: 'Administrator Home', exact: true }).click();
+  await expect(page).toHaveTitle('Administrator Home · Sierx');
+  await expect(page.getByRole('heading', { name: 'Administrator Home', exact: true })).toBeVisible();
+  const email = `member-${randomUUID()}@example.test`;
+  await page.getByLabel('Display name', { exact: true }).fill('Browser member');
+  await page.getByLabel('Email address', { exact: true }).fill(email);
+  await keyboardActivate(page, 'Add Member');
+  await expect(page.getByRole('status')).toContainText('was added as a Member');
+  const password = await page.getByLabel('Initial password', { exact: true }).inputValue();
+  await expect(page.getByLabel('Initial password', { exact: true })).toHaveAttribute('type', 'password');
+  expect(password.length).toBeGreaterThanOrEqual(32);
+  const memberRow = page.locator('.admin-member-list li').filter({ hasText: email });
+  await expect(memberRow).toContainText('Role: Member');
+  await audit(page);
+  await page.screenshot({ path: info.outputPath('administrator-home.png'), fullPage: true });
+  const memberContext = await browser.newContext({ baseURL: url, ignoreHTTPSErrors: true });
+  try {
+    expect((await memberContext.request.post('/api/v1/auth/login', { data: { email, password } })).status()).toBe(200);
+    expect((await memberContext.request.get('/api/v1/admin/members')).status()).toBe(403);
+    const memberPage = await memberContext.newPage();
+    await memberPage.goto('/');
+    await memberPage.getByRole('button', { name: /^Profile for / }).click();
+    await expect(memberPage.getByRole('link', { name: 'Administrator Home', exact: true })).toBeHidden();
+    expect((await memberContext.request.get('/admin')).status()).toBe(403);
+    await memberContext.request.post('/api/v1/auth/logout');
+  } finally { await memberContext.close(); }
+  await page.getByRole('button', { name: 'I saved the login details', exact: true }).click();
+  await expect(page.getByLabel('Initial password', { exact: true })).toBeHidden();
+  await page.getByLabel('Display name', { exact: true }).fill('Duplicate member');
+  await page.getByLabel('Email address', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Add Member', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('That email cannot be added');
+  await expect(page.getByLabel('Initial password', { exact: true })).toBeHidden();
+  const lookup = await context.request.get('/api/v1/admin/members?q='+encodeURIComponent(email));
+  expect(lookup.status()).toBe(200);
+  const memberID = (await lookup.json()).data[0].id;
+  const item = await create(context, 'Assign to newly added member');
+  await page.goto('/'+item.key);
+  await page.getByRole('button', { name: 'Edit assignee', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(memberID);
+  await page.getByRole('button', { name: 'Save assignee', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.locator('.item-sidebar')).toContainText('Browser member');
+});
+
+test('member setup keeps its generated credential after a lost committed response', async ({ page, context }) => {
+  await page.goto('/admin');
+  const email = `uncertain-${randomUUID()}@example.test`;
+  let writes = 0;
+  await page.route('**/api/v1/admin/members', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    writes++;
+    await route.fetch();
+    await route.abort('failed');
+  });
+  await page.getByLabel('Display name', { exact: true }).fill('Retained member');
+  await page.getByLabel('Email address', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Add Member', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('request may have completed');
+  const password = await page.getByLabel('Initial password', { exact: true }).inputValue();
+  await expect(page.locator('.admin-member-list')).toContainText(email);
+  expect(writes).toBe(1);
+  const login = await context.request.post('/api/v1/auth/login', { data: { email, password } });
+  expect(login.status()).toBe(200);
+  await context.request.post('/api/v1/auth/logout');
+});
+
+test('profile navigation fits phone widths across every appearance', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /^Profile for / }).click();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const { id } of appearanceThemes) {
+      await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+      const geometry = await page.getByRole('navigation', { name: 'Profile', exact: true }).evaluate((element) => {
+        const r = element.getBoundingClientRect();
+        const header = element.closest('header')!;
+        return { left: r.left, right: r.right, viewport: innerWidth, headerWidth: header.clientWidth, headerContent: header.scrollWidth };
+      });
+      expect(geometry.left, id).toBeGreaterThanOrEqual(0);
+      expect(geometry.right, id).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.headerContent, id).toBeLessThanOrEqual(geometry.headerWidth);
+    }
+  }
+});
+
 test('login supports keyboard, passwords and expired sessions', async ({
   page,
   context,

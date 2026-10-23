@@ -1198,3 +1198,37 @@ and IDs for item assignment. Emails and authentication data remain excluded.
 Direct field edits use the existing item mutation/version/authorization paths.
 Formatting controls store Markdown and lazy-load the existing safe renderer
 only for preview; there is no remote editor, font or asset dependency.
+
+## ADR-030 - Private Administrator Home and member provisioning
+
+**Status:** accepted for implementation by owner request, October 22, 2026.
+
+The profile control in the userbar exposes Administrator Home to administrators.
+The page adds private regular-member creation and scoped member search, with a
+link to the existing workspace/workflow settings. It does not activate public
+registration, invitation delivery, role promotion, credential reset or account
+reactivation. Existing account definitions and memberships are preserved.
+
+Creation uses the request's authenticated tenant context and a database function
+that independently checks the caller's active administrator membership. A
+dedicated non-login, non-superuser function owner has only the necessary account
+and membership columns/operations; the runtime login receives EXECUTE only.
+Both database functions fix their search path and revoke PUBLIC execution.
+Ordinary roster reads remain limited to active display names/IDs.
+
+The browser generates the initial password using Web Crypto and retains it in
+component memory until the administrator explicitly closes its login details.
+The server applies its existing Argon2id policy and commits before reporting
+success. A lost response cannot erase the browser's generated credential; no
+write is automatically replayed. Known duplicate rejection never resets an
+existing identity. Plaintext is absent from response bodies, persisted browser
+state, member lists and application database records. The administrator shares
+the credential privately. This does not assert an enforced first-login reset.
+
+Migration 0016 is additive and its down path removes the functions/policies and
+grants without deleting created accounts or memberships. Its isolated NOLOGIN
+role remains available for other databases that may use the same migration.
+Acceptance requires direct runtime authorization/forged-context rejection,
+credential/duplicate preservation, generated route/golden coverage, migration
+checks and real browser create/login/assignment/keyboard/mobile checks. Owner
+acceptance and deployed release evidence remain separate.

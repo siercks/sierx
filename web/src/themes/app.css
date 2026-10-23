@@ -223,6 +223,70 @@ h3 {
   white-space: nowrap;
 }
 
+.profile-control {
+  position: relative;
+}
+
+.profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius);
+  padding: 0.15rem 0.35rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.profile-trigger:hover {
+  border-color: var(--border);
+}
+
+.profile-panel {
+  position: absolute;
+  z-index: 20;
+  inset-inline-end: 0;
+  top: calc(100% + 0.5rem);
+  display: grid;
+  gap: 0.65rem;
+  width: min(22rem, calc(100vw - 2rem));
+  overflow-wrap: anywhere;
+}
+
+.profile-panel a {
+  display: block;
+  padding-block: 0.35rem;
+}
+
+.admin-section {
+  margin-block: 1rem;
+}
+
+.admin-member-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-member-list li {
+  display: grid;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  padding-block: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.member-credentials {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  overflow-wrap: anywhere;
+}
+
 .app-main {
   width: min(var(--content-width), 100%);
   min-height: 0;
@@ -1339,11 +1403,25 @@ th {
   .app-header {
     position: static;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.65rem;
   }
 
+  .brand-group {
+    flex-wrap: wrap;
+  }
+
   .header-tools {
+    position: relative;
     justify-content: space-between;
+  }
+
+  .profile-control {
+    position: static;
+  }
+
+  .profile-panel {
+    max-width: 100%;
   }
 
   .preference-field select {

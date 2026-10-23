@@ -1,5 +1,53 @@
 # Workspace settings and faster editing
 
+## Administrator Home and private member setup
+
+Click your profile avatar/name in the userbar and choose **Administrator Home**.
+This entry and `/admin` are restricted to active workspace administrators.
+The profile disclosure works with keyboard activation, Tab and Escape; Escape
+returns focus to the profile control. Existing workspace settings remain at
+`/settings` and are linked from Administrator Home.
+
+**Add Member** takes a display name and email address. It creates a regular
+Member in the current workspace, without changing any existing account or
+granting administrator access. Duplicate emails are rejected; the action never
+resets a password, links an existing global identity, reactivates an account or
+changes a role. Administrator member search shows only the current workspace's
+names, emails, roles and active state. The ordinary assignee roster still exposes
+only active names/IDs.
+
+For local sign-in, the browser generates a cryptographically random initial
+password before submitting the request. The server hashes it with the existing
+Argon2id policy; it never stores or returns plaintext. Save/copy the login details
+privately before choosing **I saved the login details**. The password is held
+only in the current component's memory; save it before leaving or reloading
+the page. It is not placed in a URL, browser
+storage, query cache or member list. It is not an expiring password or an enforced
+first-login password reset. No invitation email is sent.
+
+If a response is lost, the login details remain visible with an unconfirmed
+creation warning. Check the member list before explicitly retrying; writes are
+not replayed automatically. Retrying a committed creation cannot replace its
+credential. A known rejection on the initial request preserves name/email while
+discarding the unused generated credential. Proxy-auth deployments retain
+operator provisioning and do not create local-password members through this form.
+
+The new member can sign in and is immediately eligible for the assignee picker.
+Migration 0016 adds an isolated NOLOGIN function owner and narrowly scoped
+administrator-checked member create/list functions. The application runtime
+receives no direct account/membership write or password-read privilege. Its
+server configuration does not gain an operator/maintenance credential. Both the
+HTTP permission check and database functions verify administrator scope; the
+functions independently verify actual active administrator membership.
+
+API ownership: GET/POST `/api/v1/admin/members` are covered by
+`TestAdminMemberProvisioningAuthorizationAndCredentials`, direct runtime/forged
+scope tests, tenant-scoped pagination/search, populated 15→16→15→16 preservation,
+golden route coverage, catalog privilege checks and real browser
+profile/create/sign-in/assignment checks. GET `/admin` has a generated document
+route and a lazy frontend chunk. This is private administrator provisioning;
+registration/invitation modes remain disabled.
+
 ## Everyday editing
 
 The item Details pane has Edit assignee, Edit start date and Edit due date
@@ -93,6 +141,14 @@ keyboard/theme/conflict/session and 10k checks remain required.
 ## Release boundary
 
 Migration 0015 adds workspace versioning and a tenant/admin-scoped update policy.
+Migration 0016 adds private administrator member provisioning and scoped search.
+Before deploying 0016, rehearse the upgrade on a protected populated restore,
+verify existing account/membership/item preservation, and revalidate any recovery
+operator that pins an earlier revision or schema version.
+For a logical restore into an empty cluster, run the current `db-roles.sh`
+before restoring the archive. It provisions the isolated NOLOGIN function owner
+as well as the three application logins; an earlier role helper lacks this
+schema-16 prerequisite. Never restore past role/ACL errors.
 Use the normal reviewed release/migration procedure and preserve the live backlog
 and recovery materials. Source checks use disposable databases; never run seed,
 reset or migration reversibility gates against the daily-use instance. Local

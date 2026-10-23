@@ -47,6 +47,8 @@ func (s *Server) ConfigureAuth(c config.Env) {
 	s.Router.With(s.requireAuth).Get("/api/v1/projects", s.listProjects)
 	s.Router.With(s.requireAuth).Post("/api/v1/projects", s.createProject)
 	s.Router.With(s.requireAuth).Get("/api/v1/members", s.listMembers)
+	s.Router.With(s.requireAuth).Get("/api/v1/admin/members", s.listAdminMembers)
+	s.Router.With(s.requireAuth).Post("/api/v1/admin/members", s.addAdminMember)
 	s.Router.With(s.requireAuth).Get("/api/v1/projects/{key}", s.getProject)
 	s.Router.With(s.requireAuth).Patch("/api/v1/projects/{key}", s.updateProject)
 	s.Router.With(s.requireAuth).Get("/api/v1/projects/{key}/config", s.projectConfig)

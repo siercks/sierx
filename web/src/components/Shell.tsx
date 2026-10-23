@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cache, request, bootstrap, type Me } from '../api/client';
 
 import { startFeed } from '../api/feed';
@@ -25,6 +25,21 @@ export function Shell({
   const [error, setError] = useState('');
   const [expired, setExpired] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profile = useRef<HTMLDivElement>(null);
+  const profileButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!profileOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !profile.current?.contains(event.target)) setProfileOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setProfileOpen(false); profileButton.current?.focus(); }
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [profileOpen]);
   useEffect(() => {
     const handler = () => {
       setExpired(true);
@@ -132,10 +147,21 @@ export function Shell({
             </select>
           </label>
           <div className="user-menu">
-            <span className="sx-avatar user-avatar" aria-hidden="true">
-              {me.display_name.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="user-name">{me.display_name}</span>
+            <div className="profile-control" ref={profile}>
+              <button className="profile-trigger" type="button" ref={profileButton}
+                aria-label={`Profile for ${me.display_name}`} aria-expanded={profileOpen} aria-controls={profileOpen ? 'profile-navigation' : undefined}
+                onClick={() => setProfileOpen(!profileOpen)}>
+                <span className="sx-avatar user-avatar" aria-hidden="true">{me.display_name.slice(0, 1).toUpperCase()}</span>
+                <span className="user-name">{me.display_name}</span>
+                <span aria-hidden="true">▾</span>
+              </button>
+              {profileOpen && <nav id="profile-navigation" className="profile-panel card" aria-label="Profile">
+                <strong>{me.display_name}</strong>
+                <span>{me.role === 'admin' ? 'Administrator' : 'Member'}</span>
+                {me.role === 'admin' && <a href="/admin" aria-current={location.pathname === '/admin' ? 'page' : undefined}>Administrator Home</a>}
+                <a href="/">Workspace</a>
+              </nav>}
+            </div>
             {authMode === 'local' && (
               <Button
                 variant="ghost"

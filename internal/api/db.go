@@ -86,7 +86,7 @@ func (s *Server) withRequestScope(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), requestTxKey{}, tx)
 		next.ServeHTTP(w, r.WithContext(ctx))
-		if err := tx.Commit(r.Context()); err != nil && s.Logger != nil {
+		if err := tx.Commit(r.Context()); err != nil && !errors.Is(err, pgx.ErrTxClosed) && s.Logger != nil {
 			s.Logger.Error("request database transaction could not commit", "error", err)
 		}
 	})

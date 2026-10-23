@@ -2136,3 +2136,93 @@ tests and the hostile-Markdown proof. npm audit reports zero vulnerabilities.
 Prepared environments must be rebuilt for the new inputs; full source/native
 host gates require results for the updated commit. No phase acceptance or
 production deployment is claimed by this security update.
+
+## 2026-10-22 — Administrator Home and private Add Member
+
+Owner request: expose Administrator Home through the userbar profile control,
+with an Add Member section. The administrator-only page links workspace/workflow
+settings and lists/searches current-workspace members, including role and active
+state. Creation admits only a new regular Member under local sign-in; existing
+identities, credentials, roles and memberships cannot be overwritten. Proxy
+identities retain operator provisioning. See ADR-030 and WORKSPACE-SETTINGS.md.
+
+The browser generates an initial credential before submitting, keeps it only in
+component memory until explicit dismissal, and retains it after an uncertain
+response. The API hashes it with the existing bounded Argon2id work slot, commits
+before success and never returns plaintext. Duplicate rejection cannot replace
+an existing password. No invitation sender, public signup or role promotion is
+introduced. The administrator must save/share login details privately before
+leaving the page; a forced first-login password reset is not claimed.
+
+Migration 0016 gives runtime EXECUTE on two administrator-checked functions
+owned by an isolated NOLOGIN/non-superuser role. It grants no direct runtime
+account/membership write or password-read permission. Independent active-admin
+membership checks reject forged/missing/foreign tenant contexts. Normal assignee
+rosters retain only active display names/IDs. The member-list cursor binds search
+and tenant scope, bounds the traversal and includes inactive accounts for review.
+
+Targeted disposable PostgreSQL acceptance:
+
+```text
+--- PASS: TestAdminMemberProvisioningAuthorizationAndCredentials
+--- PASS: TestAdminMemberFunctionRejectsForgedOrMissingScope
+--- PASS: TestAdminMemberListIsolationAndPagination
+--- PASS: TestAdminMemberMigrationPreservesPopulatedAccountsAndItems
+Populated 15→16→15→16 preserved accounts, credential hashes, memberships,
+projects and items; member login passed.
+gate-db-privileges: application role attributes, ownership, DDL, secret columns and RLS catalog passed
+```
+
+The first browser pass exposed narrow-phone profile-menu overflow; position the
+mobile panel relative to the full header controls rather than the avatar alone.
+Ledger's wider brand also exposed the header grid's automatic minimum width;
+allow the mobile track to shrink, wrap brand navigation, and bound the panel to
+its containing controls. Both engines' focused checks pass all 23 appearances
+at 320/390px, including header-content bounds.
+The full gate also exposed a pre-existing rollback-test race: it compared global
+item counts while another package could commit to another workspace. Scope the
+assertion to its own items, rollups, events and counter, and deliberately commit
+an unrelated workspace item inside the test. This strengthens rollback evidence
+without serializing packages or changing production mutation behavior.
+
+```text
+--- PASS: TestMutateCallbackErrorRollsBack
+[chromium administrator/profile cases] 3 passed
+[firefox administrator/profile cases] 3 passed
+--- PASS: TestBrowserAcceptance (24.47s)
+```
+
+Recovery review identified a further bootstrap prerequisite: logical archives
+reference the new function owner and RLS policies before migrations can run.
+`db-roles.sh` now creates and validates that isolated NOLOGIN role on an empty
+cluster, and native artifact acceptance requires it before applying migrations.
+A separate synthetic PostgreSQL cluster reproduced restore rejection with the
+previous role helper, then restored with the corrected helper. Two accounts and
+memberships, password hashes, a project and item were preserved; restored member
+login and the restricted runtime list function passed. The artifact prerequisite
+also rejected the old setup and accepted the corrected setup.
+
+```text
+Prior role setup reproduced missing-provisioner restore failure.
+Fresh-cluster role bootstrap and logical restore passed: 2 members, 1 item;
+hashes/memberships preserved, login and runtime function passed.
+--- PASS: TestAdminFreshClusterLogicalRestore (2.39s)
+artifact fixture regression suite: 6 tests passed
+```
+
+The complete offline application gate passed. Its
+snapshot precedes the follow-up role-bootstrap/artifact prerequisite change;
+the fresh-cluster proof and fixture suite above validate that change separately.
+New exact-revision native/release checks, a protected populated deployment
+rehearsal, recovery operator revision/schema revalidation and owner review remain
+separate. No production migration or Phase 2 acceptance is claimed here.
+
+```text
+[chromium workflow] 61 passed (2.6m)
+[firefox workflow] 61 passed (3.5m)
+--- PASS: TestBrowserAcceptance (371.04s)
+[chromium 10k] 1 passed (7.8s)
+[firefox 10k] 1 passed (12.9s)
+--- PASS: TestBrowserAcceptance (122.42s)
+gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)
+```
