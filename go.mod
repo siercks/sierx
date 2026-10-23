@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/andybalholm/brotli v1.2.6
-	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/leanovate/gopter v0.2.11
 	golang.org/x/crypto v0.58.0
