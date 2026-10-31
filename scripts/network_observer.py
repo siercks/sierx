@@ -173,11 +173,15 @@ def records(lines):
                     'execve','execveat','clone','clone3','fork','vfork'} else 'io_uring'
                 prefix = ('numbered' if re.match(r'^\d+(?:<|\s)',raw.strip()) else
                           'bracketed' if re.match(r'^\[pid\s+[0-9]+\]',raw.strip()) else 'other')
+                shape = ('nul-padding' if raw.lstrip().startswith('\0') else
+                         'timestamp-only' if re.match(r'^\d+\.\d+\s',raw.strip()) else
+                         'syscall-only' if re.match(r'^[a-z0-9_]+\(',raw.strip()) else 'other')
                 raise ValueError('A state-changing trace record could not be classified: call='+call+
                     ' prefix='+prefix+' timestamp='+str(int(bool(re.search(r'\s[0-9]+\.[0-9]+\s',raw[:256]))))+
                     ' return='+str(int(bool(re.search(r'\)\s*=\s*-?[0-9]+',raw))))+
                     ' unfinished='+str(int('<unfinished ...>' in raw))+
-                    ' resumed='+str(int(bool(re.search(r'<\.\.\. [a-z0-9_]+ resumed>',raw)))))
+                    ' resumed='+str(int(bool(re.search(r'<\.\.\. [a-z0-9_]+ resumed>',raw))))+
+                    ' header-shape='+shape)
             continue
         pid, program, timestamp, body = line.groups()
         resumed = re.match(r'<\.\.\. ([a-z0-9_]+) resumed>(.*)', body)

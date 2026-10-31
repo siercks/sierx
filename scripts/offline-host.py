@@ -230,6 +230,23 @@ def disk_file(disk, name):
     return run('debugfs', '-R', 'cat ' + paths[name], disk)
 
 
+def trace_lines(*streams):
+    # Each strace is an independent stream. A final record without a newline
+    # must not absorb the next observer's first startup record.
+    return [line for stream in streams for line in stream.decode().splitlines()]
+
+
+def failure_detail(phase, log):
+    # The private log is already read in full by debugfs. Search its fixed
+    # markers before discarding any tail; appended journals can exceed 64 KiB.
+    text = log.decode(errors='replace')
+    if phase == 'delivered-browser-workflows':
+        return evidence.browser_failure_diagnostic(text)
+    if phase.startswith('negative-'):
+        return evidence.control_failure_diagnostic(text)
+    return None
+
+
 def recover_disk(disk):
     # The owned guest disk is never mounted on the host. Replay only its journal
     # after QEMU stops, so debugfs sees metadata durably synced by the fixture.
@@ -389,11 +406,7 @@ def main(args):
                 failure_type=result.get('failure_type','unknown')
                 if failure_type not in {'TimeoutExpired','ValueError','RuntimeError','PermissionError','FileNotFoundError'}:
                     failure_type='unknown'
-                detail = None
-                if failed_phase == 'delivered-browser-workflows':
-                    detail = evidence.browser_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
-                elif failed_phase.startswith('negative-'):
-                    detail = evidence.control_failure_diagnostic(disk_file(disk, 'diagnostics.log')[-65536:].decode(errors='replace'))
+                detail = failure_detail(failed_phase, disk_file(disk, 'diagnostics.log'))
                 suffix = '; detail '+detail if detail else ''
                 code=result.get('command_exit_code')
                 if type(code) is int and -128<=code<=255:suffix+='; command-exit='+str(code)
@@ -409,8 +422,8 @@ def main(args):
                 print('offline-host: development runtime probe passed; no closeout claim',flush=True)
                 return
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
-            trace = (disk_file(disk,'manager.trace') + disk_file(disk,'installer.trace')).decode()
-            observation = network_observer.summarize(trace.splitlines(),
+            trace = trace_lines(disk_file(disk,'manager.trace'), disk_file(disk,'installer.trace'))
+            observation = network_observer.summarize(trace,
                 json.loads(disk_file(disk,'network-controls.json')), result.pop('internal_addresses'),
                 (disk_file(disk,'manager.stderr')+disk_file(disk,'installer.stderr')).decode(),
                 control_interval_limit=120 if mode=='tcg' else 20)

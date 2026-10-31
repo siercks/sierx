@@ -2315,3 +2315,39 @@ Sierx does not import it. No advisory is suppressed or audit threshold lowered.
 These are local checks for this patch, not a claim that hosted native gates,
 release promotion, production deployment or Phase 2 acceptance have completed.
 Prepared CI images must be refreshed for the changed inputs.
+
+## 2026-10-30 — Phase 2 follow-up after security merge
+
+Merge the reviewed security maintenance from main (PR #29) into the Phase 2
+usability branch, retaining fast-uri 3.1.9 and the Go/Node security floors.
+The earlier offline failures remain failed evidence. Their private runner traces
+are no longer available, so their underlying causes are still unproven. Eight
+bounded Linux strace 6.8 startup probes, varying fork behavior, seccomp-bpf and
+the traced user, emitted valid PID headers and did not reproduce the malformed
+record. A timestamp-only synthetic record reproduces the old diagnostic category;
+that does not establish what the failed runner emitted.
+
+Two independently reproducible harness defects are corrected. Separate observer
+streams are split into records before combining them, so a missing final newline
+cannot swallow the next observer's startup. Failure markers are extracted from
+the complete private diagnostic log, rather than a 64 KiB tail that appended
+journals can displace. Regression fixtures reproduce both losses and require
+malformed state-changing records to remain rejected.
+
+Unknown trace-header diagnostics now report only a fixed shape category.
+Lifecycle rejection evidence distinguishes checkpoint access, database
+verification and checkpoint mismatch, with elapsed time, the actual verification
+budget and numeric pool occupancy. Public failure summaries allowlist and bound
+these fields; hostile labels, malformed types and private error text are excluded.
+No verification deadline is increased, uncertain write is retried or audit
+rejection is relaxed. The additional evidence supports diagnosis if a new host
+attempt fails; it does not claim that the original intermittent failures are fixed.
+
+Local validation: all 132 Linux Python tests and 45 frontend unit tests pass;
+the production frontend build/budgets, hostile-Markdown proof and 181-component
+license policy/negative controls pass. Targeted lifecycle/API guard and deadline
+tests pass under Go 1.27.3. The merged lockfile is byte-identical to public main,
+and a fresh npm audit reports zero vulnerabilities. Credential-scan controls and
+source/build scanning pass. Full hosted source and three-profile offline-host
+acceptance must run on the new revision before claiming current PR acceptance.
+No production change, release promotion or Phase 2 owner acceptance is claimed.

@@ -48,6 +48,8 @@ def browser_failure_diagnostic(text):
             kinds=sorted(set(re.findall(r'^offline-browser: unavailable ((?:GET|POST|PATCH|PUT|DELETE|HEAD)-(?:recovery|problem|other))$',text,re.MULTILINE)))
             if kinds:result += ' unavailable='+','.join(kinds)
             late=early=timeouts=0
+            stages,budgets,pools=set(),set(),set()
+            timings=[]
             for line in text.splitlines():
                 try:
                     record=json.loads(line[line.index('{'):])
@@ -56,12 +58,27 @@ def browser_failure_diagnostic(text):
                 if (isinstance(record,dict) and record.get('msg')=='lifecycle verification rejected request'
                         and record.get('reason')=='deadline-exceeded'):
                     timeouts+=1
+                if isinstance(record,dict) and record.get('msg')=='lifecycle verification rejected request':
+                    stage=record.get('stage')
+                    if isinstance(stage,str) and stage in {'checkpoint','database','comparison','unknown'}:
+                        stages.add(stage)
+                    elapsed=record.get('verification_ms')
+                    if type(elapsed) is int and 0<=elapsed<=600000:timings.append(elapsed)
+                    budget=record.get('verification_timeout_ms')
+                    if type(budget) is int and budget in {1000,10000}:budgets.add(budget)
+                    acquired,total,maximum=(record.get('pool_'+key) for key in ('acquired','total','max'))
+                    if all(type(value) is int for value in (acquired,total,maximum)) and 0<=acquired<=total<=maximum<=1024:
+                        pools.add(str(acquired)+'/'+str(maximum))
                 if (isinstance(record,dict) and record.get('msg')=='request' and record.get('route')=='unmatched'
                         and record.get('status')==503 and type(record.get('duration_ms')) is int and record['duration_ms']>=0):
                     if record['duration_ms']>=1000:late+=1
                     else:early+=1
             if late or early:result += ' recovery-late='+str(late)+' recovery-early='+str(early)
             if timeouts:result += ' recovery-timeouts='+str(timeouts)
+            if stages:result += ' verification-stage='+','.join(sorted(stages))
+            if timings:result += ' verification-ms='+str(min(timings))+'..'+str(max(timings))
+            if budgets:result += ' verification-budget-ms='+','.join(map(str,sorted(budgets)))
+            if pools:result += ' pool-acquired='+','.join(sorted(pools))
             return result
     return None
 

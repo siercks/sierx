@@ -22,6 +22,41 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_trace_file_boundary_preserves_each_startup_record(self):
+        import network_observer as observer
+        manager = b'10<systemd> 1.000000 close(3) = 0'
+        installer = b'20<runner> 2.000000 execve("/usr/local/bin/sierx", ["fixture"], 0x0) = 0\n'
+        # A collector can end without a newline. Byte concatenation absorbs
+        # the second collector's startup into the first collector's close.
+        self.assertNotIn('app', observer.parse((manager+installer).decode().splitlines())[1])
+        self.assertEqual(observer.parse(host.trace_lines(manager, installer))[1], {'app'})
+        with self.assertRaises(ValueError):
+            observer.parse(host.trace_lines(manager, b'execve("private", [], 0x0) = 0'))
+
+    def test_browser_failure_marker_survives_a_large_private_journal_tail(self):
+        marker = b'offline-browser: failed at chromium-comment (Error); no passing report\n'
+        private = b'private-fixture-credential\n' * 5000
+        self.assertIsNone(evidence.browser_failure_diagnostic((marker+private)[-65536:].decode()))
+        self.assertEqual(host.failure_detail('delivered-browser-workflows', marker+private), 'chromium-comment (Error)')
+        self.assertIsNone(host.failure_detail('delivered-browser-workflows', private))
+
+    def test_recovery_stage_and_budget_diagnostics_are_fixed_and_bounded(self):
+        marker='offline-browser: failed at chromium-comment (Error); no passing report\n'
+        records=[{'msg':'lifecycle verification rejected request','reason':'deadline-exceeded',
+                  'stage':'database','verification_ms':10003,'verification_timeout_ms':10000,
+                  'pool_acquired':4,'pool_total':4,'pool_max':4,'private':'credential'},
+                 {'msg':'lifecycle verification rejected request','stage':'private-credential',
+                  'verification_ms':10**50,'verification_timeout_ms':'private','pool_acquired':True,
+                  'pool_total':4,'pool_max':4},
+                 {'msg':'lifecycle verification rejected request','stage':['private-credential']}]
+        detail=host.failure_detail('delivered-browser-workflows', (marker+'\n'.join(map(json.dumps,records))).encode())
+        self.assertIn('verification-stage=database',detail)
+        self.assertIn('verification-ms=10003..10003',detail)
+        self.assertIn('verification-budget-ms=10000',detail)
+        self.assertIn('pool-acquired=4/4',detail)
+        self.assertNotIn('private',detail)
+        self.assertNotIn('credential',detail)
+
     def test_node_security_minimum_matches_all_toolchain_selectors(self):
         pin = (ROOT / '.nvmrc').read_text().strip()
         self.assertEqual(tuple(map(int, pin.split('.'))), evidence.NODE_MIN_VERSION)

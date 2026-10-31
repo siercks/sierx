@@ -29,6 +29,17 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_missing_header_shape_is_diagnostic_and_still_rejected(self):
+        for raw,shape in (
+            ('1.000001 execve("private", [], 0x0) = 0', 'timestamp-only'),
+            ('execve("private", [], 0x0) = 0', 'syscall-only'),
+            ('\x00\x00execve("private", [], 0x0) = 0', 'nul-padding'),
+        ):
+            with self.subTest(shape=shape), self.assertRaises(ValueError) as caught:
+                observer.parse([raw])
+            self.assertIn('header-shape='+shape, str(caught.exception))
+            self.assertNotIn('private', str(caught.exception))
+
     def test_unclassified_trace_diagnostic_reports_fixed_categories_without_leaking_prefix(self):
         private = 'private-password-or-process-label'
         for raw,prefix in (('[pid 10] 1.000001 connect(3, "'+private+'", 16) = -1 EFAULT','bracketed'),

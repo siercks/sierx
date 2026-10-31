@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -44,6 +45,7 @@ func (s *Server) requestLog(next http.Handler) http.Handler {
 				timeout = time.Second
 			}
 			ctx, cancel := context.WithTimeout(r.Context(), timeout)
+			verificationStart := time.Now()
 			err := s.CheckLifecycle(ctx)
 			contextError := ctx.Err()
 			if err == nil {
@@ -57,7 +59,21 @@ func (s *Server) requestLog(next http.Handler) http.Handler {
 				} else if contextError == context.Canceled {
 					reason = "request-canceled"
 				}
-				s.Logger.Warn("lifecycle verification rejected request", "reason", reason)
+				stage := "unknown"
+				var staged interface{ VerificationStage() string }
+				if errors.As(err, &staged) {
+					switch value := staged.VerificationStage(); value {
+					case "checkpoint", "database", "comparison":
+						stage = value
+					}
+				}
+				fields := []any{"reason", reason, "stage", stage,
+					"verification_ms", time.Since(verificationStart).Milliseconds(), "verification_timeout_ms", timeout.Milliseconds()}
+				if s.rawPool != nil {
+					stats := s.rawPool.Stat()
+					fields = append(fields, "pool_acquired", stats.AcquiredConns(), "pool_total", stats.TotalConns(), "pool_max", stats.MaxConns())
+				}
+				s.Logger.Warn("lifecycle verification rejected request", fields...)
 				http.Error(ww, "Service unavailable pending operator recovery verification.", http.StatusServiceUnavailable)
 				return
 			}
