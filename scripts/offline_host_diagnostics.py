@@ -13,6 +13,51 @@ SERVICE_RESULTS = {'success', 'resources', 'timeout', 'exit-code', 'signal',
                    'exec-condition', 'protocol', 'unknown'}
 EXIT_KINDS = {'exited', 'killed', 'dumped', 'unknown'}
 SIGNALS = {entry.name.removeprefix('SIG') for entry in signal.Signals}
+FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionError',
+                 'FileNotFoundError', 'JSONDecodeError', 'UnicodeDecodeError',
+                 'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError'}
+FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bootstrap',
+                  'actual-plan-apply', 'https-data-check', 'repeat-apply', 'restart',
+                  'network-negative-controls', 'negative-app', 'negative-gateway',
+                  'negative-database', 'negative-installer', 'negative-dns-ipv-six',
+                  'delivered-browser-workflows', 'invalid-deliveries', 'two-approved-releases',
+                  'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete'} | {
+    'runtime-'+name for name in ('reject-implicit-timers', 'reload-units', 'start-timer',
+                                'observe', 'verify-maintenance', 'inventory-services',
+                                'inventory-timers', 'inventory-enabled')}
+
+
+def sanitize_failure(value):
+    """Accept fixed failure metadata only; this can never produce passing evidence."""
+    if not isinstance(value, dict) or value.get('result') != 'failed':
+        raise ValueError('Failure diagnostics require a failed guest result')
+    result = {'result':'failed', 'phase':'unknown', 'failure_type':'unknown'}
+    for key, allowed in (('phase', FAILURE_PHASES), ('failure_type', FAILURE_TYPES)):
+        if isinstance(value.get(key), str) and value[key] in allowed:
+            result[key] = value[key]
+    code = value.get('command_exit_code')
+    if type(code) is int and -128 <= code <= 255:
+        result['command_exit_code'] = code
+    if result['failure_type'] == 'JSONDecodeError':
+        kind = value.get('json_input')
+        if isinstance(kind, str) and kind in {'empty', 'object', 'array', 'other'}:
+            result['json_input'] = kind
+        for key in ('json_chars', 'json_position', 'json_line', 'json_column'):
+            count = value.get(key)
+            if type(count) is int and 0 <= count <= 10**7:
+                result[key] = count
+    return result
+
+
+def failure_record(error, phase):
+    value = {'result':'failed', 'phase':phase, 'failure_type':type(error).__name__,
+             'command_exit_code':getattr(error, 'fixture_exit_code', None)}
+    if isinstance(error, json.JSONDecodeError):
+        first = error.doc.lstrip()[:1]
+        value.update(json_input='empty' if not first else 'object' if first=='{' else 'array' if first=='[' else 'other',
+                     json_chars=len(error.doc), json_position=error.pos,
+                     json_line=error.lineno, json_column=error.colno)
+    return sanitize_failure(value)
 
 
 def resources(root=Path('/')):

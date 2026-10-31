@@ -2351,3 +2351,38 @@ and a fresh npm audit reports zero vulnerabilities. Credential-scan controls and
 source/build scanning pass. Full hosted source and three-profile offline-host
 acceptance must run on the new revision before claiming current PR acceptance.
 No production change, release promotion or Phase 2 owner acceptance is claimed.
+
+## 2026-10-31 — ARM64 retry failure and persistent failure metadata
+
+All current PR-triggered source/security/offline checks for `c63110e` passed,
+including three complete host reports for test merge `80f6b97`. The duplicate
+push workflows were manually canceled; their always-run offline aggregate
+correctly failed on canceled coverage. Restore those interrupted runs on the
+unchanged head rather than treating cancellation as a code defect.
+
+The restarted source/security jobs and both AMD64 hosts passed. ARM64 job
+124595376403 genuinely failed at delivered-browser-workflows after installation,
+migration/bootstrap, HTTPS writes, restart and the network controls. Aggregate
+124609301417 consequently rejected `HOST_RESULT: failure`. The last resource
+snapshot showed no OOM kills and sufficient memory/storage; that snapshot does
+not exclude a later resource problem. The approximately 16-minute browser phase
+did not exhaust its 90-minute command cap. No root cause is established.
+
+The failure's input artifact survived, but no acceptance or failed-result report
+was uploaded. The ephemeral runner's private log is gone. The host normalized
+exceptions outside five exact class names to `unknown`, including JSON decoding
+errors that can occur while reading browser output without a browser failure
+marker. This explains an evidence gap, not the original exception's identity.
+
+Add fixed exception/phase allowlists and bounded JSON input-shape/position
+metadata to failed guest results. Preserve a separately named, sanitized failed
+report as an artifact before raising the acceptance error. Unknown values remain
+unknown; private output/messages are excluded. A failure report cannot satisfy
+the acceptance validator, and every host/profile/scenario remains required.
+No timeout, write retry, application behavior or production setting changes.
+
+Regression coverage verifies safe JSON classifications, hostile metadata
+rejection and failed-artifact persistence/rejection as acceptance evidence.
+All 135 Linux Python tests, credential-scan controls/source/build scan and
+whitespace checks pass. New hosted checks must validate the diagnostic revision;
+the previous complete PR run does not erase the reproducible instability.

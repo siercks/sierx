@@ -241,6 +241,14 @@ tested inventory.
 
 Private traces and diagnostics contain synthetic credentials/content and are
 never uploaded. Only the explicitly named sanitized reports/receipts are public.
+For a synced failed guest result, the launcher also writes
+`host-acceptance-<profile>-<arch>.failure.json`. It records only a fixed failure
+phase/exception category, bounded command exit code, existing sanitized browser
+detail and, for JSON decoding failures, bounded input length/position and a fixed
+input-shape category. Raw output and exception messages remain private. Its
+`offline-host-failure-v1` schema always has `result: failed`; it cannot replace
+any acceptance report or satisfy promotion. The named failure artifact survives
+hosted-runner cleanup so an unknown console summary does not erase all evidence.
 The launcher waits for a synced completion marker, stops its owned VM and
 replays only that disposable disk's journal before reading evidence.
 

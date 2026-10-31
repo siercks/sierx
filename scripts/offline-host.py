@@ -247,6 +247,19 @@ def failure_detail(phase, log):
     return None
 
 
+def record_failure(report, result, log, arch, suite, revision):
+    failure = diagnostics.sanitize_failure(result)
+    detail = failure_detail(failure['phase'], log)
+    if detail:
+        failure['detail'] = detail
+    summary = {'schema':1, 'suite':'offline-host-failure-v1', 'suite_sha256':suite,
+               'arch':arch, 'revision':revision, **failure}
+    path = Path(report).with_suffix('.failure.json')
+    path.write_text(json.dumps(summary, indent=2)+'\n')
+    path.chmod(0o644)
+    return failure
+
+
 def recover_disk(disk):
     # The owned guest disk is never mounted on the host. Replay only its journal
     # after QEMU stops, so debugfs sees metadata durably synced by the fixture.
@@ -261,6 +274,7 @@ def main(args):
     args.suite_sha256 = suite_digest()
     report = Path(args.report).absolute()
     report.unlink(missing_ok=True)
+    report.with_suffix('.failure.json').unlink(missing_ok=True)
     if os.geteuid() != 0:
         raise ValueError('Run on a disposable native Linux host with root namespace privileges')
     arch = offline.native_arch()
@@ -400,16 +414,16 @@ def main(args):
             if result.get('result')!=finished[1]:
                 raise ValueError('Guest result does not match its completion marker')
             if result.get('result') == 'failed':
-                failed_phase = str(result.get('phase', 'unknown'))
-                if not re.fullmatch(r'[a-z-]{1,80}', failed_phase):
-                    failed_phase = 'unknown'
-                failure_type=result.get('failure_type','unknown')
-                if failure_type not in {'TimeoutExpired','ValueError','RuntimeError','PermissionError','FileNotFoundError'}:
-                    failure_type='unknown'
-                detail = failure_detail(failed_phase, disk_file(disk, 'diagnostics.log'))
+                failure = record_failure(report, result, disk_file(disk, 'diagnostics.log'),
+                                         arch, args.suite_sha256, data['release']['revision'])
+                failed_phase = failure['phase']
+                failure_type = failure['failure_type']
+                detail = failure.get('detail')
                 suffix = '; detail '+detail if detail else ''
-                code=result.get('command_exit_code')
-                if type(code) is int and -128<=code<=255:suffix+='; command-exit='+str(code)
+                code = failure.get('command_exit_code')
+                if code is not None:suffix+='; command-exit='+str(code)
+                for key in ('json_input','json_chars','json_position','json_line','json_column'):
+                    if key in failure:suffix+='; '+key.replace('_','-')+'='+str(failure[key])
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             if result.get('virtual_cpus') != (4 if mode=='tcg' else 2):
                 raise ValueError('Guest CPU count differs from its declared emulation profile')

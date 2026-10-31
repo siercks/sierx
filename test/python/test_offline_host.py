@@ -22,6 +22,21 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_failed_guest_summary_survives_runner_cleanup_and_cannot_satisfy_acceptance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report=Path(temporary)/'host-acceptance-ubuntu24-arm64.json'
+            raw={'result':'failed','phase':'delivered-browser-workflows','failure_type':'JSONDecodeError',
+                 'json_input':'empty','json_chars':0,'json_position':0,'private':'credential'}
+            result=host.record_failure(report,raw,b'private journal and credential','arm64','c'*64,'a'*40)
+            saved=json.loads(report.with_suffix('.failure.json').read_text())
+            self.assertEqual(result['failure_type'],'JSONDecodeError')
+            self.assertEqual(saved['result'],'failed')
+            self.assertEqual(saved['suite'],'offline-host-failure-v1')
+            self.assertEqual(saved['revision'],'a'*40)
+            self.assertFalse(report.exists())
+            self.assertNotIn('private',json.dumps(saved))
+            with self.assertRaises(ValueError):evidence.validate(saved,self.bundle,'d'*64,'c'*64)
+
     def test_trace_file_boundary_preserves_each_startup_record(self):
         import network_observer as observer
         manager = b'10<systemd> 1.000000 close(3) = 0'

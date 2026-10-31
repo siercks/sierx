@@ -305,9 +305,8 @@ if __name__ == '__main__':
     except Exception as error:
         with LOG.open('a') as log:
             log.write('\nFailed phase: ' + PHASE + '\n' + type(error).__name__ + ': ' + str(error) + '\n')
-        result = {'result':'failed','phase':PHASE,'failure_type':type(error).__name__}
-        code=getattr(error,'fixture_exit_code',None)
-        if type(code) is int and -128<=code<=255:result['command_exit_code']=code
+        result = diagnostics.failure_record(error, PHASE)
+        diagnostics.emit_resources()
         for name in ('sierx-postgres.service','sierx.service','sierx-caddy.service'):
             with LOG.open('ab') as log:
                 try:

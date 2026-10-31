@@ -10,6 +10,28 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_json_decode_failure_keeps_fixed_type_and_position_without_private_output(self):
+        for document,kind in (('', 'empty'), ('private-credential', 'other'), ('{private-credential', 'object')):
+            error=json.JSONDecodeError('private exception message',document,0)
+            value=diagnostics.failure_record(error,'delivered-browser-workflows')
+            self.assertEqual(value['result'],'failed')
+            self.assertEqual(value['failure_type'],'JSONDecodeError')
+            self.assertEqual(value['json_input'],kind)
+            self.assertEqual(value['json_chars'],len(document))
+            self.assertEqual(value['json_position'],0)
+            self.assertNotIn('private',json.dumps(value))
+
+    def test_failure_metadata_rejects_private_types_phases_and_unbounded_values(self):
+        value=diagnostics.sanitize_failure({'result':'failed','phase':'private-credential',
+            'failure_type':['private'],'command_exit_code':True,'json_input':'private',
+            'json_chars':10**50,'json_position':-1,'json_line':'private','json_column':True,
+            'private':'credential'})
+        self.assertEqual(value,{'result':'failed','phase':'unknown','failure_type':'unknown'})
+        error=RuntimeError('private fixture command')
+        error.fixture_exit_code=-9
+        self.assertEqual(diagnostics.failure_record(error,'delivered-browser-workflows')['command_exit_code'],-9)
+        with self.assertRaises(ValueError):diagnostics.sanitize_failure({'result':'passed'})
+
     def test_reads_only_numeric_resource_metadata_and_marks_missing_values_unknown(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
