@@ -59,13 +59,20 @@ fi
 
 # ---- node ----------------------------------------------------------------
 node_pin=$(tr -d '[:space:]' < .nvmrc)
-if command -v node >/dev/null 2>&1; then
+if [[ ! $node_pin =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+  bad node ".nvmrc must pin a complete stable Node version"
+elif command -v node >/dev/null 2>&1; then
+  node_pin_major=${BASH_REMATCH[1]}
+  node_pin_minor=${BASH_REMATCH[2]}
+  node_pin_patch=${BASH_REMATCH[3]}
   node_have=$(node -v)                       # vNN.x.y
-  node_major=${node_have#v}; node_major=${node_major%%.*}
-  if [[ $node_major == "$node_pin" ]]; then
-    ok node "${node_have} (.nvmrc pins ${node_pin})"
+  if [[ $node_have =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] &&
+      [[ ${BASH_REMATCH[1]} == "$node_pin_major" ]] &&
+      (( 10#${BASH_REMATCH[2]} > 10#$node_pin_minor ||
+         (10#${BASH_REMATCH[2]} == 10#$node_pin_minor && 10#${BASH_REMATCH[3]} >= 10#$node_pin_patch) )); then
+    ok node "${node_have} (.nvmrc minimum ${node_pin}, same major)"
   else
-    bad node "${node_have} is not the major pinned in .nvmrc (${node_pin})"
+    bad node "${node_have} must be stable Node ${node_pin_major}.x >= ${node_pin}"
   fi
 else
   bad node "node not found; .nvmrc pins ${node_pin}"
