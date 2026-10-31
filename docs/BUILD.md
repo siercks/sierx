@@ -234,7 +234,7 @@ Where an ADR in §4 knowingly departs from a higher tier, it says so and carries
 | Agent role | Writes code; does not operate production | Human deploys and dogfoods |
 | Dev host | RHEL-family Linux, Podman (rootless) | No Docker, no docker-compose |
 | Database | PostgreSQL 18, self-hosted container, dev and prod | Full control of extensions and `pg_stat_statements` |
-| Go | **1.27.x** — pin `go 1.27.3` in `go.mod` | Go 1.27.3 includes the October 21, 2026 crypto/x509 certificate-distrust fix (GO-2026-6809). Supported lines are 1.27 and 1.26. **high (verified)** |
+| Go | **1.27.x** — pin `go 1.27.3` in `go.mod` | Go 1.27.3 includes the crypto/x509 certificate-distrust fix (GO-2026-6809). Supported lines are 1.27 and 1.26. **high (verified)** |
 | Node | **24.22.1 minimum, Node 24 only** — exact setup/image version in `.nvmrc`; minimum in both `package.json` `engines` | October 21, 2026 security release. Bootstrap and offline-host acceptance reject older Node 24 runtimes. Refresh prepared CI and host-test images after changing the pin. Node 26 migration remains a separate task. **high (verified)** |
 | JSON | Golden files are generated and verified under the pinned toolchain only | Go 1.27 backs `encoding/json` with the v2 engine: behaviour preserved, but escaping bytes and error text differ from 1.26. `GOEXPERIMENT=nojsonv2` is a comparison escape hatch, not a shipping configuration. **high (verified)** |
 | Frontend | Vite + React 19 + Sierx semantic CSS/tokens + Base UI interaction primitives | Sierx owns its visual contract and themes; Base UI supplies headless behavior for accessible interactions. Its render API and @floating-ui/react dependency matter to the section 9.1 budget. **high (verified)** |

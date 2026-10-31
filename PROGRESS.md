@@ -2285,3 +2285,33 @@ Validation for this diagnostic increment: all 35 observer tests and the full
 Full source/native/host checks for the new revision remain pending. Preserve
 both old failures rather than rewriting their results; use the new evidence
 to choose the next correction if the new attempt fails.
+
+## 2026-10-30 — Focused security maintenance for main
+
+The October 26 scheduled security run and October 30 dependency PR checks still
+find GO-2026-6809 in Go 1.27.2. The scheduled frontend scan also reports
+markdown-it 15.0.2 denial of service and fast-uri 3.1.8 URI-handling advisories.
+Some fixes already exist in the separate Phase 2 branch; those unmerged commits
+do not protect main or dependency PRs based on main.
+
+This focused patch brings main to Go 1.27.3, markdown-it 15.0.3 and fast-uri
+3.1.9. The last package is a development-only transitive dependency through
+HTML Validate/Ajv. Node setup is pinned to security release 24.22.1, both
+package engine declarations require that minimum within Node 24, and bootstrap
+rejects older cached versions. The bootstrap version-floor regression suite
+runs in both the fast check and full phase gate. Other dependency upgrades
+remain separately reviewable.
+
+Fresh online validation on the patch: npm audit reports zero vulnerabilities;
+138 installed packages have verified registry signatures and 55 have verified
+attestations; all 181 lockfile components pass license policy and negative
+controls. The production frontend build/budgets, all 41 frontend unit tests,
+hostile-Markdown proof, bootstrap security-floor proof and credential scan pass.
+Govulncheck under Go 1.27.3 reports zero affected symbols and zero vulnerable
+imported packages. Its verbose module inventory still lists GO-2026-5932 for
+the unused golang.org/x/crypto/openpgp package, which has no fixed version;
+Sierx does not import it. No advisory is suppressed or audit threshold lowered.
+
+These are local checks for this patch, not a claim that hosted native gates,
+release promotion, production deployment or Phase 2 acceptance have completed.
+Prepared CI images must be refreshed for the changed inputs.
