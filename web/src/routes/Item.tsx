@@ -17,6 +17,8 @@ import { ItemActions, ActionForm } from '../components/ItemActions';
 import { Dialog } from '../components/ui/dialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { DetailEditor } from '../components/DetailEditor';
+import { MarkdownEditor } from '../components/MarkdownEditor';
 import { renderMarkdown } from '../markdown/render';
 import { historyAction, historyValue } from '../history';
 type Comment = {
@@ -307,14 +309,7 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                               label="Save comment"
                               body={(d) => ({ body: d.get('body') })}
                             >
-                              <label>
-                                Comment
-                                <textarea
-                                  name="body"
-                                  required
-                                  defaultValue={c.body ?? ''}
-                                />
-                              </label>
+                              <MarkdownEditor label="Comment" name="body" required defaultValue={c.body ?? ''} />
                             </ActionForm>
                           </Dialog>
                         )}
@@ -363,14 +358,7 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               resetOnSuccess
               body={(d) => ({ item: item.key, body: d.get('body') })}
             >
-              <label>
-                New comment
-                <textarea
-                  name="body"
-                  required
-                  placeholder="Write a comment in Markdown"
-                />
-              </label>
+              <MarkdownEditor label="New comment" name="body" required placeholder="Write a comment in Markdown" />
             </ActionForm>
           )}
           </section>
@@ -430,7 +418,7 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
                 {item.status.name}
               </dd>
               <dt>Assignee</dt>
-              <dd>{item.assignee?.display_name ?? 'Unassigned'}</dd>
+              <dd><span aria-live="polite">{item.assignee?.display_name ?? 'Unassigned'}</span>{!item.deleted_at && <DetailEditor item={item} workspace={workspace} field="assignee" label="Assignee" />}</dd>
               <dt>Parent</dt>
               <dd>
                 {item.parent ? (
@@ -442,9 +430,9 @@ function Detail({ state, item }: { state: State; item: ItemData }) {
               <dt>Points</dt>
               <dd>{item.points ?? 'Not set'}</dd>
               <dt>Start date</dt>
-              <dd>{item.start_date ?? 'Not set'}</dd>
+              <dd><span aria-live="polite">{item.start_date ?? 'Not set'}</span>{!item.deleted_at && <DetailEditor item={item} workspace={workspace} field="start_date" label="Start date" />}</dd>
               <dt>Due date</dt>
-              <dd>{item.due_date ?? 'Not set'}</dd>
+              <dd><span aria-live="polite">{item.due_date ?? 'Not set'}</span>{!item.deleted_at && <DetailEditor item={item} workspace={workspace} field="due_date" label="Due date" />}</dd>
             </dl>
             {Object.entries(item.fields ?? {}).map(([k, v]) => (
               <p className="custom-detail" key={k}>

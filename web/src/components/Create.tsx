@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { request, type Config, type Project, type Item } from '../api/client';
 import { Dialog } from './ui/dialog';
 import { Button } from './ui/button';
+import { MarkdownEditor } from './MarkdownEditor';
 export function Create({
   projects,
   workspace,
@@ -160,10 +161,7 @@ function CreateForm({
         Title
         <input className="sx-control" name="title" required maxLength={500} />
       </label>
-      <label className="workflow-field workflow-field-full">
-        Description
-        <textarea className="sx-control" name="body" placeholder="Write in Markdown" />
-      </label>
+      <MarkdownEditor label="Description" name="body" placeholder="Write in Markdown" />
       {error && (
         <p className="error" role="alert">
           {error}

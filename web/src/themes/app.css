@@ -223,6 +223,70 @@ h3 {
   white-space: nowrap;
 }
 
+.profile-control {
+  position: relative;
+}
+
+.profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius);
+  padding: 0.15rem 0.35rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.profile-trigger:hover {
+  border-color: var(--border);
+}
+
+.profile-panel {
+  position: absolute;
+  z-index: 20;
+  inset-inline-end: 0;
+  top: calc(100% + 0.5rem);
+  display: grid;
+  gap: 0.65rem;
+  width: min(22rem, calc(100vw - 2rem));
+  overflow-wrap: anywhere;
+}
+
+.profile-panel a {
+  display: block;
+  padding-block: 0.35rem;
+}
+
+.admin-section {
+  margin-block: 1rem;
+}
+
+.admin-member-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-member-list li {
+  display: grid;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  padding-block: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.member-credentials {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  overflow-wrap: anywhere;
+}
+
 .app-main {
   width: min(var(--content-width), 100%);
   min-height: 0;
@@ -280,6 +344,8 @@ h3 {
 .legal-footer {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
   gap: 0.5rem 1rem;
   color: var(--muted-foreground);
   font-size: var(--sx-text-sm);
@@ -428,6 +494,11 @@ h3 {
   padding: 0.85rem 1.1rem;
   background: var(--card);
   transition: background-color 120ms ease;
+}
+
+/* A proportional key column made each title move with its row's status width. */
+.sx-virtual-list .item-row {
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
 }
 
 .item-row:last-child {
@@ -714,6 +785,39 @@ h3 {
   overflow-wrap: anywhere;
   font-size: 0.85rem;
   font-weight: 550;
+}
+
+.detail-list dd:has(button) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.check-label input {
+  width: 1.5rem;
+  min-height: 1.5rem;
+  flex: 0 0 1.5rem;
+}
+
+.workflow-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.app-main > .card {
+  margin-block: 1rem;
 }
 
 .custom-detail {
@@ -1299,11 +1403,25 @@ th {
   .app-header {
     position: static;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.65rem;
   }
 
+  .brand-group {
+    flex-wrap: wrap;
+  }
+
   .header-tools {
+    position: relative;
     justify-content: space-between;
+  }
+
+  .profile-control {
+    position: static;
+  }
+
+  .profile-panel {
+    max-width: 100%;
   }
 
   .preference-field select {
@@ -1345,7 +1463,8 @@ th {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .item-row {
+  .item-row,
+  .sx-virtual-list .item-row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.4rem 0.75rem;
   }

@@ -39,4 +39,7 @@
   [data-theme="plain"] .sx-card[data-blocked] { border-style: solid; }
   [data-theme="plain"] .sx-row[data-selected] .sx-c-key::before { content: "> "; }
   [data-theme="plain"] .sx-who { background: none; min-width: 0; }
+  /* Item details are a workspace, with a sidebar, rather than an RFC page. */
+  [data-theme="plain"] .sx-main > .sx-doc.item-document { max-width: none; margin-inline: 0; padding-inline: 0; }
+  [data-theme="plain"] .item-document .sx-doc-title { text-align: start; }
 }

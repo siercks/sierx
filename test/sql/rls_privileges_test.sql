@@ -44,6 +44,23 @@ BEGIN
      OR has_column_privilege('sierx_runtime','user_account','totp_secret','SELECT') THEN
     RAISE EXCEPTION 'runtime can read authentication secrets';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='sierx_member_provisioner'
+    AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit AND NOT rolreplication)
+    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='sierx_member_provisioner')
+      OR roleid=(SELECT oid FROM pg_roles WHERE rolname='sierx_member_provisioner'))
+    OR has_column_privilege('sierx_member_provisioner','user_account','password_hash','SELECT')
+    OR has_column_privilege('sierx_runtime','user_account','password_hash','INSERT')
+    OR has_schema_privilege('sierx_member_provisioner','public','CREATE') THEN
+    RAISE EXCEPTION 'member provisioning boundary is not isolated';
+  END IF;
+  IF NOT has_function_privilege('sierx_runtime','sierx_admin_add_member(text,text,text)','EXECUTE')
+    OR NOT has_function_privilege('sierx_runtime','sierx_admin_list_members(uuid,uuid,text,integer)','EXECUTE')
+    OR EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE n.nspname='public' AND p.proname IN ('sierx_admin_add_member','sierx_admin_list_members')
+        AND (NOT p.prosecdef OR pg_get_userbyid(p.proowner)<>'sierx_member_provisioner' OR a.grantee=0)) THEN
+    RAISE EXCEPTION 'member provisioning function owner or grants are incorrect';
+  END IF;
   IF NOT has_column_privilege('sierx_auth','user_account','password_hash','SELECT')
      OR NOT has_column_privilege('sierx_auth','user_account','totp_secret','SELECT') THEN
     RAISE EXCEPTION 'auth role lacks its narrowly scoped credential columns';

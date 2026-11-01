@@ -52,6 +52,7 @@ func main() {
 	logger.Info("server ready")
 	server := api.NewWithAuthPool(pool, authPool, logger)
 	server.CheckLifecycle = guard.Check
+	server.LifecycleCheckTimeout = c.LifecycleCheckTimeout
 	server.ConfigureAuth(c)
 	server.ConfigureDocuments()
 	if err := server.Serve(ctx, listener); err != nil {

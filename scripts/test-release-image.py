@@ -63,6 +63,18 @@ def await_database(db, database):
                             "-c", "SELECT 1"))
 
 
+def require_member_provisioner(database):
+    # Check before migrations: archive restore needs this owner on a new cluster.
+    ready = run("psql", database, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", """
+        SELECT count(*) FROM pg_roles r WHERE r.rolname='sierx_member_provisioner'
+          AND NOT (r.rolcanlogin OR r.rolsuper OR r.rolcreatedb OR r.rolcreaterole
+                   OR r.rolinherit OR r.rolbypassrls OR r.rolreplication)
+          AND NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid)
+    """)
+    if ready != "1":
+        raise ValueError("Database role setup must prepare an isolated non-login member function owner before archive restore")
+
+
 def failure_detail(error):
     if isinstance(error, ValueError):
         return str(error)
@@ -126,6 +138,7 @@ def main():
             await_database(db, admin_database)
             print("release-image: provisioning database roles", flush=True)
             run("bash", "scripts/db-roles.sh", env=role_environment, cwd=ROOT)
+            require_member_provisioner(admin_database)
             goose = os.environ["GOOSE"]
             print("release-image: applying migrations", flush=True)
             run(goose, "-dir", str(ROOT / "migrations"), "postgres",

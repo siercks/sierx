@@ -1,33 +1,11 @@
-import { useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { APIError, request, type Member, type Project } from '../api/client';
+import { useId, useState } from 'react';
+import { APIError, request, type Project } from '../api/client';
 import { Button } from './ui/button';
 import { Dialog } from './ui/dialog';
-
-function MemberPicker({ workspace, value, onChange, enabled }: { workspace: string; value: string; onChange: (id: string) => void; enabled: boolean }) {
-  const [search, setSearch] = useState('');
-  const members = useInfiniteQuery({
-    queryKey: [workspace, 'members', search],
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) => request<{ data: Member[]; next_cursor: string | null }>(`/members?${new URLSearchParams({ limit: '100', ...(search ? { q: search } : {}), ...(pageParam ? { cursor: pageParam } : {}) })}`, { signal }),
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
-    enabled,
-  });
-  const data = members.data?.pages.flatMap((page) => page.data) ?? [];
-  return <div className="workflow-field">
-    <label>Organizational owner (optional)</label>
-    <p className="field-hint">This describes who is accountable for the project. Workspace permissions still control access.</p>
-    <input className="sx-control" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search active members" aria-label="Search active members" />
-    <select className="sx-control" value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="">No owner</option>
-      {data.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}
-    </select>
-    {members.error && <p role="alert">{members.error.message}</p>}
-    {members.hasNextPage && <Button variant="ghost" type="button" disabled={members.isFetchingNextPage} onClick={() => void members.fetchNextPage()}>{members.isFetchingNextPage ? 'Loading…' : 'Load more members'}</Button>}
-  </div>;
-}
+import { MemberPicker } from './MemberPicker';
 
 function ProjectForm({ project, workspace, onSaved, enabled }: { project?: Project; workspace: string; onSaved: (project: Project) => void; enabled: boolean }) {
+  const keyHint = useId();
   const [name, setName] = useState(project?.name ?? '');
   const [prefix, setPrefix] = useState('');
   const [kind, setKind] = useState<Project['kind']>('delivery');
@@ -60,13 +38,15 @@ function ProjectForm({ project, workspace, onSaved, enabled }: { project?: Proje
   }}>
     {create ? <>
       <label className="workflow-field">Project name<input className="sx-control" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} required /></label>
-      <label className="workflow-field">Key prefix<input className="sx-control" value={prefix} onChange={(event) => setPrefix(event.target.value.toUpperCase())} minLength={2} maxLength={10} pattern="[A-Z][A-Z0-9]{1,9}" required /><span className="field-hint">Uppercase letters and numbers, starting with a letter.</span></label>
+      <label className="workflow-field">Key prefix<input className="sx-control" value={prefix} onChange={(event) => setPrefix(event.target.value.toUpperCase())} minLength={2} maxLength={10} pattern="[A-Z][A-Z0-9]{1,9}" aria-describedby={keyHint} required /></label>
+      <p id={keyHint} className="field-hint">Uppercase letters and numbers, starting with a letter.</p>
       <label className="workflow-field">Project kind<select className="sx-control" value={kind} onChange={(event) => setKind(event.target.value as Project['kind'])}><option value="delivery">Delivery</option><option value="discovery">Discovery</option><option value="portfolio">Portfolio</option></select></label>
     </> : <>
       <label className="workflow-field">Project name<input className="sx-control" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} required /></label>
       <p className="field-hint">Key prefix {project.key_prefix} · {project.kind}</p>
     </>}
-    <MemberPicker workspace={workspace} value={owner} onChange={setOwner} enabled={enabled} />
+    <MemberPicker workspace={workspace} label="Organizational owner" value={owner} selected={project?.owner} onChange={setOwner} emptyLabel="No owner" />
+    <p className="field-hint">This describes accountability. Workspace permissions still control access.</p>
     {conflict && <section className="alert alert-notice" aria-labelledby="project-conflict-heading">
       <h3 id="project-conflict-heading">Latest saved project</h3>
       <p>Name: {conflict.name} · owner: {conflict.owner?.display_name ?? 'none'} · version {conflict.version}</p>
@@ -86,4 +66,8 @@ export function ProjectManagement({ project, workspace, onSaved, onDismiss }: { 
     {project && <Dialog trigger="Edit project" title={`Edit ${project.name}`} open={editOpen} onOpenChange={setEditOpen}><ProjectForm key={`${project.id}:${project.version}`} project={project} workspace={workspace} onSaved={saved} enabled={editOpen} /></Dialog>}
     <Button variant="ghost" onClick={onDismiss}>Close project management</Button>
   </div>;
+}
+
+export function ProjectCreation({ workspace, onSaved, open, onOpenChange }: { workspace: string; onSaved: (project: Project) => void; open: boolean; onOpenChange: (open: boolean) => void }) {
+  return <Dialog title="Create project" open={open} onOpenChange={onOpenChange} finalFocus={() => document.querySelector<HTMLButtonElement>('nav[aria-label="Project navigation"] button[aria-label="Create project"]')}><ProjectForm workspace={workspace} onSaved={(project) => { onOpenChange(false); onSaved(project); }} enabled={open} /></Dialog>;
 }

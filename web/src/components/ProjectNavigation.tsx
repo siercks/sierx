@@ -3,9 +3,9 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { request, type Me, type Page, type Project } from '../api/client';
 import { Button } from './ui/button';
 
-export function ProjectNavigation({ workspace, me, projectPage, selected, onNavigate, onManage }: {
+export function ProjectNavigation({ workspace, me, projectPage, selected, onNavigate, onManage, onCreate }: {
   workspace: string; me: Me; projectPage: Page<Project>; selected: Project | null;
-  onNavigate: (key: string) => void; onManage: () => void;
+  onNavigate: (key: string) => void; onManage: () => void; onCreate: () => void;
 }) {
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
@@ -27,5 +27,6 @@ export function ProjectNavigation({ workspace, me, projectPage, selected, onNavi
     <input id="project-search" className="sx-control" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a project" />
     {pages.hasNextPage && <Button variant="ghost" size="sm" onClick={() => void pages.fetchNextPage()}>More</Button>}
     {me.role === 'admin' && <Button variant="outline" size="sm" onClick={onManage}>Manage projects</Button>}
+    {me.role === 'admin' && <Button variant="outline" size="sm" onClick={onCreate}>Create project</Button>}
   </nav>;
 }

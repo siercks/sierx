@@ -1167,3 +1167,68 @@ Ordinary event metadata and partitions are retained. Reviewed case-bound value r
 Record exact bounded intents in an encrypted chain outside database backups before committing their effects. Independently preserve the current authenticated checkpoint. A restored database must be an exact prefix, replay and verify before access. The app holds only a derived verification key and checks its receipt against the checkpoint on startup and each request. Recovery fails closed on missing, stale, wrong-instance or corrupt evidence. The app does not receive the journal master key.
 
 Logical backup recovery preserves original owners/ACLs and rejects errors rather than granting restored security-definer functions to PUBLIC. Original roles must exist on the recovery cluster. Native performance collection separately measures repeated process readiness and warmed RSS; actual reference hardware thresholds remain human acceptance evidence. See `docs/LIFECYCLE-OPERATIONS.md` and `docs/PERFORMANCE-ACCEPTANCE.md`.
+
+## ADR-029 — Administrator settings and bounded visual item workflows
+
+Date: 2026-10-18. Status: implementation under the owner's instruction to continue
+through the requested priority changes; this does not approve Phase 2 exit.
+
+Bring a bounded workflow editor forward from the later configuration tooling.
+Administrators can edit the workspace display name, create peer projects and
+publish per-project item-workflow snapshots: additive custom statuses, display
+order, allowed transitions/required fields and per-type initial statuses. The
+interface visualizes outgoing transitions and provides keyboard controls.
+Workspace identifiers, item keys and historical configuration stay stable.
+Existing immutable status definitions are retained; renaming/removal requiring
+item migration is outside this additive editor. New versions reuse those IDs,
+so existing items can take newly configured transitions without rewriting history.
+No YAML reconcile service, Kanban surface or cross-project item moves are added.
+
+Unassigned is offered as the requested optional status label; assignment remains
+an independent field. On Hold/Blocked are ordinary active statuses when selected
+from the suggestions, and Completed is a done status. Suggestions do not modify
+an existing project until the administrator explicitly reviews and saves its
+flow. Old Done and In Review definitions remain usable. Workflow writes require
+the current numeric config version, serialize on the project, and reject stale
+or invalid submissions. Workspace naming has its own optimistic version and
+tenant/admin database policy.
+
+Authenticated members can search only their workspace's active display names
+and IDs for item assignment. Emails and authentication data remain excluded.
+Direct field edits use the existing item mutation/version/authorization paths.
+Formatting controls store Markdown and lazy-load the existing safe renderer
+only for preview; there is no remote editor, font or asset dependency.
+
+## ADR-030 - Private Administrator Home and member provisioning
+
+**Status:** accepted for implementation by owner request, October 22, 2026.
+
+The profile control in the userbar exposes Administrator Home to administrators.
+The page adds private regular-member creation and scoped member search, with a
+link to the existing workspace/workflow settings. It does not activate public
+registration, invitation delivery, role promotion, credential reset or account
+reactivation. Existing account definitions and memberships are preserved.
+
+Creation uses the request's authenticated tenant context and a database function
+that independently checks the caller's active administrator membership. A
+dedicated non-login, non-superuser function owner has only the necessary account
+and membership columns/operations; the runtime login receives EXECUTE only.
+Both database functions fix their search path and revoke PUBLIC execution.
+Ordinary roster reads remain limited to active display names/IDs.
+
+The browser generates the initial password using Web Crypto and retains it in
+component memory until the administrator explicitly closes its login details.
+The server applies its existing Argon2id policy and commits before reporting
+success. A lost response cannot erase the browser's generated credential; no
+write is automatically replayed. Known duplicate rejection never resets an
+existing identity. Plaintext is absent from response bodies, persisted browser
+state, member lists and application database records. The administrator shares
+the credential privately. This does not assert an enforced first-login reset.
+
+Migration 0016 is additive and its down path removes the functions/policies and
+grants without deleting created accounts or memberships. Its isolated NOLOGIN
+role remains available for other databases that may use the same migration.
+Acceptance requires direct runtime authorization/forged-context rejection,
+credential/duplicate preservation, generated route/golden coverage, migration
+checks and real browser create/login/assignment/keyboard/mobile checks. Owner
+acceptance and deployed release evidence remain separate.
