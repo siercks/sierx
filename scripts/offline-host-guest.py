@@ -310,9 +310,18 @@ if __name__ == '__main__':
         for name in ('sierx-postgres.service','sierx.service','sierx-caddy.service'):
             with LOG.open('ab') as log:
                 try:
-                    subprocess.run(['journalctl','--user','--no-pager','-u',name,'-n','40'],stdout=log,stderr=log,timeout=10)
+                    subprocess.run(['journalctl','--user','--no-pager','--all','--output=cat','-u',name,'-n','40'],stdout=log,stderr=log,timeout=10)
                 except subprocess.TimeoutExpired:
                     log.write(b'Private journal collection timed out\n')
+        # A long browser locator wait can displace its initial rejection from
+        # the final request-log tail. Keep bounded complete rejection messages.
+        with LOG.open('ab') as log:
+            try:
+                subprocess.run(['journalctl','--user','--no-pager','--all','--output=cat',
+                    '-u','sierx.service','--grep=lifecycle verification rejected request|"status":503',
+                    '-n','100'],stdout=log,stderr=log,timeout=10)
+            except subprocess.TimeoutExpired:
+                log.write(b'Private rejection journal collection timed out\n')
     (HOME / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     os.sync()
     print('SIERX_FINISHED: '+OPTIONS['suite_sha256']+' '+result['result'],flush=True)

@@ -82,6 +82,58 @@ test('offline navigation retries only bounded emulated recovery reads', async ({
   await expect(bounded.goto('https://example.invalid/login')).rejects.toThrow('exact origin');
 });
 
+test('offline navigation observes delayed recovery until read readiness without replaying writes', async ({ page, context }) => {
+  const moduleUrl = new URL('../../../scripts/offline-browser-navigation.mjs', import.meta.url).href;
+  const { createRecoveryNavigator } = await import(moduleUrl);
+  await context.clearCookies();
+  const origin = new URL(url!).origin;
+  const recovery = 'Service unavailable pending operator recovery verification.\n';
+  const path = '/offline-navigation-readiness-fixture';
+  const api = '/api/v1/offline-navigation-readiness-fixture';
+  for (const [emulated, method, responseBody, shouldRecover] of [
+    [true, 'GET', recovery, true], [false, 'GET', recovery, false],
+    [true, 'GET', 'Unrelated outage', false], [true, 'POST', recovery, false],
+  ] as const) {
+    let documents = 0;
+    const methods: string[] = [];
+    await page.route('**' + path, async (route) => {
+      documents++;
+      await route.fulfill({ contentType: 'text/html', body: `<script>
+        window.addEventListener('load', () => setTimeout(async () => {
+          const result = await fetch(${JSON.stringify(api)}, { method: ${JSON.stringify(method)} });
+          document.body.innerHTML = result.ok ? '<output data-state="ready">Ready</output>' : '<output data-state="unavailable">Unavailable</output>';
+        }, 100));
+      </script>` });
+    });
+    await page.route('**' + api, async (route) => {
+      methods.push(route.request().method());
+      await route.fulfill(methods.length === 1
+        ? { status: 503, contentType: 'text/plain', body: responseBody }
+        : { status: 200, contentType: 'text/plain', body: 'Ready' });
+    });
+    const navigation = createRecoveryNavigator(page, { emulated, origin });
+    const read = navigation.goto(origin + path, async (timeout: number) => {
+      const state = page.locator('output[data-state]');
+      await state.waitFor({ state: 'visible', timeout });
+      if (await state.getAttribute('data-state') !== 'ready') throw new Error('Fixture read not ready');
+    });
+    if (shouldRecover) {
+      await read;
+      await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+      expect(navigation.retries).toBe(1);
+      expect(documents).toBe(2);
+      expect(methods).toEqual(['GET', 'GET']);
+    } else {
+      await expect(read).rejects.toThrow('Fixture read not ready');
+      expect(navigation.retries).toBe(0);
+      expect(documents).toBe(1);
+      expect(methods).toEqual([method]);
+    }
+    await page.unroute('**' + api);
+    await page.unroute('**' + path);
+  }
+});
+
 async function navigationProjects(context: BrowserContext, count: number) {
   const navigationSessions = JSON.parse(process.env.SIERX_TEST_NAV_SESSIONS ?? '{}') as Record<string, string>;
   const token = navigationSessions[test.info().project.name];

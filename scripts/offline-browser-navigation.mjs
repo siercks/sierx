@@ -25,16 +25,21 @@ export function createRecoveryNavigator(page, { emulated, origin, navigationTime
   if (typeof emulated !== 'boolean') throw new Error('Explicit fixture timing mode required');
   if (!Number.isInteger(navigationTimeout) || navigationTimeout <= 0) throw new Error('Bounded navigation timeout required');
   let retries = 0;
-  async function read(action) {
+  async function read(action, ready) {
+    if (ready !== undefined && typeof ready !== 'function') throw new TypeError('Read readiness must be a function');
     const deadline = Date.now() + 600000;
     for (;;) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) throw unavailable(503, true);
       let rejected = false;
+      let rejectRead;
+      const recovery = new Promise((resolve) => { rejectRead = resolve; });
       const pending = new Set();
       const observe = (response) => {
         if (response.status() !== 503 || response.request().method() !== 'GET' || new URL(response.url()).origin !== origin) return;
-        const check = recoveryResponse(response).then((value) => { rejected ||= value; });
+        const check = recoveryResponse(response).then((value) => {
+          if (value) { rejected = true; rejectRead(); }
+        });
         pending.add(check);
         void check.finally(() => pending.delete(check));
       };
@@ -43,6 +48,17 @@ export function createRecoveryNavigator(page, { emulated, origin, navigationTime
         const response = await action(Math.min(navigationTimeout, remaining));
         await Promise.all([...pending]);
         const status = response?.status() ?? 0;
+        if (status === 200 && !rejected && ready) {
+          // The document can finish before its asynchronous bootstrap GET.
+          // Observe through read readiness, before the caller fills/clicks anything.
+          const budget = Math.min(navigationTimeout, deadline - Date.now());
+          if (budget <= 0) throw unavailable(503, true);
+          const readiness = Promise.resolve().then(() => ready(budget))
+            .then(() => ({}), (error) => ({ error }));
+          const outcome = await Promise.race([readiness, recovery.then(() => ({}))]);
+          await Promise.all([...pending]);
+          if (outcome.error && !rejected) throw outcome.error;
+        }
         if (status === 200 && !rejected) return response;
         if (!emulated || !rejected || ![200, 503].includes(status)) throw unavailable(status);
         if (retries === maxRetries || Date.now() >= deadline) throw unavailable(503, true);
@@ -59,8 +75,8 @@ export function createRecoveryNavigator(page, { emulated, origin, navigationTime
     return value.href;
   }
   return {
-    goto: (url) => read((timeout) => page.goto(target(url), { timeout })),
-    reload: () => { target(page.url()); return read((timeout) => page.reload({ timeout })); },
+    goto: (url, ready) => read((timeout) => page.goto(target(url), { timeout }), ready),
+    reload: (ready) => { target(page.url()); return read((timeout) => page.reload({ timeout }), ready); },
     get retries() { return retries; },
   };
 }

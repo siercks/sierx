@@ -2421,3 +2421,41 @@ no hostile private error text and cannot satisfy the acceptance validator.
 All 136 Linux Python tests, credential scan controls/source/build scan and
 whitespace checks pass. The diagnostic revision still requires its own native
 and hosted checks. No release promotion or production change is claimed.
+
+## 2026-11-01 — Retained emulation evidence and asynchronous read readiness
+
+Current head `0f6a005` passed source/security on both hosted event sets and all
+AMD64 host profiles. Both hosted ARM64 jobs failed the independent network audit
+after their guest scenarios completed: the PR test merge reported an opaque
+installer sendto (PID 3318, FD 10), while the push reported an opaque installer
+sendmsg (PID 1774, FD 12). The new sanitized failure artifacts correctly preserve
+the network-audit phase. No hosted run was canceled.
+
+The same head also passed the complete native ARM64/KVM suite in about 302 seconds.
+Its private software-emulation comparison instead failed after 2415 seconds at
+firefox-login-fields, with a GET recovery response (HTTP 503). Its retained trace
+independently exposes an unreadable, unfinished Chromium sendmsg just before
+SIGTERM. No return or destination can be established for that entry; it remains
+rejected. This is not proof that the hosted installer entries have the same cause.
+
+Correct a reproducible browser-fixture readiness gap: document navigation can
+finish before an asynchronous bootstrap GET reports recovery unavailability.
+Observe those reads through an explicit UI-ready condition, before the caller
+fills fields or submits actions. Use the existing emulation-only GET recovery
+policy and its unchanged five-retry/overall navigation limits. Never replay
+writes, unrelated 503 responses or native-mode failures. A real Chromium/Firefox
+regression with a delayed bootstrap response fails in both browsers before the
+change and passes in both afterwards, including the non-retry controls.
+
+Keep full journal messages and a bounded filtered rejection history in private
+failure diagnostics so a long browser wait cannot displace its original lifecycle
+warning. Add strictly allowlisted observer fields to failed audit artifacts:
+numeric PID/FD/table owner/return, fixed role/call/descriptor/family categories and
+message-header shape. Raw pointers, paths, payloads, addresses and exception text
+are excluded. Unfinished/unclassifiable calls still fail the audit.
+
+All 138 Linux Python tests pass. Frontend build/budgets, 45 unit tests, hostile
+Markdown proof, 181-component license checks, credential scan and whitespace
+checks pass. Full native and hosted verification of this new revision remain
+required. The original hosted audit failure remains unexplained; no application
+verification deadline, production setting or release acceptance is relaxed.

@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import signal
 import sys
+from network_observer import safe_failure_fields
 
 RESOURCE_KEYS = {'disk_available_bytes', 'memory_available_bytes', 'oom_kills',
                  'manager_trace_bytes', 'installer_trace_bytes'}
@@ -15,7 +16,8 @@ EXIT_KINDS = {'exited', 'killed', 'dumped', 'unknown'}
 SIGNALS = {entry.name.removeprefix('SIG') for entry in signal.Signals}
 FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionError',
                  'FileNotFoundError', 'JSONDecodeError', 'UnicodeDecodeError',
-                 'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError'}
+                 'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError',
+                 'NetworkObservationError'}
 FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bootstrap',
                   'actual-plan-apply', 'https-data-check', 'repeat-apply', 'restart',
                   'network-negative-controls', 'negative-app', 'negative-gateway',
@@ -47,12 +49,16 @@ def sanitize_failure(value):
             count = value.get(key)
             if type(count) is int and 0 <= count <= 10**7:
                 result[key] = count
+    if result['phase'] == 'network-audit' and result['failure_type'] == 'NetworkObservationError':
+        observer = safe_failure_fields(value.get('observer'))
+        if observer: result['observer'] = observer
     return result
 
 
 def failure_record(error, phase):
     value = {'result':'failed', 'phase':phase, 'failure_type':type(error).__name__,
-             'command_exit_code':getattr(error, 'fixture_exit_code', None)}
+             'command_exit_code':getattr(error, 'fixture_exit_code', None),
+             'observer':getattr(error, 'observer_details', None)}
     if isinstance(error, json.JSONDecodeError):
         first = error.doc.lstrip()[:1]
         value.update(json_input='empty' if not first else 'object' if first=='{' else 'array' if first=='[' else 'other',

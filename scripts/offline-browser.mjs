@@ -120,7 +120,7 @@ async function core(context, engine) {
   const prefix = 'OF' + randomUUID().slice(0, 6).toUpperCase();
   const title = 'Offline browser ' + engine + ' ' + prefix;
   phase = engine + '-login-navigation';
-  await navigation.goto(base + '/login');
+  await navigation.goto(base + '/login', (timeout) => page.getByLabel('Email', { exact: true }).waitFor({ state: 'visible', timeout }));
   phase = engine + '-login-fields';
   await page.getByLabel('Email', { exact: true }).fill(process.env.SIERX_BOOTSTRAP_ADMIN_EMAIL);
   await page.getByLabel('Password', { exact: true }).fill(process.env.SIERX_BOOTSTRAP_ADMIN_PASSWORD);
@@ -192,11 +192,11 @@ async function core(context, engine) {
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByRole('link', { name: target.key, exact: true })).toBeVisible();
   phase = engine + '-search-reload-bootstrap';
-  await navigation.goto(base + '/?project=' + prefix);
+  await navigation.goto(base + '/?project=' + prefix, (timeout) => page.getByLabel('Search backlog', { exact: true }).waitFor({ state: 'visible', timeout }));
   await page.getByLabel('Search backlog', { exact: true }).fill('status.category = active');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('link', { name: title + ' edited', exact: true })).toBeVisible();
-  await navigation.reload();
+  await navigation.reload((timeout) => page.getByRole('link', { name: title + ' edited', exact: true }).waitFor({ state: 'visible', timeout }));
   await expect(page.getByRole('link', { name: title + ' edited', exact: true })).toBeVisible();
   const waterfall = [];
   await page.route('**/api/v1/**', (route) => {
@@ -205,7 +205,8 @@ async function core(context, engine) {
     return route.continue();
   });
   for (const [path, name] of [['/', title + ' edited'], ['/?project=' + prefix, title + ' edited'], ['/' + key.toLowerCase() + '/', title + ' edited']]) {
-    await navigation.goto(base + path);
+    await navigation.goto(base + path, (timeout) => page.getByRole(path.startsWith('/?') || path === '/' ? 'link' : 'heading',
+      { name, exact: true }).waitFor({ state: 'visible', timeout }));
     if (path.startsWith('/?') || path === '/') await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
     else { await expect(page.getByRole('heading', { name, exact: true })).toBeVisible(); await expect(page).toHaveURL(base + '/' + key); }
   }

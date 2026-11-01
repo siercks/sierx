@@ -29,6 +29,18 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_interrupted_shutdown_send_keeps_fixed_diagnostics_and_is_still_rejected(self):
+        line='3421<headless_shell> 1.000000 sendmsg(14<anon_inode:[eventpoll]>, 0xffff1234, MSG_NOSIGNAL <unfinished ...>'
+        with self.assertRaises(observer.NetworkObservationError) as caught:
+            observer.parse([line])
+        fields=caught.exception.observer_details
+        self.assertEqual(fields,{'pid':3421,'fd':14,'table_owner':3421,'returned':None,
+            'role':'chromium','call':'sendmsg','descriptor':'anon_inode','fd_family':'unknown','header':'pointer'})
+        self.assertNotIn('0xffff1234',str(caught.exception))
+        self.assertNotIn('eventpoll',str(caught.exception))
+        self.assertEqual(observer.safe_failure_fields({'pid':True,'fd':-1,'table_owner':10**30,
+            'role':'private','header':'secret','payload':'credential','returned':'private'}),{})
+
     def test_missing_header_shape_is_diagnostic_and_still_rejected(self):
         for raw,shape in (
             ('1.000001 execve("private", [], 0x0) = 0', 'timestamp-only'),

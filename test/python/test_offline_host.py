@@ -23,6 +23,24 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_audit_failure_artifact_preserves_only_allowlisted_observer_structure(self):
+        import network_observer as observer
+        with self.assertRaises(observer.NetworkObservationError) as caught:
+            observer.parse(['10<python3> 1.000000 sendto(12, "private-credential", 18, 0, NULL, 0) = -1 EBADF'])
+        with tempfile.TemporaryDirectory() as temporary:
+            report=Path(temporary)/'host-acceptance-ubuntu24-arm64.json'
+            error=caught.exception
+            error.observer_details['payload']='private-credential'
+            with patch.object(host,'disk_file',return_value=b'[]'), \
+                    patch.object(host.network_observer,'summarize',side_effect=error), \
+                    self.assertRaises(observer.NetworkObservationError):
+                host.audit_network(Path('/guest'),{'internal_addresses':[]},report,'arm64','c'*64,'a'*40,'tcg')
+            saved=json.loads(report.with_suffix('.failure.json').read_text())
+            self.assertEqual(saved['observer']['returned'],-1)
+            self.assertEqual(saved['observer']['call'],'sendto')
+            self.assertNotIn('private-credential',json.dumps(saved))
+            with self.assertRaises(ValueError):evidence.validate(saved,self.bundle,'d'*64,'c'*64)
+
     def test_post_guest_audit_failure_is_preserved_without_private_trace_or_passing_report(self):
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary) / 'host-acceptance-ubuntu24-arm64.json'

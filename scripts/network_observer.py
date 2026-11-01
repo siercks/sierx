@@ -12,6 +12,40 @@ from pathlib import Path
 import re
 
 PROCESSES = {'installer', 'app', 'gateway', 'database', 'chromium', 'firefox','network-proxy'}
+NETWORK_CALLS = {'connect', 'sendto', 'sendmsg', 'sendmmsg'}
+DESCRIPTOR_KINDS = {'opaque', 'TCP', 'TCPv6', 'UDP', 'UDPv6', 'UNIX', 'UNIX-STREAM',
+                    'UNIX-DGRAM', 'UNIX-SEQPACKET', 'NETLINK', 'socket', 'anon_inode', 'other'}
+
+
+def safe_failure_fields(value):
+    if not isinstance(value, dict): return {}
+    result = {}
+    for key in ('pid', 'fd', 'table_owner'):
+        item = value.get(key)
+        if type(item) is int and 0 <= item <= 0x7fffffff: result[key] = item
+    item = value.get('returned')
+    if 'returned' in value and (item is None or type(item) is int and -4095 <= item <= 0x7fffffff):
+        result['returned'] = item
+    for key, allowed in (('role', PROCESSES | {'other'}), ('call', NETWORK_CALLS),
+                         ('descriptor', DESCRIPTOR_KINDS),
+                         ('fd_family', {'AF_INET', 'AF_INET6', 'AF_UNIX', 'AF_NETLINK', 'unknown'}),
+                         ('header', {'structure', 'pointer', 'null', 'other', 'not-message'})):
+        item = value.get(key)
+        if isinstance(item, str) and item in allowed: result[key] = item
+    return result
+
+
+class NetworkObservationError(ValueError):
+    def __init__(self, fields):
+        self.observer_details = safe_failure_fields(fields)
+        data = self.observer_details
+        super().__init__('Outgoing syscall has an unclassified destination: pid='+str(data.get('pid'))+
+            ' role='+data.get('role','other')+' call='+data.get('call','unknown')+' fd='+str(data.get('fd'))+
+            ' descriptor='+data.get('descriptor','other')+' returned='+str(data.get('returned'))+
+            ' header='+data.get('header','other')+' table-owner='+str(data.get('table_owner'))+
+            ' fd-family='+data.get('fd_family','unknown'))
+
+
 CONTROLS = {
     'app-tcp': ('app', '198.51.100.11', 18181, 'tcp'),
     'gateway-tcp': ('gateway', '198.51.100.12', 18181, 'tcp'),
@@ -376,8 +410,15 @@ def parse(lines,stats=None):
             if destination is None and family in {'AF_UNIX', 'AF_NETLINK'}: destination = (family, '', 0)
             if destination is None:
                 kind=re.search(r'<([A-Za-z0-9_-]+)',args[0])
-                raise ValueError('Outgoing syscall has an unclassified destination: pid='+pid+' role='+role+
-                    ' call='+name+' fd='+str(key[1])+' descriptor='+(kind[1] if kind else 'opaque'))
+                descriptor = kind[1] if kind else 'opaque'
+                header = args[1] if name == 'sendmsg' and len(args) > 1 else None
+                raise NetworkObservationError({'pid':int(pid), 'role':role, 'call':name,
+                    'fd':key[1], 'table_owner':int(owner), 'returned':returned,
+                    'descriptor':descriptor if descriptor in DESCRIPTOR_KINDS else 'other',
+                    'fd_family':family if family in {'AF_INET','AF_INET6','AF_UNIX','AF_NETLINK'} else 'unknown',
+                    'header':'not-message' if name != 'sendmsg' else 'null' if header == 'NULL' else
+                        'structure' if header and header.startswith('{') else
+                        'pointer' if header and re.fullmatch(r'0x[0-9a-fA-F]+', header) else 'other'})
             if destination[0]=='AF_UNSPEC' and name!='connect':
                 raise ValueError('An unspecified send destination cannot be classified')
             if name == 'connect':
