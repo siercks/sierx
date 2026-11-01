@@ -21,7 +21,8 @@ FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bo
                   'network-negative-controls', 'negative-app', 'negative-gateway',
                   'negative-database', 'negative-installer', 'negative-dns-ipv-six',
                   'delivered-browser-workflows', 'invalid-deliveries', 'two-approved-releases',
-                  'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete'} | {
+                  'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete',
+                  'network-audit'} | {
     'runtime-'+name for name in ('reject-implicit-timers', 'reload-units', 'start-timer',
                                 'observe', 'verify-maintenance', 'inventory-services',
                                 'inventory-timers', 'inventory-enabled')}

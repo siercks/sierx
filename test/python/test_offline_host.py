@@ -10,6 +10,7 @@ import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -22,6 +23,26 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_post_guest_audit_failure_is_preserved_without_private_trace_or_passing_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary) / 'host-acceptance-ubuntu24-arm64.json'
+            error = ValueError('private destination and credential')
+            with patch.object(host, 'disk_file', return_value=b'[]'), \
+                    patch.object(host.network_observer, 'summarize', side_effect=error), \
+                    self.assertRaises(ValueError) as caught:
+                host.audit_network(Path('/private/guest'), {'internal_addresses': []},
+                                   report, 'arm64', 'c' * 64, 'a' * 40, 'kvm')
+            self.assertIs(caught.exception, error)
+            saved = json.loads(report.with_suffix('.failure.json').read_text())
+            self.assertEqual(saved['phase'], 'network-audit')
+            self.assertEqual(saved['failure_type'], 'ValueError')
+            self.assertEqual(saved['result'], 'failed')
+            self.assertFalse(report.exists())
+            self.assertNotIn('private', json.dumps(saved))
+            self.assertNotIn('credential', json.dumps(saved))
+            with self.assertRaises(ValueError):
+                evidence.validate(saved, self.bundle, 'd' * 64, 'c' * 64)
+
     def test_failed_guest_summary_survives_runner_cleanup_and_cannot_satisfy_acceptance(self):
         with tempfile.TemporaryDirectory() as temporary:
             report=Path(temporary)/'host-acceptance-ubuntu24-arm64.json'

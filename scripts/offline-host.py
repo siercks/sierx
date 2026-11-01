@@ -260,6 +260,23 @@ def record_failure(report, result, log, arch, suite, revision):
     return failure
 
 
+def audit_network(disk, result, report, arch, suite, revision, mode):
+    # The guest can finish successfully while its independent host audit fails.
+    # Preserve the same strictly sanitized failure artifact in that case too.
+    try:
+        trace = trace_lines(disk_file(disk, 'manager.trace'), disk_file(disk, 'installer.trace'))
+        observation = network_observer.summarize(trace,
+            json.loads(disk_file(disk, 'network-controls.json')), result['internal_addresses'],
+            (disk_file(disk, 'manager.stderr') + disk_file(disk, 'installer.stderr')).decode(),
+            control_interval_limit=120 if mode == 'tcg' else 20)
+        evidence.validate_network(observation)
+        return observation
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        record_failure(report, diagnostics.failure_record(error, 'network-audit'), b'',
+                       arch, suite, revision)
+        raise
+
+
 def recover_disk(disk):
     # The owned guest disk is never mounted on the host. Replay only its journal
     # after QEMU stops, so debugfs sees metadata durably synced by the fixture.
@@ -436,17 +453,13 @@ def main(args):
                 print('offline-host: development runtime probe passed; no closeout claim',flush=True)
                 return
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
-            trace = trace_lines(disk_file(disk,'manager.trace'), disk_file(disk,'installer.trace'))
-            observation = network_observer.summarize(trace,
-                json.loads(disk_file(disk,'network-controls.json')), result.pop('internal_addresses'),
-                (disk_file(disk,'manager.stderr')+disk_file(disk,'installer.stderr')).decode(),
-                control_interval_limit=120 if mode=='tcg' else 20)
-            result['network'] = observation
+            result['network'] = audit_network(disk, result, report, arch, args.suite_sha256,
+                                             data['release']['revision'], mode)
+            result.pop('internal_addresses')
             result['rootfs_sha256'] = args.rootfs_sha256
             result['archive_sha256'] = args.archive_sha256
             result['virtual_cpu'] = mode
             result['kernel_sha256'] = kernel_digest
-            evidence.validate_network(result['network'])
             if not args.development:
                 evidence.validate_closeout(result,data,args.expected_sha256,args.suite_sha256)
             report.write_text(json.dumps(result, indent=2) + '\n')

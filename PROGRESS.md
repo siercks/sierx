@@ -2386,3 +2386,38 @@ rejection and failed-artifact persistence/rejection as acceptance evidence.
 All 135 Linux Python tests, credential-scan controls/source/build scan and
 whitespace checks pass. New hosted checks must validate the diagnostic revision;
 the previous complete PR run does not erase the reproducible instability.
+
+## 2026-10-31 — Native ARM64 verification and post-guest audit diagnostics
+
+The owner's separate ARM64 test host now boots Ubuntu guests with native KVM.
+After the owner installed the identified targeted Ubuntu library/SSH security
+updates, build the exact PR head `e60dd168e4dd856ab7994cbab7376ddf1e9814d9`
+in a fresh private checkout, using its pinned Go/Node versions and a separate
+rootless image store. Verify the retained approved ARM64 release against the
+repository's pinned archive/bundle hashes and acceptance evidence.
+
+The unchanged complete offline-host suite passed on that head: real rootless
+services, both delivered browsers, invalid deliveries, two-release upgrade and
+rollback, failed-health recovery, bounded runtime, explicit acquisition and the
+independent network audit. The command required KVM and ran in a rootless user
+namespace; no host root password, home-directory share, network device or GPU
+passthrough entered the guest. Full acceptance took about 306 seconds after
+launching the host command. Private manager/installer traces remain on the test
+host. This is one native run, not a controlled speed benchmark or proof that the
+earlier intermittent TCG failure is fixed.
+
+The earlier hosted push run on `e60dd16` completed its guest scenarios but failed
+the independent network audit on an opaque installer sendmsg destination. The
+parallel PR run passed; neither that result nor this native pass explains the
+failed audit. Its private ephemeral-runner trace was not retained.
+
+Correct the reporting gap: persist a separately named, sanitized failure report
+when the host's post-guest network audit fails, including its fixed network-audit
+phase and allowlisted exception type. Propagate the original failure and retain
+the existing destination classification and complete acceptance requirements.
+Private messages, addresses, payloads and trace text do not enter the artifact.
+Regression coverage verifies that the artifact survives the rejection, contains
+no hostile private error text and cannot satisfy the acceptance validator.
+All 136 Linux Python tests, credential scan controls/source/build scan and
+whitespace checks pass. The diagnostic revision still requires its own native
+and hosted checks. No release promotion or production change is claimed.
