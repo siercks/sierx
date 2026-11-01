@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tarfile
 import tempfile
+import subprocess
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -23,6 +24,50 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_closeout_rejects_missing_kernel_controls_or_invalid_cancellation_counts(self):
+        network=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',
+            {'release':self.bundle['release'],'bundle_sha256':'e'*64})['network']
+        evidence.validate_network(network)
+        for field,value in (('kernel_syscalls',None),('cancelled_before_kernel_entry',{})):
+            report=copy.deepcopy(network);report[field]=value
+            with self.assertRaises(ValueError):evidence.validate_network(report)
+        for field in ('lost_events','positive_controls','execution_controls'):
+            report=copy.deepcopy(network);report['kernel_syscalls'][field]=False
+            with self.assertRaises(ValueError):evidence.validate_network(report)
+        report=copy.deepcopy(network);report['cancelled_before_kernel_entry']['installer']=True
+        with self.assertRaises(ValueError):evidence.validate_network(report)
+
+    def test_preboot_command_failure_retains_stage_and_private_stderr_without_disclosing_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report=Path(temporary)/'host-acceptance-rocky10-amd64.json'
+            args=SimpleNamespace(report=str(report),failure_phase='host-create-filesystem',
+                failure_arch='amd64',suite_sha256='c'*64,failure_revision='a'*40)
+            private=b'private credential path: No space left on device'
+            original=subprocess.CalledProcessError(2,['mkfs.ext4','/private/credential'],stderr=private)
+            with patch.object(host.subprocess,'check_output',side_effect=original),self.assertRaises(host.HostCommandError) as caught:
+                host.run('mkfs.ext4','/private/credential')
+            error=caught.exception
+            with patch.object(host,'main',side_effect=error),self.assertRaises(host.HostCommandError):host.execute(args)
+            saved=json.loads(report.with_suffix('.failure.json').read_text())
+            self.assertEqual(saved['phase'],'host-create-filesystem')
+            self.assertEqual(saved['host_tool'],'mkfs.ext4')
+            self.assertEqual(saved['host_detail'],'storage-full')
+            self.assertEqual(saved['command_exit_code'],2)
+            self.assertNotIn('private',json.dumps(saved)+str(error))
+            self.assertEqual(report.with_suffix('.preparation.private.log').read_bytes(),private)
+            self.assertFalse(report.exists())
+            with self.assertRaises(ValueError):evidence.validate(saved,self.bundle,'d'*64,'c'*64)
+
+    def test_later_host_error_cannot_replace_the_original_guest_failure_artifact(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report=Path(temporary)/'host-acceptance-rocky10-amd64.json'
+            original='{"result":"failed","phase":"delivered-browser-workflows"}\n'
+            report.with_suffix('.failure.json').write_text(original)
+            args=SimpleNamespace(report=str(report),failure_phase='host-read-evidence')
+            with patch.object(host,'main',side_effect=PermissionError(13,'private path')),self.assertRaises(PermissionError):
+                host.execute(args)
+            self.assertEqual(report.with_suffix('.failure.json').read_text(),original)
+
     def test_audit_failure_artifact_preserves_only_allowlisted_observer_structure(self):
         import network_observer as observer
         with self.assertRaises(observer.NetworkObservationError) as caught:
@@ -32,6 +77,7 @@ class EvidenceTests(unittest.TestCase):
             error=caught.exception
             error.observer_details['payload']='private-credential'
             with patch.object(host,'disk_file',return_value=b'[]'), \
+                    patch.object(host.kernel_network_evidence,'KernelEvidence'), \
                     patch.object(host.network_observer,'summarize',side_effect=error), \
                     self.assertRaises(observer.NetworkObservationError):
                 host.audit_network(Path('/guest'),{'internal_addresses':[]},report,'arm64','c'*64,'a'*40,'tcg')
@@ -46,6 +92,7 @@ class EvidenceTests(unittest.TestCase):
             report = Path(temporary) / 'host-acceptance-ubuntu24-arm64.json'
             error = ValueError('private destination and credential')
             with patch.object(host, 'disk_file', return_value=b'[]'), \
+                    patch.object(host.kernel_network_evidence, 'KernelEvidence'), \
                     patch.object(host.network_observer, 'summarize', side_effect=error), \
                     self.assertRaises(ValueError) as caught:
                 host.audit_network(Path('/private/guest'), {'internal_addresses': []},

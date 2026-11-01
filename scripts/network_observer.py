@@ -184,7 +184,7 @@ class Attempt:
     protocol: str
 
 
-def records(lines):
+def records(lines, unfinished=None):
     """Join unfinished calls with timestamps needed for descriptor ownership.
 
     Forks replay at entry so inherited/shared tables exist before a child sends
@@ -232,17 +232,26 @@ def records(lines):
             if (pid,call[1]) in pending:raise ValueError('Duplicate unfinished syscall entry')
             pending[(pid,call[1])]=entry
         else:result.append(entry)
+    if unfinished is not None:
+        unfinished.update((entry[0], re.match(r'([a-z0-9_]+)\(', entry[3])[1], entry[2])
+                          for entry in pending.values())
     result.extend(pending.values())
     return sorted(result,key=lambda entry:entry[2])
 
 
-def parse(lines,stats=None):
+def parse(lines,stats=None,kernel=None):
     stats={} if stats is None else stats
     stats.setdefault('blocked_io_uring_setups',0)
     stats.setdefault('blocked_ipv6_sockets',0)
     stats.setdefault('kernel_control_truncations',0)
+    if kernel is not None:
+        stats.setdefault('cancelled_before_kernel_entry', {role:0 for role in sorted(PROCESSES | {'other'})})
     sockets, connected, attempts, executed, owners, roles, inode_family, inode_peer, members = {}, {}, [], set(), {}, {}, {}, {}, {}
-    for pid,program,timestamp,body in records(lines):
+    unfinished=set()
+    decoded=records(lines,unfinished)
+    if kernel is not None and (not decoded or not kernel.covers_start(decoded[0][2])):
+        raise ValueError('Kernel observation did not begin before process tracing')
+    for pid,program,timestamp,body in decoded:
         role=roles.get(pid,component(program))
         call = re.match(r'([a-z0-9_]+)\((.*)', body)
         if not call:continue
@@ -409,6 +418,10 @@ def parse(lines,stats=None):
             destination = destination or connected.get(key) or inode_peer.get(identity) or inline_endpoint(args[0])
             if destination is None and family in {'AF_UNIX', 'AF_NETLINK'}: destination = (family, '', 0)
             if destination is None:
+                if (name != 'sendmmsg' and returned is None and (pid,name,timestamp) in unfinished and kernel is not None
+                        and kernel.cancelled_before_entry(pid,timestamp)):
+                    stats['cancelled_before_kernel_entry'][role] += 1
+                    continue
                 kind=re.search(r'<([A-Za-z0-9_-]+)',args[0])
                 descriptor = kind[1] if kind else 'opaque'
                 header = args[1] if name == 'sendmsg' and len(args) > 1 else None
@@ -430,13 +443,13 @@ def parse(lines,stats=None):
     return attempts, executed
 
 
-def summarize(lines, controls, internal_addresses=(), trace_errors='', control_interval_limit=20):
+def summarize(lines, controls, internal_addresses=(), trace_errors='', control_interval_limit=20, kernel=None):
     if type(control_interval_limit) is not int or control_interval_limit not in {20,120}:
         raise ValueError('Unsupported control observation budget')
     if trace_errors.strip():
         raise ValueError('Tracer reported incomplete process coverage')
     stats={}
-    attempts, executed = parse(lines,stats)
+    attempts, executed = parse(lines,stats,kernel)
     if not PROCESSES.issubset(executed):
         raise ValueError('Tracer did not cover every required executable from startup')
     if {entry.get('name') for entry in controls} != set(CONTROLS) or len(controls) != len(CONTROLS):
@@ -474,6 +487,7 @@ def summarize(lines, controls, internal_addresses=(), trace_errors='', control_i
         summary=', '.join(role+'/'+protocol+'='+str(count) for (role,protocol),count in sorted(counts.items()))
         raise ValueError('Unapproved connection or DNS attempt observed ('+summary+')')
     if any(count == 0 for count in counts.values()): raise ValueError('A planted external attempt escaped observation')
+    if kernel is not None: stats['kernel_syscalls'] = kernel.summary()
     return {'result':'passed','observer':'strace-network-v1','processes':sorted(PROCESSES),
             'external_attempts':0,'negative_controls':counts,'attempts_examined':len(attempts),
             'browser_driver_policy':'seccomp-deny-io-uring','control_interval_limit_seconds':control_interval_limit,**stats}

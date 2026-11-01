@@ -166,6 +166,17 @@ def validate_network(report):
         raise ValueError('Browser driver asynchronous I/O policy was not observed')
     if type(report.get('kernel_control_truncations')) is not int or report['kernel_control_truncations'] < 0:
         raise ValueError('Missing kernel ancillary-discard accounting')
+    kernel=report.get('kernel_syscalls')
+    if (not isinstance(kernel,dict) or set(kernel)!={'result','observer','lost_events','positive_controls','execution_controls'}
+            or kernel.get('result')!='passed' or kernel.get('observer')!='kernel-syscalls-v1'
+            or type(kernel.get('lost_events')) is not int or kernel['lost_events']!=0
+            or type(kernel.get('positive_controls')) is not int or kernel['positive_controls']!=2
+            or type(kernel.get('execution_controls')) is not int or kernel['execution_controls']!=2):
+        raise ValueError('Missing independent loss-free kernel syscall controls')
+    cancelled=report.get('cancelled_before_kernel_entry')
+    if (not isinstance(cancelled,dict) or set(cancelled)!=PROCESSES | {'other'}
+            or any(type(count) is not int or count<0 for count in cancelled.values())):
+        raise ValueError('Missing non-executed syscall accounting')
 
 
 def validate_closeout(report,bundle,expected,suite_sha256):

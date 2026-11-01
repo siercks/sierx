@@ -322,7 +322,10 @@ if __name__ == '__main__':
                     '-n','100'],stdout=log,stderr=log,timeout=10)
             except subprocess.TimeoutExpired:
                 log.write(b'Private rejection journal collection timed out\n')
-    (HOME / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    pending = HOME / 'result.pending.json'
+    pending.write_text(json.dumps(result, indent=2) + '\n')
+    pending.replace(HOME / 'result.json')
     os.sync()
-    print('SIERX_FINISHED: '+OPTIONS['suite_sha256']+' '+result['result'],flush=True)
+    # The root path unit snapshots kernel evidence and emits the completion
+    # marker only after both the result and independent trace have been synced.
     sys.exit(0 if result['result'] == 'passed' else 1)

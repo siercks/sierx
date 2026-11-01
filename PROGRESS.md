@@ -2459,3 +2459,51 @@ Markdown proof, 181-component license checks, credential scan and whitespace
 checks pass. Full native and hosted verification of this new revision remain
 required. The original hosted audit failure remains unexplained; no application
 verification deadline, production setting or release acceptance is relaxed.
+
+## 2026-11-01 — Independent kernel proof for terminal syscall entries
+
+The owner-provided log is the same completed push job 124847830899 on `3bbc153`:
+the functional scenarios completed, then the audit rejected an unclassified
+installer sendto without a numeric return. No prior change established a fix for
+that audit failure. The parallel PR matrix passed; the push also failed Rocky
+before boot, where a generic handler discarded its command/file error details.
+
+A controlled no-NIC KVM experiment demonstrates that a ptrace syscall-entry stop
+can be observed before the kernel executes that call. Resuming its invalid-FD
+control produces kernel entry and exit; killing the stopped control produces
+only thread exit, with zero lost kernel events. This establishes a possible
+observation boundary, not the historical failed record's cause.
+
+Add independent root-only kernel syscall/exit capture inside the disposable VM.
+The host requires complete all-CPU/event coverage without filters, start/end
+positive controls, executed/cancelled controls, clock correlation, a matching
+capture checksum and zero dropped/overwritten events. Completion is emitted
+only after the kernel capture and atomically published guest result are synced.
+Only a terminal unresolved entry whose thread provably never entered or returned
+from any network syscall in the complete capture can avoid destination decoding.
+Capture must precede both process tracers; any earlier kernel call by that TID
+also preserves rejection, avoiding assumptions about delayed trace rendering.
+Executed/unproven unknown sends and explicit external attempts remain rejected.
+Safe report counters distinguish these proven non-executed entries. No host
+kernel tracing, application policy or deadline changes are introduced.
+
+A private development VM passed both delivered browsers and all existing
+connection controls with the new capture. Replaying its real kernel controls
+accepts the deliberately cancelled entry and rejects the deliberately executed
+unreadable entry. This development proof does not satisfy closeout or establish
+that the earlier hosted records were harmless. The committed revision still
+requires full native and hosted validation.
+
+Pre-boot failures now retain their exact fixed preparation phase and safe
+tool/exit/errno/resource-category fields in a failed artifact. Tool stderr stays
+private. Regression coverage prevents later collection errors from overwriting
+an earlier guest failure. The old Rocky failure remains unexplained because its
+private command stderr was not retained.
+
+Validation for this change: all 145 Linux Python tests pass, including corrupted
+or lossy captures, missing controls, prior kernel calls, PID reuse, coverage gaps,
+clock changes, explicit external attempts, public-artifact privacy and pre-boot
+failure preservation. Credential-scan controls and the 510-file source/build scan
+pass; whitespace checks pass. Real development capture/replay validates the
+root-unit completion coordination and both executed/cancelled controls. These
+checks do not replace fresh full native and hosted runs of the committed change.

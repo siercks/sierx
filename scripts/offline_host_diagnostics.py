@@ -17,14 +17,18 @@ SIGNALS = {entry.name.removeprefix('SIG') for entry in signal.Signals}
 FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionError',
                  'FileNotFoundError', 'JSONDecodeError', 'UnicodeDecodeError',
                  'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError',
-                 'NetworkObservationError'}
+                 'NetworkObservationError', 'HostCommandError'}
+HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
+HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
+HOST_PHASES = {'host-verify-inputs','host-extract-os','host-configure-os','host-unpack-delivery',
+               'host-create-filesystem','host-launch','host-read-evidence'}
 FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bootstrap',
                   'actual-plan-apply', 'https-data-check', 'repeat-apply', 'restart',
                   'network-negative-controls', 'negative-app', 'negative-gateway',
                   'negative-database', 'negative-installer', 'negative-dns-ipv-six',
                   'delivered-browser-workflows', 'invalid-deliveries', 'two-approved-releases',
                   'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete',
-                  'network-audit'} | {
+                  'network-audit'} | HOST_PHASES | {
     'runtime-'+name for name in ('reject-implicit-timers', 'reload-units', 'start-timer',
                                 'observe', 'verify-maintenance', 'inventory-services',
                                 'inventory-timers', 'inventory-enabled')}
@@ -41,6 +45,12 @@ def sanitize_failure(value):
     code = value.get('command_exit_code')
     if type(code) is int and -128 <= code <= 255:
         result['command_exit_code'] = code
+    tool=value.get('host_tool')
+    if isinstance(tool,str) and tool in HOST_TOOLS: result['host_tool']=tool
+    detail=value.get('host_detail')
+    if isinstance(detail,str) and detail in HOST_DETAILS: result['host_detail']=detail
+    number=value.get('host_errno')
+    if type(number) is int and 1<=number<=4095: result['host_errno']=number
     if result['failure_type'] == 'JSONDecodeError':
         kind = value.get('json_input')
         if isinstance(kind, str) and kind in {'empty', 'object', 'array', 'other'}:
@@ -58,7 +68,9 @@ def sanitize_failure(value):
 def failure_record(error, phase):
     value = {'result':'failed', 'phase':phase, 'failure_type':type(error).__name__,
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
-             'observer':getattr(error, 'observer_details', None)}
+             'observer':getattr(error, 'observer_details', None),
+             'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
+             'host_detail':getattr(error,'host_detail',None)}
     if isinstance(error, json.JSONDecodeError):
         first = error.doc.lstrip()[:1]
         value.update(json_input='empty' if not first else 'object' if first=='{' else 'array' if first=='[' else 'other',

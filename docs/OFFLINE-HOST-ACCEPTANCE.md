@@ -173,6 +173,38 @@ tracer errors and successful undecodable asynchronous I/O fail closed. DNS is
 unnecessary in this literal-host fixture; even a failed loopback DNS lookup is
 rejected outside its explicit control.
 
+### Independent syscall corroboration
+
+Ptrace can stop a thread before its syscall reaches the kernel execution
+tracepoint ([Arm64 entry ordering](https://github.com/torvalds/linux/blob/v6.8/arch/arm64/kernel/ptrace.c),
+[generic entry ordering](https://github.com/torvalds/linux/blob/v6.8/kernel/entry/common.c)).
+An unreadable unfinished send cannot be classified from a successful browser run
+or a later process exit alone. The owned VM additionally captures syscall
+entry/exit and process-exit events using a root-only
+[tracefs instance](https://docs.kernel.org/trace/ftrace.html).
+
+Acceptance requires both start/end positive sends, executed-versus-cancelled
+controls, the exact enabled events on all CPUs without PID/event filters,
+consistent monotonic/realtime clock samples, a matching capture checksum and
+zero overwritten/dropped events. Missing or ambiguous evidence fails the gate.
+The buffer reserves 64 MiB per virtual CPU inside the existing 4 GiB guest.
+Guest root snapshots and syncs the capture before emitting the completion marker.
+No host kernel tracing is enabled.
+
+Only an unresolved terminal ptrace entry whose own kernel evidence proves no
+network syscall entry or return anywhere in that thread's captured lifetime may avoid destination
+decoding. PID reuse, an observed kernel call, a completed unknown send, missing
+death evidence, clock uncertainty or trace loss preserve rejection. Explicit
+external attempts remain counted even when unfinished. Public reports contain
+fixed control results and per-role `cancelled_before_kernel_entry` counts;
+raw kernel records and pointers remain private. Every prior external negative
+control, source startup requirement and browser assertion remains mandatory.
+Kernel capture must begin before either process tracer's first record.
+
+Preparation failures additionally preserve fixed host stages, tool names,
+bounded exit/errno values and allowlisted resource-failure labels. Their stderr
+is retained privately; a separate failed report cannot satisfy acceptance.
+
 The installer observer uses strace's kernel syscall selection (`--seccomp-bpf`)
 to avoid stopping on unselected archive reads/writes. The service manager
 retains ordinary ptrace observation, including the browser service's seccomp

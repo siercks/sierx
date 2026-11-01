@@ -24,12 +24,13 @@ import offline_host_evidence as evidence
 import network_observer
 import offline_archive
 import offline_host_diagnostics as diagnostics
+import kernel_network_evidence
 
 ROOT = Path(__file__).resolve().parent.parent
 SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs', 'offline-browser-navigation.mjs',
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
-               'offline_host_diagnostics.py')
+               'offline_host_diagnostics.py', 'kernel_network_evidence.py', 'offline-kernel-observer.py')
 
 
 def suite_digest(scripts=None, packages=None):
@@ -43,8 +44,33 @@ def suite_digest(scripts=None, packages=None):
     return digest.hexdigest()
 
 
+class HostCommandError(ValueError):
+    def __init__(self, error):
+        tool=Path(error.cmd[0]).name
+        self.host_tool=tool if tool in diagnostics.HOST_TOOLS else 'unknown'
+        self.fixture_exit_code=error.returncode
+        self.stderr=error.stderr if isinstance(error.stderr,bytes) else b''
+        for text,label in ((b'no space left on device','storage-full'),(b'permission denied','permission-denied'),
+                           (b'cannot allocate memory','out-of-memory')):
+            if text in self.stderr.lower(): self.host_detail=label;break
+        super().__init__('Host command failed: tool='+self.host_tool+' exit='+str(error.returncode))
+
+
 def run(*args, **kwargs):
-    return subprocess.check_output(list(map(str, args)), stderr=subprocess.PIPE, **kwargs)
+    try:
+        return subprocess.check_output(list(map(str, args)), stderr=subprocess.PIPE, **kwargs)
+    except subprocess.CalledProcessError as error:
+        raise HostCommandError(error) from error
+    except OSError as error:
+        tool=Path(str(args[0])).name
+        error.host_tool=tool if tool in diagnostics.HOST_TOOLS else 'unknown'
+        raise
+
+
+def stage(args, name):
+    if name not in diagnostics.HOST_PHASES: raise ValueError('Unknown host preparation stage')
+    args.failure_phase=name
+    print('offline-host: '+name,flush=True)
 
 
 def verify_rootfs(path, expected):
@@ -113,6 +139,7 @@ def setup(root, args):
         (etc / name).write_text('')
     trace = root / 'var/log/sierx-network'
     trace.mkdir(mode=0o700)
+    (trace/'suite.sha256').write_text(args.suite_sha256+'\n')
     # Root observers can follow subordinate-UID container processes. -u drops
     # each tracee to the actual acceptance identity, retaining root only in the
     # observer. Nothing contacts the host's ordinary user bus or image store.
@@ -152,10 +179,30 @@ Environment=LOGNAME=acceptance
         path = units / name
         path.unlink(missing_ok=True)
         path.symlink_to('/dev/null')
-    (units / 'sierx-acceptance.service').write_text('''[Unit]
-Requires=user@1001.service
-After=user@1001.service
+    (units / 'sierx-kernel-start.service').write_text('''[Unit]
+Before=user@1001.service sierx-acceptance.service
+FailureAction=poweroff-force
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /opt/acceptance/tests/offline-kernel-observer.py start
+''')
+    (units / 'sierx-kernel-finish.path').write_text('''[Path]
+PathExists=/home/acceptance/result.json
+Unit=sierx-kernel-finish.service
+''')
+    (units / 'sierx-kernel-finish.service').write_text('''[Unit]
 SuccessAction=poweroff-force
+FailureAction=poweroff-force
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/acceptance/tests/offline-kernel-observer.py finish
+StandardOutput=journal+console
+StandardError=journal
+''')
+    (units / 'sierx-acceptance.service').write_text('''[Unit]
+Requires=sierx-kernel-start.service sierx-kernel-finish.path user@1001.service
+After=sierx-kernel-start.service sierx-kernel-finish.path user@1001.service
 FailureAction=poweroff-force
 [Service]
 Type=oneshot
@@ -169,6 +216,7 @@ Environment=PATH=/usr/lib/postgresql/18/bin:/usr/pgsql-18/bin:/usr/local/sbin:/u
 ExecStartPre=+/usr/bin/python3 /opt/acceptance/tests/offline-host-guest.py --manager-proof
 ExecStart=+/usr/sbin/sierx-trace-installer
 ExecStopPost=+/usr/bin/python3 /opt/acceptance/tests/offline_host_diagnostics.py --service-exit
+ExecStopPost=+/usr/bin/python3 /opt/acceptance/tests/offline-kernel-observer.py finish
 TimeoutStartSec=10700
 StandardOutput=journal+console
 StandardError=journal
@@ -224,7 +272,9 @@ def disk_file(disk, name):
     paths = {'result.json':'/home/acceptance/result.json', 'diagnostics.log':'/home/acceptance/diagnostics.log',
              'manager.trace':'/var/log/sierx-network/manager.trace', 'manager.stderr':'/var/log/sierx-network/manager.stderr',
              'installer.trace':'/var/log/sierx-network/installer.trace', 'installer.stderr':'/var/log/sierx-network/installer.stderr',
-             'network-controls.json':'/home/acceptance/network-controls.json'}
+             'network-controls.json':'/home/acceptance/network-controls.json',
+             'kernel.trace':'/var/log/sierx-network/kernel.trace',
+             'kernel.json':'/var/log/sierx-network/kernel.json'}
     if name not in paths:
         raise ValueError('Unsupported guest evidence path')
     return run('debugfs', '-R', 'cat ' + paths[name], disk)
@@ -264,11 +314,13 @@ def audit_network(disk, result, report, arch, suite, revision, mode):
     # The guest can finish successfully while its independent host audit fails.
     # Preserve the same strictly sanitized failure artifact in that case too.
     try:
+        kernel = kernel_network_evidence.KernelEvidence(json.loads(disk_file(disk,'kernel.json')),
+            disk_file(disk,'kernel.trace').decode(), 4 if mode == 'tcg' else 2, suite)
         trace = trace_lines(disk_file(disk, 'manager.trace'), disk_file(disk, 'installer.trace'))
         observation = network_observer.summarize(trace,
             json.loads(disk_file(disk, 'network-controls.json')), result['internal_addresses'],
             (disk_file(disk, 'manager.stderr') + disk_file(disk, 'installer.stderr')).decode(),
-            control_interval_limit=120 if mode == 'tcg' else 20)
+            control_interval_limit=120 if mode == 'tcg' else 20, kernel=kernel)
         evidence.validate_network(observation)
         return observation
     except (ValueError, OSError, subprocess.SubprocessError) as error:
@@ -286,6 +338,7 @@ def recover_disk(disk):
 
 
 def main(args):
+    stage(args,'host-verify-inputs')
     if getattr(args,'runtime_probe',False) and not args.development:
         raise ValueError('Runtime probes require --development and cannot satisfy promotion')
     args.suite_sha256 = suite_digest()
@@ -295,12 +348,14 @@ def main(args):
     if os.geteuid() != 0:
         raise ValueError('Run on a disposable native Linux host with root namespace privileges')
     arch = offline.native_arch()
+    args.failure_arch=arch
     for tool in ('qemu-system-x86_64' if arch == 'amd64' else 'qemu-system-aarch64',
                  'mkfs.ext4', 'debugfs', 'e2fsck', 'tar'):
         if not shutil.which(tool):
             raise ValueError('Missing host test prerequisite: ' + tool)
     bundle = Path(args.bundle).resolve()
     data = offline.verify(bundle, args.expected_sha256)
+    args.failure_revision=data['release']['revision']
     if args.previous_bundle:
         old = offline.verify(Path(args.previous_bundle).resolve(), args.previous_sha256)
         if not args.previous_evidence:
@@ -319,11 +374,14 @@ def main(args):
     with tempfile.TemporaryDirectory(prefix='sierx-offline-host-') as temporary:
         root = Path(temporary) / 'root'
         root.mkdir()
+        stage(args,'host-extract-os')
+        print('offline-host: preparation resources '+json.dumps(diagnostics.resources(),sort_keys=True),flush=True)
         run('tar', '-xf', args.rootfs, '-C', root, '--no-same-owner')
         # Rootless OCI export can preserve a private storage root's 0700 mode.
         # The outer temporary directory stays private; the guest's / must be
         # traversable by its actual non-root system services and test account.
         root.chmod(0o755)
+        stage(args,'host-configure-os')
         setup(root, args)
         tests = root / 'opt/acceptance/tests'
         tests.mkdir(parents=True, exist_ok=True)
@@ -338,6 +396,7 @@ def main(args):
             (tests/name).chmod(0o644)
         if suite_digest(tests,tests) != args.suite_sha256:
             raise ValueError('Acceptance inputs changed while constructing the immutable guest snapshot')
+        stage(args,'host-unpack-delivery')
         staged=root/'opt/.delivery-input'
         delivered=offline_archive.unpack(args.archive,staged,args.archive_sha256,args.expected_sha256,arch)
         destination=root/'opt/sierx-bundle'
@@ -355,6 +414,7 @@ def main(args):
                                     root / 'boot' / ('initramfs-' + version + '.img')) if path.is_file()]
         if len(initrds) != 1:
             raise ValueError('Prepared test OS lacks the matching initramfs')
+        stage(args,'host-create-filesystem')
         disk = Path(temporary) / 'guest.ext4'
         with disk.open('wb') as stream:
             stream.truncate(24 * 1024**3)
@@ -370,6 +430,7 @@ def main(args):
         shutil.rmtree(root)
         serial = Path(temporary) / 'serial.log'
         command = qemu_command(arch, mode, disk, boot_kernel, boot_initrd, serial)
+        stage(args,'host-launch')
         process = None
         recovered = False
         try:
@@ -415,6 +476,7 @@ def main(args):
                     time.sleep(1)
                 if process.poll() is None:
                     raise ValueError('Rootless acceptance exceeded its declared timeout')
+            stage(args,'host-read-evidence')
             recover_disk(disk)
             recovered=True
             if finished is None:
@@ -476,8 +538,29 @@ def main(args):
                 if serial.exists():
                     stream.write(serial.read_bytes()[-65536:])
                 stream.write(disk_file(disk, 'diagnostics.log')[-65536:])
-            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','network-controls.json'):
+            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','network-controls.json',
+                         'kernel.trace','kernel.json'):
                 private.with_suffix('.'+name).write_bytes(disk_file(disk,name))
+
+
+def execute(args):
+    try:
+        main(args)
+    except (ValueError,OSError,subprocess.SubprocessError) as error:
+        report=Path(args.report)
+        try:
+            report.parent.mkdir(parents=True,exist_ok=True)
+            if not report.with_suffix('.failure.json').exists():
+                record_failure(report,diagnostics.failure_record(error,getattr(args,'failure_phase','host-verify-inputs')),
+                    b'',getattr(args,'failure_arch','unknown'),getattr(args,'suite_sha256','unknown'),
+                    getattr(args,'failure_revision','unknown'))
+            if isinstance(error,HostCommandError):
+                private=report.with_suffix('.preparation.private.log')
+                private.write_bytes(error.stderr[-65536:])
+                private.chmod(0o600)
+        except OSError:
+            print('offline-host: failed artifact could not be written',flush=True)
+        raise
 
 
 if __name__ == '__main__':
@@ -496,7 +579,10 @@ if __name__ == '__main__':
     parser.add_argument('--runtime-probe',action='store_true',help='Development-only runtime/timer diagnosis; omits closeout scenarios')
     parser.add_argument('--soak-seconds', type=int, default=120)
     parser.add_argument('--acceleration', choices=('auto', 'kvm', 'tcg'), default='auto')
+    args=parser.parse_args()
     try:
-        main(parser.parse_args())
+        execute(args)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
-        sys.exit('offline-host: ' + (str(error) if isinstance(error, ValueError) else 'operation failed; no passing report'))
+        failure=diagnostics.failure_record(error,getattr(args,'failure_phase','host-verify-inputs'))
+        sys.exit('offline-host: ' + (str(error) if isinstance(error, ValueError) else
+            'operation failed at '+failure['phase']+' ('+failure['failure_type']+'); no passing report'))
