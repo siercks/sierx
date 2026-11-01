@@ -61,10 +61,16 @@ class KernelEvidence:
         self.entries, self.exits, returns = defaultdict(list), defaultdict(list), defaultdict(list)
         self.return_events=defaultdict(list)
         prefix = re.compile(r'^\s*.+-(\d+)\s+\[(\d+)\]\s+\S+\s+(\d+\.\d+):\s+(.*)$')
+        started=False
         for line in text.splitlines():
-            if not line.strip() or line.lstrip().startswith('#'): continue
+            if not line.strip(): continue
             match = prefix.match(line)
-            if not match: raise ValueError('Kernel trace record could not be decoded')
+            if not match:
+                # Header comments precede events. A task can name itself with
+                # '#', so match real event structure before treating any header.
+                if not started and line.startswith('#'): continue
+                raise ValueError('Kernel trace record could not be decoded')
+            started=True
             pid, cpu, timestamp, body = match.groups()
             timestamp = float(timestamp)
             if (not 0 < int(pid) <= 0x7fffffff or int(cpu) >= cpus or not math.isfinite(timestamp)

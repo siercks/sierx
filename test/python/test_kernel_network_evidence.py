@@ -56,6 +56,7 @@ class KernelEvidenceTests(unittest.TestCase):
         self.assertEqual(stats['cancelled_before_kernel_entry']['installer'],1)
         metadata,lines=fixture()
         for extra in (
+            '#renamed-10 [000] .... 101.001000: sys_sendto(fd: 0x5, buff: 0x9999, len: 5)',
             'task-10 [000] .... 100.900000: sys_sendto(fd: 0x5, buff: 0x9999, len: 5)',
             'task-10 [000] .... 101.001000: sys_sendto(fd: 0x5, buff: 0x9999, len: 5)',
             'task-10 [000] .... 101.001000: sys_connect(fd: 0x99, uservaddr: 0x9999, addrlen: 16)',
@@ -94,7 +95,7 @@ class KernelEvidenceTests(unittest.TestCase):
         for row in broken:
             with self.subTest(metadata=row),self.assertRaises(ValueError):proof(row,lines)
         for changed in (lines[1:], [l.replace('-> 0x5','-> 0x4') for l in lines],
-                        lines+['private malformed kernel record']):
+                        lines+['private malformed kernel record'],lines+['# private injected record']):
             with self.subTest(lines=changed),self.assertRaises(ValueError):proof(metadata,changed)
 
 
