@@ -491,6 +491,57 @@ test('priorities: Details edits change only assignee or the selected date', asyn
   await audit(page);
 });
 
+test('usability: Details edit controls stay beside their values across appearances', async ({ page, context }, info) => {
+  const me = await (await context.request.get('/api/v1/me')).json();
+  const item = await create(context, 'Details row spacing', 'story', {
+    assignee: me.id, start_date: '2026-11-02', due_date: '2026-11-09',
+  });
+  await page.goto('/' + item.key);
+  for (const width of [720, 1024, 1440, 320, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const { id } of appearanceThemes) {
+      await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, id);
+      await page.evaluate(() => document.fonts.ready);
+      // Include an unusually long, unbroken name: it must wrap as readable
+      // value text rather than displacing or overlapping the edit control.
+      for (const longName of [false, true]) {
+        await page.locator('.detail-list dt').filter({ hasText: /^Assignee$/ }).evaluate((label, long) => {
+          label.nextElementSibling!.querySelector('span')!.textContent = long
+            ? 'AnUnusuallyLongAssigneeNameWithoutSpacesForLayoutReview'
+            : 'Browser tester';
+        }, longName);
+        const rows = await page.locator('.detail-list dd:has(button)').evaluateAll((elements) => elements.map((element) => {
+          const row = element.getBoundingClientRect();
+          const value = element.querySelector('span')!.getBoundingClientRect();
+          const button = element.querySelector('button')!.getBoundingClientRect();
+          return { left: row.left, right: row.right, labelRight: element.previousElementSibling!.getBoundingClientRect().right,
+            valueLeft: value.left, valueWidth: value.width, valueRight: value.right, valueTop: value.top,
+            valueBottom: value.bottom, buttonLeft: button.left, buttonRight: button.right,
+            buttonTop: button.top, buttonBottom: button.bottom, scroll: element.scrollWidth, width: element.clientWidth };
+        }));
+        expect(rows).toHaveLength(3);
+        for (const row of rows) {
+          const note = `${id} ${width}px long=${longName}`;
+          expect(row.scroll, note).toBeLessThanOrEqual(row.width + 1);
+          expect(row.buttonLeft, note).toBeGreaterThanOrEqual(row.left - 1);
+          expect(row.buttonRight, note).toBeLessThanOrEqual(row.right + 1);
+          if (width >= 672) {
+            expect(row.valueLeft - row.labelRight, note).toBeGreaterThanOrEqual(8);
+            expect(row.valueWidth, note).toBeGreaterThanOrEqual(64);
+            expect(row.buttonLeft, note).toBeGreaterThanOrEqual(row.valueRight + 3);
+            expect(row.buttonTop, note).toBeLessThan(row.valueBottom);
+            expect(row.buttonBottom, note).toBeGreaterThan(row.valueTop);
+            expect(Math.abs(row.right - row.buttonRight), note).toBeLessThan(2);
+          }
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), `${id} ${width}px`).toBeLessThanOrEqual(width);
+        if (!longName && ['plain', 'platinum'].includes(id) && [1024, 390].includes(width))
+          await page.locator('section[aria-labelledby="details-heading"]').screenshot({ path: info.outputPath(`details-${id}-${width}.png`) });
+      }
+    }
+  }
+});
+
 test('priorities: Markdown toolbar and preview preserve source and clear submitted comments', async ({ page, context }) => {
   const item = await create(context, 'Markdown editing');
   await page.goto('/' + item.key);

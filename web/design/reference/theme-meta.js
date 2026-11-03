@@ -133,7 +133,7 @@ window.SierxThemes = {
   "contrast": "normal",
   "summary": "The item set like an RFC, with fixed width, numbered sections and bracketed actions. The screen and the printout are the same document.",
   "overrides": true,
-  "overrideBytes": 829,
+  "overrideBytes": 858,
   "fonts": [],
   "fontBytes": 0,
   "pairs": 24,

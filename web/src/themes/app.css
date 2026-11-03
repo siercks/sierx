@@ -652,7 +652,7 @@ h3 {
 
 .detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.34fr);
+  grid-template-columns: minmax(0, 1fr) minmax(25rem, 0.4fr);
   align-items: start;
   gap: 1.25rem;
 }
@@ -793,6 +793,26 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
+}
+
+@media (min-width: 42rem) {
+  .detail-list {
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .detail-list dd:has(button) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .detail-list dd > span {
+    min-width: 0;
+  }
+
+  .detail-list dd > button {
+    white-space: nowrap;
+  }
 }
 
 .check-label {
@@ -1395,11 +1415,16 @@ th {
   }
 
   .item-sidebar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr));
   }
 }
 
 @media (max-width: 42rem) {
+  .detail-list dd > button {
+    max-width: 100%;
+    white-space: normal;
+  }
+
   .app-header {
     position: static;
     display: grid;

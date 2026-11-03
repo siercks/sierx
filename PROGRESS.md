@@ -2507,3 +2507,32 @@ failure preservation. Credential-scan controls and the 510-file source/build sca
 pass; whitespace checks pass. Real development capture/replay validates the
 root-unit completion coordination and both executed/cancelled controls. These
 checks do not replace fresh full native and hosted runs of the committed change.
+
+## 2026-11-02 — Owner walkthrough and Details spacing
+
+The owner reports that Sessions A and B look good. The remaining UX-04
+presentation request is to give Details more room and place assignee/start/due
+date edit controls to the right of their values on non-mobile views. This report
+does not infer separate accessibility, independent-recovery or Phase 2 exit approval.
+
+Widen the desktop sidebar and use intrinsic label widths plus separate value
+and action columns, keeping full edit labels. Tablet cards use a readable minimum
+width rather than splitting into cramped equal columns. Long assignee values
+wrap beside the action. Plain Text retains an explicit label/value gap; narrow
+phone controls can wrap their text rather than overflowing the value cell.
+Regenerate the required theme reference metadata after the Plain Text refinement.
+
+A real-browser regression reproduces the previous below-value action placement
+at 720px in Swiss. The corrected layout passes all 23 appearances at 720, 1024,
+1440, 320 and 390px in Chromium and Firefox, with ordinary and long unbroken
+assignee names, aligned action edges, readable value width and no page/cell
+overflow. The first corrected pass exposed a 3px Plain Text phone overflow in
+Firefox; the narrow-control wrapping correction resolves it. Existing actual
+assignee/date save/clear behavior and its accessibility audit pass in both engines.
+
+The production frontend build and all 45 frontend unit tests pass. Focused real
+API/database browser acceptance passes 2 cases per engine (47.70s total) in a
+no-network synthetic fixture. Its Node/Go/browser tools match the branch and its
+exact current npm lock was installed/verified; a larger general-runtime refresh
+was cancelled after these cached browsers were reused. This focused evidence
+does not claim a new full native/host gate or a production deployment.

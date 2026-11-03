@@ -22,6 +22,7 @@
   [data-theme="plain"] .sx-fields { gap: 0; padding: 8px 2ch; font-size: inherit; border: 1px dashed var(--border); }
   [data-theme="plain"] .sx-fields > div { grid-template-columns: 18ch 1fr; gap: 0; }
   [data-theme="plain"] .sx-fields dt::after { content: ":"; }
+  [data-theme="plain"] .item-document .detail-list { column-gap: 0.8rem; row-gap: 0.4rem; }
   [data-theme="plain"] .sx-doc-h { font-size: inherit; color: var(--foreground); }
   [data-theme="plain"] .sx-doc-h::before { counter-increment: sec; content: counter(sec) ".  "; white-space: pre; }
   [data-theme="plain"] :is(.sx-md, .sx-links, .sx-activity) { padding-left: 4ch; }
