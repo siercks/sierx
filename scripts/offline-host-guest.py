@@ -68,13 +68,23 @@ def phase(name):
 def run(*args, env=None):
     timeout = (5400 if PHASE=='delivered-browser-workflows' else 1800) if OPTIONS['virtual_cpu']=='tcg' else 600
     with LOG.open('ab') as log:
+        stderr_start=log.tell()
         result = subprocess.run(list(map(str, args)), stdout=subprocess.PIPE, stderr=log,
                                 env=env or ENV, cwd=BUNDLE,
                                 timeout=timeout)
+        stderr_end=log.tell()
         log.write(result.stdout)
     if result.returncode:
         error=RuntimeError('Fixture command failed in ' + PHASE)
         error.fixture_exit_code=result.returncode
+        # Retain streaming stderr (including on timeout). Inspect only its
+        # bounded tail for fixed command/error categories after a failure.
+        with LOG.open('rb') as private:
+            private.seek(max(stderr_start,stderr_end-8192))
+            stderr=private.read(min(8192,stderr_end-stderr_start))
+        detail=diagnostics.guest_command_failure(args,stderr)
+        error.fixture_command=detail.get('guest_command')
+        error.fixture_command_detail=detail.get('guest_command_detail')
         raise error
     return result.stdout.decode().strip()
 
@@ -259,7 +269,7 @@ def main():
         spec.loader.exec_module(scenario)
         phase('invalid-deliveries')
         OPTIONS['invalid_hashes']=json.loads((HOME/'invalid-inputs.json').read_text())
-        scenarios['invalid_deliveries']=scenario.delivery_failures(BUNDLE,OPTIONS,ENV,run,LOG)
+        scenarios['invalid_deliveries']=scenario.delivery_failures(BUNDLE,OPTIONS,ENV,run,LOG,phase)
         phase('two-approved-releases')
         scenarios['two_release']=scenario.two_release(BUNDLE,OPTIONS,ENV,operation,run,require)
         phase('failed-health-rollback')

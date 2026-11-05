@@ -501,6 +501,8 @@ def main(args):
                 suffix = '; detail '+detail if detail else ''
                 code = failure.get('command_exit_code')
                 if code is not None:suffix+='; command-exit='+str(code)
+                if failure.get('guest_command'):
+                    suffix+='; command='+failure['guest_command']+'; command-detail='+failure['guest_command_detail']
                 for key in ('json_input','json_chars','json_position','json_line','json_column'):
                     if key in failure:suffix+='; '+key.replace('_','-')+'='+str(failure[key])
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')

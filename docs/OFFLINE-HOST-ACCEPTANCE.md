@@ -286,6 +286,11 @@ input-shape category. Raw output and exception messages remain private. Its
 `offline-host-failure-v1` schema always has `result: failed`; it cannot replace
 any acceptance report or satisfy promotion. The named failure artifact survives
 hosted-runner cleanup so an unknown console summary does not erase all evidence.
+Invalid-delivery failures retain the exact fixed substep (including separate
+store configuration, store inspection and plan rejection). Failed Podman `info`
+and `inspect` commands additionally retain only their fixed operation and an
+allowlisted error category. A bounded tail of the private stderr stream supplies
+that category; raw stderr, paths and command arguments are never published.
 The launcher waits for a synced completion marker, stops its owned VM and
 replays only that disposable disk's journal before reading evidence.
 

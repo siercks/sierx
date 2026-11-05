@@ -64,12 +64,18 @@ def service_snapshot(run):
             'started':{name:run('podman','inspect',name,'--format','{{.State.StartedAt}}') for name in ('sierx','sierx-caddy')}}
 
 
-def delivery_failures(bundle, options, env, run, log):
+def delivery_failures(bundle, options, env, run, log, progress=None):
+    def step(name):
+        if progress is not None:progress('invalid-delivery-'+name)
+    step('snapshot-before')
     before = service_snapshot(run)
     for name in ('missing-image','altered-archive','wrong-architecture'):
+        step(name)
         fixture = Path('/opt/invalid-bundles')/name
         installer(fixture,'import',options['invalid_hashes'][name],env,log)
+    step('wrong-digest')
     installer(bundle,'import','0'*64,env,log)
+    step('missing-certificate')
     certificate = CONFIG/'tls/server.crt'
     parked = certificate.with_suffix('.parked')
     certificate.rename(parked)
@@ -78,10 +84,14 @@ def delivery_failures(bundle, options, env, run, log):
     finally:
         parked.rename(certificate)
     # A separate empty image store exercises actual no-pull plan rejection.
+    step('empty-store-config')
     storage,runroot = HOME/'empty-store',Path(env['XDG_RUNTIME_DIR'])/'empty-store'
     isolated=isolated_storage(storage,runroot,env)
+    step('empty-store-info')
     require_empty_storage(json.loads(run('podman','info','--format','json',env=isolated)),storage,runroot)
+    step('empty-store-plan')
     installer(bundle,'plan',options['bundle_sha256'],isolated,log)
+    step('snapshot-after')
     if service_snapshot(run) != before:
         raise ValueError('Rejected delivery changed the accepted revision or running services')
     return ['missing-image','altered-archive','wrong-architecture','wrong-digest','missing-certificate','empty-image-store']

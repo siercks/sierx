@@ -2564,3 +2564,35 @@ tests pass, including wrong syscall/error/order, duplicate return, executed
 entry and ordinary traffic rejection. Credential scan and whitespace checks
 pass. Full hosted host coverage must pass on the corrected revision before
 Phase 2 merge readiness is claimed. No live release changed.
+
+## 2026-11-04 — ARM64 invalid-delivery failure evidence
+
+The AMD64 correction passed all four Ubuntu/Rocky jobs in PR and push runs on
+`c713f09`. Push ARM64 job 127029492323 completed database/setup, deployment,
+restart, external negative controls and delivered browsers, then failed in
+`invalid-deliveries` with command exit 125 after about 87 minutes. Its retained
+failure artifact confirms that phase/code but omits the individual command and
+stderr. The separate PR ARM64 attempt remained running during this diagnosis.
+
+The unexpected failure can arise from the accepted-service snapshots or the
+isolated-store inspection; intentionally rejected installer commands use a
+different path and cannot produce this RuntimeError. A short no-NIC KVM Ubuntu
+probe with actual rootless Podman 4.9.3 passed original-store, separate-empty-
+store and original-store inspection using the unchanged helper. This does not
+reproduce the ARM64/traced workload or establish the historical cause. Do not
+change storage policy, lengthen timeouts or claim the exit-125 failure fixed.
+
+Add fixed invalid-delivery substeps to both live progress and retained failure
+artifacts. A failed Podman info/inspect now records its fixed operation and a
+small allowlist of error categories; unknown errors stay `other`. Only the last
+8KiB of that command's stderr is inspected locally, excluding previous commands
+and stdout. Raw stderr keeps streaming privately, including on timeout, and
+never enters public evidence. The report remains failed. All six negative cases,
+actual empty-store path/image checks and accepted-service preservation remain
+mandatory.
+
+All 150 Linux Python tests pass. New regressions cover exact failure substeps,
+all six required rejection calls, certificate cleanup, service snapshots,
+bounded private-safe command categories and streaming stderr preservation on
+timeout. This is a correction to the evidence gap, not an underlying Podman fix;
+the next full attempt must supply the missing information if it fails again.

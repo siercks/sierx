@@ -20,6 +20,10 @@ FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionErro
                  'NetworkObservationError', 'HostCommandError'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
+GUEST_COMMANDS = {'podman-info','podman-inspect'}
+GUEST_COMMAND_DETAILS = {'storage-configuration','database-lock','permission-denied',
+                         'storage-full','resource-unavailable','namespace-clone',
+                         'reexec','deadline','unexpected-eof','other'}
 HOST_PHASES = {'host-verify-inputs','host-extract-os','host-configure-os','host-unpack-delivery',
                'host-create-filesystem','host-launch','host-read-evidence'}
 FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bootstrap',
@@ -29,6 +33,9 @@ FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bo
                   'delivered-browser-workflows', 'invalid-deliveries', 'two-approved-releases',
                   'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete',
                   'network-audit'} | HOST_PHASES | {
+    'invalid-delivery-'+name for name in ('snapshot-before','missing-image','altered-archive',
+        'wrong-architecture','wrong-digest','missing-certificate','empty-store-config',
+        'empty-store-info','empty-store-plan','snapshot-after')} | {
     'runtime-'+name for name in ('reject-implicit-timers', 'reload-units', 'start-timer',
                                 'observe', 'verify-maintenance', 'inventory-services',
                                 'inventory-timers', 'inventory-enabled')}
@@ -45,6 +52,11 @@ def sanitize_failure(value):
     code = value.get('command_exit_code')
     if type(code) is int and -128 <= code <= 255:
         result['command_exit_code'] = code
+    command=value.get('guest_command')
+    if isinstance(command,str) and command in GUEST_COMMANDS:
+        result['guest_command']=command
+        detail=value.get('guest_command_detail')
+        result['guest_command_detail']=detail if isinstance(detail,str) and detail in GUEST_COMMAND_DETAILS else 'other'
     tool=value.get('host_tool')
     if isinstance(tool,str) and tool in HOST_TOOLS: result['host_tool']=tool
     detail=value.get('host_detail')
@@ -65,12 +77,29 @@ def sanitize_failure(value):
     return result
 
 
+def guest_command_failure(args, stderr):
+    """Classify only fixed Podman operations/errors; never expose argv/stderr."""
+    if len(args)<2 or str(args[0])!='podman' or str(args[1]) not in {'info','inspect'}:
+        return {}
+    text=stderr.lower() if isinstance(stderr,bytes) else b''
+    patterns=((b'database configuration mismatch','storage-configuration'),
+              (b'database is locked','database-lock'),(b'permission denied','permission-denied'),
+              (b'no space left on device','storage-full'),
+              (b'resource temporarily unavailable','resource-unavailable'),
+              (b'cannot clone','namespace-clone'),(b'cannot re-exec','reexec'),
+              (b'context deadline exceeded','deadline'),(b'unexpected eof','unexpected-eof'))
+    detail=next((label for message,label in patterns if message in text),'other')
+    return {'guest_command':'podman-'+str(args[1]),'guest_command_detail':detail}
+
+
 def failure_record(error, phase):
     value = {'result':'failed', 'phase':phase, 'failure_type':type(error).__name__,
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
-             'host_detail':getattr(error,'host_detail',None)}
+             'host_detail':getattr(error,'host_detail',None),
+             'guest_command':getattr(error,'fixture_command',None),
+             'guest_command_detail':getattr(error,'fixture_command_detail',None)}
     if isinstance(error, json.JSONDecodeError):
         first = error.doc.lstrip()[:1]
         value.update(json_input='empty' if not first else 'object' if first=='{' else 'array' if first=='[' else 'other',
