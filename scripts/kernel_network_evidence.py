@@ -1,5 +1,6 @@
 """Corroborate terminal ptrace entries with a complete, loss-free kernel trace."""
 from collections import defaultdict
+import errno
 import hashlib
 import math
 import re
@@ -123,24 +124,35 @@ class KernelEvidence:
         if (len(entered)!=1 or entered[0][1:]!=('sendto',999) or len(exited)!=1 or exited[0][1]!=-9
                 or len(deaths)!=1 or not entered[0][0]<=exited[0][0]<=deaths[0]):
             raise ValueError('Executed kernel control was not observed from entry through exit')
-        if (len(set(identities)) != 4
-                or self.cancelled_before_entry(**controls['executed_control'])
-                or self.entries.get(controls['cancelled_control']['pid'])
-                or not self.cancelled_before_entry(**controls['cancelled_control'])):
+        cancelled=controls['cancelled_control']
+        cancelled_pid=cancelled['pid']
+        window=self._terminal_window(**cancelled)
+        observed_returns=self.return_events.get(cancelled_pid, [])
+        sendto_returns=returns.get((cancelled_pid,'sendto'), [])
+        # The guest explicitly kills this known ptrace-stopped child and
+        # verifies SIGKILL. On x86, the syscall exit path can log ENOSYS even
+        # though the sendto entry tracepoint was never reached. Accept that
+        # exact evidence only for this deliberate control, never app traffic.
+        aborted_return=(window is not None and len(observed_returns)==1 and len(sendto_returns)==1
+                        and sendto_returns[0][1]==-errno.ENOSYS
+                        and window[0]<=sendto_returns[0][0]<=window[1])
+        if (len(set(identities)) != 4 or self.entries.get(cancelled_pid)
+                or window is None or (observed_returns and not aborted_return)):
             raise ValueError('Kernel execution controls did not distinguish a cancelled syscall')
 
-    def cancelled_before_entry(self, pid, timestamp):
-        """Only a terminal, never-executed entry may avoid destination decoding.
-
-        Ptrace stops precede kernel syscall tracepoints. Any kernel entry in the
-        conservative clock interval, missing death or PID reuse keeps rejection.
-        """
-        pid = int(pid)
+    def _terminal_window(self, pid, timestamp):
         lower = timestamp-self.offset_upper-0.001
         upper = timestamp-self.offset_lower+0.001
         deaths = self.exits.get(pid, [])
         if (len(deaths) != 1 or lower < self.begin or upper > self.end
                 or not upper <= deaths[0] <= min(self.end, lower+20)):
+            return None
+        return upper, deaths[0]
+
+    def cancelled_before_entry(self, pid, timestamp):
+        """Only a terminal, never-executed entry may avoid destination decoding."""
+        pid = int(pid)
+        if self._terminal_window(pid,timestamp) is None:
             return False
         # Requiring no network execution anywhere in this TID's captured
         # lifetime also covers delayed/misordered userspace trace rendering.

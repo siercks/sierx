@@ -42,6 +42,24 @@ def proof(metadata=None, lines=None):
 
 
 class KernelEvidenceTests(unittest.TestCase):
+    def test_amd64_abort_return_is_only_allowed_for_the_cancelled_control(self):
+        metadata,lines=fixture()
+        orphan='root-4 [000] .... 100.209000: sys_sendto -> 0xffffffffffffffda'
+        evidence=proof(metadata,lines+[orphan])
+        self.assertFalse(evidence.cancelled_before_entry(4,1100.2))
+        unknown='4<python3> 1100.200000 sendto(5, "probe", 5, 0, NULL, 0) <unfinished ...>'
+        with self.assertRaises(observer.NetworkObservationError):observer.parse([unknown],kernel=evidence)
+        for extra in (
+            [orphan.replace('ffffffda','fffffff7')],
+            [orphan.replace('sys_sendto','sys_sendmsg')],
+            [orphan.replace('100.209000','100.199000')],
+            [orphan.replace('100.209000','100.211000')],
+            [orphan,orphan],
+            [orphan,'root-4 [000] .... 100.208000: sys_sendto(fd: 3e7, buff: 0x1234, len: 5)'],
+        ):
+            with self.subTest(extra=extra),self.assertRaisesRegex(ValueError,'did not distinguish'):
+                proof(metadata,lines+extra)
+
     def test_kernel_hexadecimal_fields_without_prefix_are_not_decimal(self):
         metadata,lines=fixture()
         metadata['start']['fd']=61

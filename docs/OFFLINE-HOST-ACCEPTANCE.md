@@ -187,6 +187,11 @@ Acceptance requires both start/end positive sends, executed-versus-cancelled
 controls, the exact enabled events on all CPUs without PID/event filters,
 consistent monotonic/realtime clock samples, a matching capture checksum and
 zero overwritten/dropped events. Missing or ambiguous evidence fails the gate.
+For the deliberately killed control child only, a single `sendto` `ENOSYS`
+return between the ptrace stop and the observed death is valid when there is
+no kernel entry. An isolated Ubuntu AMD64 probe reproduced this exit-path
+record for a call that never reached its entry tracepoint. Return-bearing
+ordinary traffic still cannot use the terminal cancellation exception.
 The buffer reserves 64 MiB per virtual CPU inside the existing 4 GiB guest.
 Guest root snapshots and syncs the capture before emitting the completion marker.
 No host kernel tracing is enabled.

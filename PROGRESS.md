@@ -2536,3 +2536,31 @@ no-network synthetic fixture. Its Node/Go/browser tools match the branch and its
 exact current npm lock was installed/verified; a larger general-runtime refresh
 was cancelled after these cached browsers were reused. This focused evidence
 does not claim a new full native/host gate or a production deployment.
+
+## 2026-11-04 — AMD64 cancellation control diagnosis
+
+The four AMD64 jobs on `6346692` (Ubuntu and Rocky, PR and push) completed
+their guest scenarios but failed the same kernel execution-control assertion.
+The two summary checks failed downstream. Both Ubuntu ARM64 jobs, source CI
+and security passed. Do not treat these six red checks as six independent bugs.
+
+A disposable two-vCPU KVM guest with no network device, booting the cached
+Ubuntu 6.8.0-147 AMD64 kernel, reproduced the exact verifier error using the
+repository's ptrace controls. The executed child produced a `sendto` entry,
+`EBADF` return and process exit. The killed child produced an orphan `ENOSYS`
+return and process exit, with no `sendto` entry. Both CPUs reported zero lost
+events. The old control rejected any return, conflating this syscall exit-path
+record with execution. Rocky showed the same hosted assertion; this local
+probe does not claim to have reproduced Rocky independently.
+
+Accept a single time-correlated `sendto` `ENOSYS` return only for the known
+deliberately killed control child, with no kernel entry and a unique observed
+death. The ordinary traffic classifier still rejects an unresolved send with
+any kernel return. Missing/duplicate controls, wrong or out-of-window returns,
+entries, lost events and explicit external attempts remain rejected.
+
+The same Ubuntu guest probe passes after the correction. All 146 Linux Python
+tests pass, including wrong syscall/error/order, duplicate return, executed
+entry and ordinary traffic rejection. Credential scan and whitespace checks
+pass. Full hosted host coverage must pass on the corrected revision before
+Phase 2 merge readiness is claimed. No live release changed.
