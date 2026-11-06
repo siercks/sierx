@@ -12,6 +12,8 @@
  "GET /api/v1/projects/{key}":"api/projects-detail.json",
  "PATCH /api/v1/projects/{key}":"api/projects-update.json",
  "GET /api/v1/members":"api/members-list.json",
+ "GET /api/v1/admin/members":"api/admin-members.json",
+ "POST /api/v1/admin/members":"api/admin-member-created.json",
  "GET /api/v1/projects/{key}/config":"api/project-config.json",
  "GET /api/v1/items":"api/items-list.json",
  "POST /api/v1/items":"api/items-create.json",
@@ -35,5 +37,8 @@
  "GET /api/v1/views":"api/views-list.json",
  "POST /api/v1/views":"api/views-create.json",
  "GET /api/v1/changes":"api/changes.json",
- "GET /api/v1/metrics":"api/metrics.json"
+ "GET /api/v1/metrics":"api/metrics.json",
+ "GET /api/v1/workspace":"api/workspace-settings.json",
+ "PATCH /api/v1/workspace":"api/workspace-update.json",
+ "PUT /api/v1/projects/{key}/config":"api/workflow-update.json"
 }

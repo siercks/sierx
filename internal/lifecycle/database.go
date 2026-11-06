@@ -72,6 +72,17 @@ type Guard struct {
 	head            *Head
 }
 
+// verificationError exposes only a fixed stage to request diagnostics. Private
+// filesystem/database errors are never used as a public diagnostic label.
+type verificationError struct {
+	stage string
+	cause error
+}
+
+func (e *verificationError) Error() string             { return e.cause.Error() }
+func (e *verificationError) Unwrap() error             { return e.cause }
+func (e *verificationError) VerificationStage() string { return e.stage }
+
 func NewGuard(db DB) (*Guard, error) {
 	g := &Guard{DB: db, Checkpoint: os.Getenv("SIERX_LIFECYCLE_CHECKPOINT"), Key: os.Getenv("SIERX_LIFECYCLE_GUARD_KEY_FILE")}
 	if g.Checkpoint == "" || g.Key == "" || g.Checkpoint == g.Key {
@@ -121,14 +132,14 @@ func (g *Guard) checkpoint() (Head, error) {
 func (g *Guard) Check(ctx context.Context) error {
 	expected, err := g.checkpoint()
 	if err != nil {
-		return err
+		return &verificationError{"checkpoint", err}
 	}
 	h, err := DatabaseHead(ctx, g.DB)
 	if err != nil {
-		return err
+		return &verificationError{"database", err}
 	}
 	if h.InstanceID != expected.InstanceID || h.Sequence != expected.Sequence || h.Hash != expected.Hash {
-		return errors.New("lifecycle recovery replay required before application access")
+		return &verificationError{"comparison", errors.New("lifecycle recovery replay required before application access")}
 	}
 	return nil
 }

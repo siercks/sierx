@@ -118,6 +118,17 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='sierx_maintenance') THEN
     EXECUTE 'CREATE ROLE sierx_maintenance';
   END IF;
+  -- Logical restores reference this owner and its RLS policies before migrations
+  -- can run. Provision it on an empty cluster without granting login or DDL.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='sierx_member_provisioner') THEN
+    CREATE ROLE sierx_member_provisioner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='sierx_member_provisioner'
+    AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls OR rolreplication))
+    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='sierx_member_provisioner')
+      OR roleid=(SELECT oid FROM pg_roles WHERE rolname='sierx_member_provisioner')) THEN
+    RAISE EXCEPTION 'member provisioner role must be isolated and non-login';
+  END IF;
   EXECUTE format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L', 'sierx_runtime', {literal(runtime_password)});
   EXECUTE format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L', 'sierx_auth', {literal(auth_password)});
   EXECUTE format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L', 'sierx_maintenance', {literal(maintenance_password)});

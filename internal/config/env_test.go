@@ -3,16 +3,43 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestLifecycleCheckTimeoutIsBoundedAndDefaultsToOneSecond(t *testing.T) {
+	for _, raw := range []string{"", "1s", "1.5s", "10s"} {
+		values := validEnvironment("")
+		values["SIERX_LIFECYCLE_CHECK_TIMEOUT"] = raw
+		cfg, err := Load(func(key string) string { return values[key] })
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := time.Second
+		if raw != "" {
+			want, _ = time.ParseDuration(raw)
+		}
+		if cfg.LifecycleCheckTimeout != want {
+			t.Fatal("verification deadline differs from bounded configuration")
+		}
+	}
+	for _, raw := range []string{"0s", "999ms", "10.001s", "-1s", "1m", "private-invalid-value"} {
+		values := validEnvironment("")
+		values["SIERX_LIFECYCLE_CHECK_TIMEOUT"] = raw
+		_, err := Load(func(key string) string { return values[key] })
+		if err == nil || !strings.Contains(err.Error(), "SIERX_LIFECYCLE_CHECK_TIMEOUT") || strings.Contains(err.Error(), "private-invalid-value") {
+			t.Fatal("unbounded or privately reflected verification configuration")
+		}
+	}
+}
 
 func validEnvironment(registrationMode string) map[string]string {
 	return map[string]string{
 		"SIERX_RUNTIME_DATABASE_URL": "postgres://sierx_runtime:runtime-secret@localhost/sierx",
-		"SIERX_AUTH_DATABASE_URL":     "postgres://sierx_auth:auth-secret@localhost/sierx",
-		"SIERX_AUTH_MODE":             "local",
-		"SIERX_BASE_URL":              "https://sierx.example.test",
-		"SIERX_SESSION_KEY":           strings.Repeat("k", 32),
-		"SIERX_REGISTRATION_MODE":     registrationMode,
+		"SIERX_AUTH_DATABASE_URL":    "postgres://sierx_auth:auth-secret@localhost/sierx",
+		"SIERX_AUTH_MODE":            "local",
+		"SIERX_BASE_URL":             "https://sierx.example.test",
+		"SIERX_SESSION_KEY":          strings.Repeat("k", 32),
+		"SIERX_REGISTRATION_MODE":    registrationMode,
 	}
 }
 

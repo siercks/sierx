@@ -257,11 +257,21 @@ func TestMutateEmptyIsAnError(t *testing.T) {
 
 func TestMutateCallbackErrorRollsBack(t *testing.T) {
 	f := newFixture(t)
+	unrelated := newFixture(t)
 	ctx := context.Background()
-	before, _, err := f.st.CountItemsAndRollups(ctx)
-	if err != nil {
-		t.Fatal(err)
+	snapshot := func() [4]int64 {
+		t.Helper()
+		var counts [4]int64
+		if err := f.pool.QueryRow(ctx, `SELECT
+            (SELECT count(*) FROM item WHERE workspace_id=$1),
+            (SELECT count(*) FROM item_rollup r JOIN item i ON i.id=r.item_id WHERE i.workspace_id=$1),
+            (SELECT count(*) FROM change_event WHERE workspace_id=$1),
+            coalesce((SELECT value FROM seq_counter WHERE workspace_id=$1),0)`, pgUUID(f.wsID)).Scan(&counts[0], &counts[1], &counts[2], &counts[3]); err != nil {
+			t.Fatal(err)
+		}
+		return counts
 	}
+	before := snapshot()
 	sentinel := errors.New("caller changed its mind")
 	id := uuid.NewV7()
 	if _, err := f.st.Mutate(ctx, f.wsID, func(m *store.Mutation) error {
@@ -269,16 +279,16 @@ func TestMutateCallbackErrorRollsBack(t *testing.T) {
 			ID: id, ProjectID: f.projectID, ItemTypeID: f.typeID, StatusID: f.todo,
 			Title: "doomed", OriginID: f.originID,
 		})
+		// Other packages may commit to the shared test database concurrently.
+		// Their workspace must not affect this mutation's rollback assertion.
+		unrelated.create(t, "independent commit", nil, unrelated.todo, nil)
 		return sentinel
 	}); !errors.Is(err, sentinel) {
 		t.Fatalf("got %v, want the callback's error", err)
 	}
-	after, _, err := f.st.CountItemsAndRollups(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	after := snapshot()
 	if after != before {
-		t.Fatalf("item count moved from %d to %d after a failed mutation", before, after)
+		t.Fatalf("workspace items/rollups/events/counter changed from %v to %v after a failed mutation", before, after)
 	}
 }
 

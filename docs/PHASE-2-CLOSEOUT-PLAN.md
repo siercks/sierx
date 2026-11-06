@@ -6,7 +6,23 @@ Revised October 9 to incorporate the legal/security audit and owner direction: t
 
 ## Implementation status (October 2026)
 
-The implementation branch covers the security/privacy workstream F1–F7. F1 role separation/RLS, F2 local legal-document surfaces and truthful operator-configured privacy content, F3 fail-closed signup modes, F4 offline asset/secret/request controls, F5 scope boundaries, F6 title/accessibility automation, and F7 machine-checkable release gates have code or documentation evidence. F2's data-lifecycle handling remains incomplete: reversible account suspension and a bounded operator-mediated export are implemented, but broader authenticated access/export, correction of historical copies, content redaction, holds, membership removal, and erasure-aware restore are not. The export is limited to profile, memberships, authored comments, and owned saved views and is not a complete personal-data export. A restricted operator intake procedure is documented but is not a substitute for these workflows.
+October 18 reconciliation: requested usability changes and migration 15 are
+deployed at `6dac24f`; ADR-028's lifecycle work is implemented within its stated
+operator scope. The navigation/cache follow-up is committed in `67b1d98`.
+Workstream C's expanded host/browser/observer/rollback/report code is undergoing
+verification under the [native host acceptance contract](OFFLINE-HOST-ACCEPTANCE.md).
+Earlier baseline descriptions below remain planning history, not evidence that
+implemented project metadata or lifecycle features are still missing. Exact
+candidate/profile reports and operator/manual exit requirements remain required.
+
+The implementation branch covers the security/privacy workstream F1–F7. Role
+separation/RLS, local notices, fail-closed admission, offline resource/secret
+controls, scope boundaries and automated accessibility have code or documentation
+evidence. ADR-028 adds protected lifecycle actions, holds, bounded content/history
+handling, membership replacement and authenticated restore replay. Keep its
+documented operator/export limits explicit; it is not a complete personal-data
+self-service workflow. F7 now adds the expanded host evidence contract, whose
+actual candidate/profile results remain separate from implementation claims.
 
 F5 adds no email delivery or billing implementation; public signup, invitation and child admission remain disabled. F6's manual screen-reader and whole-workflow review has not been performed, so automated accessibility evidence is not a WCAG conformance claim. Operator-specific privacy facts, deployment role transition/recovery, host acceptance, and Phase 2 real-use/signoff requirements remain open. F7 is the implementation boundary, not a declaration that Phase 2 has exited.
 
@@ -153,7 +169,12 @@ flowchart TD
 
 Separate delivery content from test tooling. Browser binaries, connection observers and host test tools are acquired before isolation and are not dependencies of the production deployment. Action/artifact download/upload and GitHub reporting remain outside the isolated workload. No CI registry token, cloud credential or live testbed data enters the isolated fixture.
 
-Keep a reproducer in scripts/Make targets. Proposed targets are `offline-candidate-prepare`, `gate-offline-delivery`, `prove-offline-delivery` and `gate-offline-host`; they are planned names, not existing commands. Reuse `release-offline-bundle`, `release-offline-test` and their existing implementation where practical. Do not duplicate bundle verification/import logic in workflow YAML.
+The branch now supplies `offline-candidate-prepare`, `offline-previous-prepare`,
+`offline-host-prepare`, `gate-offline-host`, `prove-offline-host` and
+`offline-host-evidence`. The reusable offline workflow calls these targets;
+`release-offline-bundle`/`release-offline-test` retain the baseline layer.
+The stable CI aggregate is named **Offline delivery**. Confirm its actual check
+name/results before changing required-check enforcement.
 
 ### Two test layers
 

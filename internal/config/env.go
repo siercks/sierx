@@ -7,37 +7,47 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Env struct {
-	RuntimeDatabaseURL string
-	AuthDatabaseURL         string
-	AuthMode                string
-	RegistrationMode        string
-	TrustedProxies          []netip.Prefix
-	BaseURL                 string
-	SessionKey              string
-	ListenAddr              string
-	OperatorName            string
-	PrivacyContact          string
-	PrivacyRetention        string
-	PrivacyBackups          string
-	PrivacyServices         string
-	PrivacyVersion          string
-	PrivacyEffectiveDate    string
-	CopyrightAgent          string
-	CopyrightContact        string
-	CopyrightNotice         string
-	CopyrightCounterNotice  string
-	RepeatInfringerPolicy   string
+	RuntimeDatabaseURL     string
+	AuthDatabaseURL        string
+	AuthMode               string
+	RegistrationMode       string
+	TrustedProxies         []netip.Prefix
+	BaseURL                string
+	SessionKey             string
+	ListenAddr             string
+	LifecycleCheckTimeout  time.Duration
+	OperatorName           string
+	PrivacyContact         string
+	PrivacyRetention       string
+	PrivacyBackups         string
+	PrivacyServices        string
+	PrivacyVersion         string
+	PrivacyEffectiveDate   string
+	CopyrightAgent         string
+	CopyrightContact       string
+	CopyrightNotice        string
+	CopyrightCounterNotice string
+	RepeatInfringerPolicy  string
 }
 
 func Load(get func(string) string) (Env, error) {
 	c := Env{RuntimeDatabaseURL: get("SIERX_RUNTIME_DATABASE_URL"), AuthDatabaseURL: get("SIERX_AUTH_DATABASE_URL"), AuthMode: get("SIERX_AUTH_MODE"), RegistrationMode: strings.TrimSpace(get("SIERX_REGISTRATION_MODE")), BaseURL: get("SIERX_BASE_URL"), SessionKey: get("SIERX_SESSION_KEY"), ListenAddr: get("SIERX_LISTEN_ADDR"),
 		OperatorName: get("SIERX_OPERATOR_NAME"), PrivacyContact: get("SIERX_PRIVACY_CONTACT"), PrivacyRetention: get("SIERX_PRIVACY_RETENTION"), PrivacyBackups: get("SIERX_PRIVACY_BACKUPS"), PrivacyServices: get("SIERX_PRIVACY_SERVICES"), PrivacyVersion: get("SIERX_PRIVACY_VERSION"), PrivacyEffectiveDate: get("SIERX_PRIVACY_EFFECTIVE_DATE"),
 		CopyrightAgent: get("SIERX_COPYRIGHT_AGENT"), CopyrightContact: get("SIERX_COPYRIGHT_CONTACT"), CopyrightNotice: get("SIERX_COPYRIGHT_NOTICE_PROCESS"), CopyrightCounterNotice: get("SIERX_COPYRIGHT_COUNTER_NOTICE_PROCESS"), RepeatInfringerPolicy: get("SIERX_REPEAT_INFRINGER_POLICY")}
+	c.LifecycleCheckTimeout = time.Second
+	if raw := strings.TrimSpace(get("SIERX_LIFECYCLE_CHECK_TIMEOUT")); raw != "" {
+		value, err := time.ParseDuration(raw)
+		if err != nil || value < time.Second || value > 10*time.Second {
+			return Env{}, fmt.Errorf("SIERX_LIFECYCLE_CHECK_TIMEOUT must be a duration from 1s through 10s")
+		}
+		c.LifecycleCheckTimeout = value
+	}
 	if c.RegistrationMode == "" {
 		c.RegistrationMode = "private"
 	}

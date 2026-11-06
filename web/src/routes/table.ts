@@ -6,5 +6,7 @@ export const routes = [
   { id: 'privacy', path: '/privacy', eager: false, handler: 'bootstrapPrivacy' },
   { id: 'copyright', path: '/copyright', eager: false, handler: 'bootstrapCopyright' },
   { id: 'third-party', path: '/third-party', eager: false, handler: 'bootstrapThirdParty' },
+  { id: 'settings', path: '/settings', eager: false, handler: 'bootstrapSettings' },
+  { id: 'admin', path: '/admin', eager: false, handler: 'bootstrapAdmin' },
   { id: 'item', path: '/:key', eager: false, handler: 'bootstrapItem' },
 ] as const;

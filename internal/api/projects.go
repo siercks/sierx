@@ -374,10 +374,8 @@ func (s *Server) listMembers(w http.ResponseWriter, r *http.Request) {
 	if !rejectFields(w, r) {
 		return
 	}
-	if Identity(r).Role != "admin" {
-		WriteProblem(w, Forbidden())
-		return
-	}
+	// Authenticated members need workspace names/IDs for assigning work.
+	// The query and database scope expose neither email nor authentication data.
 	limit, err := PageLimit(r)
 	if err != nil {
 		requestProblem(w, err.Error())

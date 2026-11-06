@@ -8,6 +8,11 @@ provide browser offline editing.
 
 ## Supported boundary
 
+The expanded branch validation matrix also includes Rocky 10 amd64. See
+[native host acceptance](OFFLINE-HOST-ACCEPTANCE.md) for its reproducible VM
+fixture and required reports. A guest distribution pass is separate from the
+active testbed's SELinux/reboot/operator acceptance.
+
 The initial host profile is Ubuntu 24.04, native Linux amd64 or arm64, rootless
 Podman 4.9.3 and systemd 255 with cgroup v2. The OS provisioning process must
 supply Python 3.11+, Bash, coreutils, a working user systemd manager, subordinate

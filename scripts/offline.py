@@ -145,7 +145,7 @@ def from_environment():
     return root, verify(root, os.environ.get("SIERX_OFFLINE_SHA256", ""))
 
 
-def prepare(release_path, caddy, output, sbom):
+def prepare(release_path, caddy, output, sbom, local_app=None):
     arch = native_arch()
     release = json.loads(Path(release_path).read_text())
     if (not isinstance(release, dict) or set(release) != {"image", "revision"}
@@ -154,6 +154,13 @@ def prepare(release_path, caddy, output, sbom):
     revision = command("git", "rev-parse", "HEAD", cwd=ROOT)
     if release["revision"] != revision or command("git", "status", "--porcelain", cwd=ROOT):
         raise ValueError("Assemble from a clean committed checkout at the exact release revision")
+    local = None
+    if local_app:
+        from local_candidate import identity
+        local = identity(local_app)
+        if (local['arch'] != arch or local['revision'] != revision
+                or release['image'].split('@')[1] != local['manifest']):
+            raise ValueError('Local OCI candidate differs from the requested native release')
     inventory = json.loads(Path(sbom).read_text())
     properties = inventory.get("metadata", {}).get("component", {}).get("properties", [])
     if inventory.get("bomFormat") != "CycloneDX" or {"name": "vcs:commit", "value": revision} not in properties:
@@ -185,8 +192,12 @@ def prepare(release_path, caddy, output, sbom):
             raise ValueError("PostgreSQL image must be digest pinned")
         images = {}
         for role, source in (("app", release["image"]), ("postgres", postgres), ("caddy", caddy)):
-            command("podman", "pull", "--arch", arch, source)
-            metadata = json.loads(command("podman", "image", "inspect", source))[0]
+            if role == 'app' and local:
+                command('podman','load','--input',str(local_app))
+                metadata = json.loads(command('podman','image','inspect',local['id']))[0]
+            else:
+                command("podman", "pull", "--arch", arch, source)
+                metadata = json.loads(command("podman", "image", "inspect", source))[0]
             info = {"source": source, "id": image_id(metadata["Id"]), "archive": "images/" + role + ".tar"}
             inspect_image(info, arch, revision if role == "app" else None)
             command("podman", "save", "--format", "oci-archive", "--output", str(root / info["archive"]), info["id"])
@@ -277,6 +288,7 @@ def main():
     build = sub.add_parser("prepare")
     for name in ("release", "caddy-image", "output", "sbom"):
         build.add_argument("--" + name, required=True)
+    build.add_argument('--local-app',type=Path)
     check = sub.add_parser("verify")
     check.add_argument("--bundle", required=True)
     check.add_argument("--expected-sha256", required=True)
@@ -284,7 +296,7 @@ def main():
         sub.add_parser(name)
     args = parser.parse_args()
     if args.operation == "prepare":
-        prepare(args.release, args.caddy_image, args.output, args.sbom)
+        prepare(args.release, args.caddy_image, args.output, args.sbom,args.local_app)
     elif args.operation == "verify":
         verify(Path(args.bundle), args.expected_sha256)
         print("offline: approved inventory, checksums and native architecture verified")

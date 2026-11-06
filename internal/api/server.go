@@ -15,8 +15,9 @@ import (
 )
 
 type Server struct {
-	auth           *authState
-	CheckLifecycle func(context.Context) error
+	auth                  *authState
+	CheckLifecycle        func(context.Context) error
+	LifecycleCheckTimeout time.Duration
 	// Pool is retained for controlled setup and test-fixture access. Runtime
 	// endpoint queries must use DB, which refuses queries without request scope.
 	Pool       *pgxpool.Pool
@@ -35,7 +36,7 @@ func New(pool *pgxpool.Pool, logger *slog.Logger) *Server {
 }
 
 func NewWithAuthPool(pool, authPool *pgxpool.Pool, logger *slog.Logger) *Server {
-	s := &Server{Pool: pool, DB: &requestDB{pool: pool}, rawPool: pool, authPool: authPool, Router: chi.NewRouter(), Logger: logger}
+	s := &Server{Pool: pool, DB: &requestDB{pool: pool}, rawPool: pool, authPool: authPool, Router: chi.NewRouter(), Logger: logger, LifecycleCheckTimeout: time.Second}
 	s.Router.Use(s.requestLog)
 	s.Router.Use(compression)
 	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) { WriteProblem(w, NotFound()) })

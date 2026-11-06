@@ -35,7 +35,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, o Options) (Result, error) {
 	if !regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`).MatchString(o.ProjectPrefix) || o.ProjectName == "" {
 		return result, fmt.Errorf("set a valid initial project prefix and name")
 	}
-	for _, reserved := range []string{"API", "LOGIN", "BOARD", "VIEWS", "SETTINGS", "ROADMAP", "PROJECTS", "ASSETS"} {
+	for _, reserved := range []string{"API", "LOGIN", "BOARD", "VIEWS", "SETTINGS", "ADMIN", "ROADMAP", "PROJECTS", "ASSETS"} {
 		if o.ProjectPrefix == reserved {
 			return result, fmt.Errorf("initial project prefix is reserved")
 		}

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "repository": "siercks/sierx",
+  "run_id": 39144952489,
+  "revision": "6dac24f723f5092697aa7ad8bed7673684f47042",
+  "architectures": {
+    "amd64": {
+      "archive_sha256": "fc2846b1fbc7b3120074a544f1d4cb779128751eac4c7cd5e5b148a5a2dc43e9",
+      "bundle_sha256": "3b2320548c75b927f104f5cf0148c2eac89584afc989fcea2fcd911c0e8f294e",
+      "release": {
+        "image": "ghcr.io/siercks/sierx@sha256:a2054452dffa2ef592376baa288c049f67a58105861c9130ca936735b8e6d0c5",
+        "revision": "6dac24f723f5092697aa7ad8bed7673684f47042"
+      }
+    },
+    "arm64": {
+      "archive_sha256": "75785696ce47ea107cc69fbf8641f5bd6420285ae65c4db1ad0b56c62288ed01",
+      "bundle_sha256": "718c64e93bd10f8741fb730732e499f7adad8b93737fbcb0debb2b823f40aeb5",
+      "release": {
+        "image": "ghcr.io/siercks/sierx@sha256:ad251df62d2f0c2befbf68b9690174425ff08d9f4ceead6f847ed291d09d26de",
+        "revision": "6dac24f723f5092697aa7ad8bed7673684f47042"
+      }
+    }
+  }
+}

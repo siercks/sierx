@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sys
 import tarfile
+from pathlib import PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -15,6 +16,9 @@ _spec = importlib.util.spec_from_file_location("release_evidence", ROOT / "scrip
 _release_evidence = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_release_evidence)
 validate_release = _release_evidence.validate
+_host_spec=importlib.util.spec_from_file_location('host_evidence',ROOT/'scripts/offline-host-evidence.py')
+_host_evidence=importlib.util.module_from_spec(_host_spec)
+_host_spec.loader.exec_module(_host_evidence)
 
 
 def candidate(directory: Path, repository: str, revision: str, arch: str) -> dict:
@@ -22,6 +26,30 @@ def candidate(directory: Path, repository: str, revision: str, arch: str) -> dic
     if arch not in images:
         raise ValueError("Unsupported offline candidate architecture")
     return {"image": images[arch], "revision": revision}
+
+
+def archive_contents(stream,stem,lock):
+    """Bind every archived byte to the inventory accepted inside the guest."""
+    files=lock.get('files')
+    if not isinstance(files,dict) or not files:raise ValueError('Offline archive lacks its tested file inventory')
+    seen=set()
+    found=set()
+    for entry in stream.getmembers():
+        name=entry.name.rstrip('/') if entry.isdir() else entry.name
+        parts=PurePosixPath(name).parts
+        if (not parts or parts[0]!=stem or name.startswith('/') or '..' in parts
+                or not (entry.isfile() or entry.isdir()) or name in seen):
+            raise ValueError('Offline archive contains an unsafe, duplicate or untested member')
+        seen.add(name)
+        if entry.isdir():continue
+        relative=name[len(stem)+1:]
+        if relative=='bundle.lock.json':continue
+        record=files.get(relative)
+        if (not isinstance(record,dict) or entry.size!=record.get('size')
+                or hashlib.file_digest(stream.extractfile(entry),'sha256').hexdigest()!=record.get('sha256')):
+            raise ValueError('Offline archive contents differ from the tested bundle inventory')
+        found.add(relative)
+    if found!=set(files):raise ValueError('Offline archive omitted a tested bundle member')
 
 
 def verify(directory: Path, repository: str, revision: str) -> None:
@@ -50,11 +78,18 @@ def verify(directory: Path, repository: str, revision: str) -> None:
             if not entry.isfile():
                 raise ValueError("Offline archive has no regular bundle lock for " + arch)
             lock_bytes = bundle.extractfile(entry).read()
+            archive_contents(bundle,f'sierx-offline-{arch}',json.loads(lock_bytes))
         if hashlib.sha256(lock_bytes).hexdigest() != expected_lock:
             raise ValueError("Offline archive lock differs from accepted lock for " + arch)
         lock = json.loads(lock_bytes)
         if (lock.get("arch") != arch or lock.get("release") != expected_release):
             raise ValueError("Offline archive lock identity differs from tested candidate for " + arch)
+        for profile in ('ubuntu24','rocky10') if arch=='amd64' else ('ubuntu24',):
+            host=json.loads((directory/f'host-acceptance-{profile}-{arch}.json').read_text())
+            if (host.get('release')!=expected_release or host.get('bundle_sha256')!=expected_lock
+                    or host.get('archive_sha256')!=actual_archive):
+                raise ValueError('Rootless host evidence differs from the staged native offline candidate')
+    _host_evidence.verify(directory,repository,revision)
 
 
 def main() -> None:

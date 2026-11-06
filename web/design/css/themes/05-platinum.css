@@ -43,4 +43,9 @@
   [data-theme="platinum"] .sx-blocker::before { content: "▲ "; }
   [data-theme="platinum"] :is(.sx-who, .sx-avatar) { border-radius: 3px; background: var(--card); color: var(--foreground); border: 1px solid var(--border); }
   [data-theme="platinum"] .sx-foot { border-top-color: var(--border); box-shadow: inset 0 1px var(--card); }
+  /* The live app needs gutters on the backlog as well as document screens. */
+  [data-theme="platinum"] .sx-main.app-main { width: min(var(--content-width), calc(100% - 16px)); margin-inline: auto; padding: 12px; }
+  @media (max-width: 42rem) {
+    [data-theme="platinum"] .sx-control { font-size: 1rem; line-height: 1.5; padding: 0.65rem 0.75rem; }
+  }
 }

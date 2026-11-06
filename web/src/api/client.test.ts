@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { QueryObserver } from '@tanstack/react-query';
 import {
   decode,
   encode,
@@ -10,6 +11,46 @@ import {
 beforeEach(() => {
   cache.clear();
   vi.restoreAllMocks();
+});
+it('retains committed item responses when refreshes fail and sends the next write once at the new version', async () => {
+  const original = { key: 'SRX-1', title: 'Original', version: 1 } as Item;
+  cache.setQueryData(itemKey('workspace', 'SRX-1'), original);
+  const mock = vi.fn(async (_url: string, options?: RequestInit) => {
+    if (!options?.method || options.method === 'GET') return new Response('Unavailable', { status: 503 });
+    const version = options.method === 'PATCH' ? 2 : 3;
+    return new Response(encode({ ...original, title: 'Canonical saved title', version }), { status: 200 });
+  });
+  vi.stubGlobal('fetch', mock);
+  const observer = new QueryObserver(cache, {
+    queryKey: itemKey('workspace', 'SRX-1'),
+    queryFn: async () => { const response = await fetch('/api/v1/items/SRX-1'); if (!response.ok) throw new Error('Refresh failed'); return response.json(); },
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    await mutateItem('workspace', 'SRX-1', { path: '/items/SRX-1', method: 'PATCH', body: { title: 'Draft' }, optimistic: { title: 'Draft' }, version: 1 });
+    expect(observer.getCurrentResult().isError).toBe(true);
+    expect(cache.getQueryData<Item>(itemKey('workspace', 'SRX-1'))).toMatchObject({ title: 'Canonical saved title', version: 2 });
+    await mutateItem('workspace', 'SRX-1', { path: '/items/SRX-1/transition', method: 'POST', body: { to_status: 'doing' }, version: 2 });
+    expect(cache.getQueryData<Item>(itemKey('workspace', 'SRX-1'))?.version).toBe(3);
+    const writes = mock.mock.calls.filter(([, options]) => options?.method && options.method !== 'GET');
+    expect(writes.map(([, options]) => options?.headers)).toEqual([
+      expect.objectContaining({ 'If-Match': '"1"' }), expect.objectContaining({ 'If-Match': '"2"' }),
+    ]);
+    expect(mock).toHaveBeenCalledTimes(4);
+  } finally { unsubscribe(); }
+});
+
+it('does not replace a newer item with a delayed write response or a relationship envelope', async () => {
+  const newer = { key: 'SRX-1', title: 'Newer concurrent read', version: 4 } as Item;
+  vi.stubGlobal('fetch', vi.fn(async () => {
+    cache.setQueryData(itemKey('workspace', 'SRX-1'), newer);
+    return new Response(encode({ ...newer, title: 'Older write', version: 2 }), { status: 200 });
+  }));
+  await mutateItem('workspace', 'SRX-1', { path: '/items/SRX-1', method: 'PATCH', version: 1 });
+  expect(cache.getQueryData(itemKey('workspace', 'SRX-1'))).toEqual(newer);
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(encode({ id: 'comment', body: 'Saved comment' }), { status: 201 })));
+  await mutateItem('workspace', 'SRX-1', { path: '/comments', method: 'POST', version: 4 });
+  expect(cache.getQueryData(itemKey('workspace', 'SRX-1'))).toEqual(newer);
 });
 it('preserves integral tokens above 2^53 including int64 max and keeps ordinary decimals', () => {
   const text =

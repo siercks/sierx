@@ -6,7 +6,7 @@ Before providing an instance to anyone beyond its operator, configure `SIERX_OPE
 
 The operator must verify the descriptions against the actual proxy/gateway, certificate, logs, database, backup repositories, and expiry settings. The public pages do not infer those settings from application configuration.
 
-Account admission is private and operator-provisioned. `SIERX_REGISTRATION_MODE` defaults to `private`; `invitation` and `public` are reserved values that fail startup until their routes and safeguards are implemented. Do not enable a deployment by changing this setting: the validation intentionally rejects those modes.
+Account admission is private. In local-auth deployments an active workspace administrator can create a regular Member through Administrator Home; proxy-auth accounts remain operator-provisioned. The scoped action creates only a new account/membership and cannot reset, reactivate or elevate an existing account. Member login details are generated in browser memory and must be shared privately by the administrator; no invitation email is sent. See `WORKSPACE-SETTINGS.md`. `SIERX_REGISTRATION_MODE` defaults to `private`; `invitation` and `public` remain reserved values that fail startup until their routes and safeguards are implemented.
 
 ## Current lifecycle behavior
 

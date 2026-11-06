@@ -184,3 +184,26 @@ func TestGuardChecksLatestCheckpointAndCannotDecryptOperatorJournal(t *testing.T
 		t.Fatal("forged checkpoint served")
 	}
 }
+
+func TestGuardFailureStageDistinguishesCheckpointDatabaseAndComparison(t *testing.T) {
+	j, p := journalFixture(t)
+	db := &headDB{h: j.Head}
+	g := &Guard{DB: db, Checkpoint: p.Checkpoint, Key: filepath.Join(filepath.Dir(p.Checkpoint), "verification.key")}
+	assertStage := func(expected string) {
+		t.Helper()
+		err := g.Check(context.Background())
+		var staged interface{ VerificationStage() string }
+		if !errors.As(err, &staged) || staged.VerificationStage() != expected {
+			t.Fatalf("verification failure did not identify stage %s", expected)
+		}
+	}
+	db.err = errors.New("private database cause")
+	assertStage("database")
+	db.err = nil
+	db.h.Sequence++
+	assertStage("comparison")
+	if err := os.Remove(p.Checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	assertStage("checkpoint")
+}

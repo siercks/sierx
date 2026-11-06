@@ -11,6 +11,15 @@ true. Read it once; `PROGRESS.md` is the running state thereafter.
 
 ## 0. Current state (Phase 2 uplift, 2026-09-23)
 
+**October 18 update:** the operator testbed is deployed at `6dac24f`, migration
+15, on Rocky 10.2 amd64 with SELinux Enforcing. Requested usability priorities
+are live. Current engineering continues on `codex/usability-followup`; the
+navigation/cache regression fix is `67b1d98`. Consult the October 18 section of
+`docs/PHASE-2-ACCEPTANCE.md` and `docs/OFFLINE-HOST-ACCEPTANCE.md` for the expanded
+automated contract and evidence boundaries. Older references here to unavailable
+server access, pending cutover or an unfinished ADR-028 implementation are
+historical. No owner phase-exit approval is implied.
+
 Phase 2 code merged in PR #6 at 71976c771d9fea1567ad34063e82037f56f93376.
 The owner approved release-assurance work on uplift/phase-2-release-assurance,
 with both connected and optional air-gapped deployment retained (ADR-026).
