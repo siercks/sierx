@@ -165,6 +165,20 @@ class OfflinePromotionTests(unittest.TestCase):
                 self.assertTrue(helper.required(event,staged=True))
         self.assertTrue(helper.required({}))
 
+    def test_focused_host_audit_diagnostic_keeps_full_workload_and_cannot_promote(self):
+        workflow=(ROOT/'.github/workflows/host-audit-diagnostic.yml').read_text()
+        self.assertIn('  workflow_dispatch:',workflow)
+        self.assertIn('    paths:\n      - ".github/workflows/host-audit-diagnostic.yml"',workflow)
+        self.assertIn('make gate-offline-host',workflow)
+        self.assertIn('make offline-previous-prepare',workflow)
+        self.assertNotIn('runtime-probe',workflow)
+        self.assertNotIn('packages: write',workflow)
+        self.assertIn("'suite':'host-audit-diagnostic-v1','release_acceptance':False",workflow)
+        upload=workflow.split('name: diagnostic-host-audit-ubuntu24-amd64',1)[1]
+        self.assertIn('path: dist/host-audit-diagnostic-amd64.json',upload)
+        self.assertNotIn('*',upload)
+        self.assertNotIn('host-audit-diagnostic', (ROOT/'.github/workflows/release.yml').read_text())
+
     def test_vm_diagnostic_upload_excludes_private_guest_json(self):
         workflow=(ROOT/'.github/workflows/acquisition-diagnostic.yml').read_text()
         upload=workflow.split('name: acquisition-vm-diagnostic-arm64\n',1)[1]

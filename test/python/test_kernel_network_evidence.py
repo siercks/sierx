@@ -42,6 +42,19 @@ def proof(metadata=None, lines=None):
 
 
 class KernelEvidenceTests(unittest.TestCase):
+    def test_opaque_terminal_send_is_still_rejected_with_payload_free_kernel_reason(self):
+        metadata,lines=fixture()
+        lines.append('task-10 [000] .... 100.900000: sys_sendto(fd: 0x5, buff: 0x9999, len: 5)')
+        evidence=proof(metadata,lines)
+        self.assertFalse(evidence.cancelled_before_entry(10,1101.0))
+        line='10<chromium> 1101.000000 sendto(57, "private payload", 15, 0, NULL, 0) <unfinished ...>'
+        with self.assertRaises(observer.NetworkObservationError) as caught:observer.parse([line],kernel=evidence)
+        correlation=caught.exception.observer_details['kernel']
+        self.assertEqual(correlation,{'terminal_window':True,'ptrace_time_in_capture':True,
+            'network_entries':1,'network_returns':0,'process_exits':1,
+            'entries_in_or_after_window':0,'returns_in_or_after_window':0})
+        self.assertNotIn('private',str(caught.exception)+str(correlation))
+
     def test_amd64_abort_return_is_only_allowed_for_the_cancelled_control(self):
         metadata,lines=fixture()
         orphan='root-4 [000] .... 100.209000: sys_sendto -> 0xffffffffffffffda'

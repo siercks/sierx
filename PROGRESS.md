@@ -2793,3 +2793,23 @@ a fresh no-NIC namespace observed an unprivileged synthetic process exit 73
 without a guest report; independent service-exit capture preserved that failed
 status. This diagnostic is not VM or release acceptance and does not yet identify
 the underlying full ARM64 termination cause.
+
+The full Ubuntu24 ARM64 job on `70bd4e1` subsequently passed every scenario and
+its independent network audit in [run 42390903478](https://github.com/siercks/sierx/actions/runs/42390903478).
+Its report/input pair was checked independently using the validators and suite
+bytes archived from that exact commit, including retained-release approval.
+This validates one standalone host report, not archive bytes, the whole matrix or
+release promotion. It does not establish the historical termination root cause.
+
+That run remains failed: Rocky AMD64 passed, but Ubuntu AMD64's independent audit
+rejected an opaque unfinished Chromium sendto after all guest scenarios completed.
+Keep that rejection. Add only payload-free kernel correlation counts/time-window
+flags to future failure metadata, with tests proving the same opaque calls remain
+rejected and private fields are removed. No exclusion/classification rule changes.
+
+Add a focused Ubuntu AMD64 full-workload diagnostic, available on dispatch and
+changes to its own workflow. It runs the same no-NIC VM and every full scenario,
+then wraps only explicit sanitized outputs in `host-audit-diagnostic-v1` with
+`release_acceptance:false`. It has no publishing permission or promotion path.
+The normal release matrix still requires both architectures and all three host
+profiles. Validation: 166 Linux Python tests, pinned actionlint and ShellCheck pass.

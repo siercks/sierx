@@ -29,6 +29,14 @@ def evidence():
 
 
 class NetworkObserverTests(unittest.TestCase):
+    def test_failure_kernel_metadata_rejects_private_fields_and_non_numeric_counts(self):
+        value=observer.safe_failure_fields({'kernel':{'terminal_window':True,'ptrace_time_in_capture':'private',
+            'network_entries':12,'network_returns':True,'process_exits':-1,
+            'entries_in_or_after_window':0,'returns_in_or_after_window':10**30,
+            'payload':'private credential','address':'private endpoint'}})
+        self.assertEqual(value,{'kernel':{'terminal_window':True,'network_entries':12,
+            'entries_in_or_after_window':0}})
+
     def test_interrupted_shutdown_send_keeps_fixed_diagnostics_and_is_still_rejected(self):
         line='3421<headless_shell> 1.000000 sendmsg(14<anon_inode:[eventpoll]>, 0xffff1234, MSG_NOSIGNAL <unfinished ...>'
         with self.assertRaises(observer.NetworkObservationError) as caught:

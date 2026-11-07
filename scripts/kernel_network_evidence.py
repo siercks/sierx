@@ -158,6 +158,20 @@ class KernelEvidence:
         # lifetime also covers delayed/misordered userspace trace rendering.
         return not self.entries.get(pid) and not self.return_events.get(pid)
 
+    def cancellation_diagnostic(self,pid,timestamp):
+        """Payload-free explanation only; never changes the exclusion decision."""
+        pid=int(pid)
+        lower=timestamp-self.offset_upper-0.001
+        upper=timestamp-self.offset_lower+0.001
+        entries=self.entries.get(pid,[])
+        returns=self.return_events.get(pid,[])
+        return {'terminal_window':self._terminal_window(pid,timestamp) is not None,
+                'ptrace_time_in_capture':self.begin<=lower<=upper<=self.end,
+                'network_entries':len(entries),'network_returns':len(returns),
+                'process_exits':len(self.exits.get(pid,[])),
+                'entries_in_or_after_window':sum(row[0]>=lower for row in entries),
+                'returns_in_or_after_window':sum(when>=lower for when in returns)}
+
     def covers_start(self, timestamp):
         return timestamp-self.offset_upper >= self.begin
 

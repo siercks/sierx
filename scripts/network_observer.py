@@ -32,6 +32,16 @@ def safe_failure_fields(value):
                          ('header', {'structure', 'pointer', 'null', 'other', 'not-message'})):
         item = value.get(key)
         if isinstance(item, str) and item in allowed: result[key] = item
+    correlation=value.get('kernel')
+    if isinstance(correlation,dict):
+        safe={}
+        for key in ('terminal_window','ptrace_time_in_capture'):
+            if type(correlation.get(key)) is bool:safe[key]=correlation[key]
+        for key in ('network_entries','network_returns','process_exits',
+                    'entries_in_or_after_window','returns_in_or_after_window'):
+            count=correlation.get(key)
+            if type(count) is int and 0<=count<=0x7fffffff:safe[key]=count
+        if safe:result['kernel']=safe
     return result
 
 
@@ -431,7 +441,8 @@ def parse(lines,stats=None,kernel=None):
                     'fd_family':family if family in {'AF_INET','AF_INET6','AF_UNIX','AF_NETLINK'} else 'unknown',
                     'header':'not-message' if name != 'sendmsg' else 'null' if header == 'NULL' else
                         'structure' if header and header.startswith('{') else
-                        'pointer' if header and re.fullmatch(r'0x[0-9a-fA-F]+', header) else 'other'})
+                        'pointer' if header and re.fullmatch(r'0x[0-9a-fA-F]+', header) else 'other',
+                    'kernel':kernel.cancellation_diagnostic(pid,timestamp) if kernel is not None else None})
             if destination[0]=='AF_UNSPEC' and name!='connect':
                 raise ValueError('An unspecified send destination cannot be classified')
             if name == 'connect':
