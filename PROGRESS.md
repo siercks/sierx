@@ -2770,3 +2770,26 @@ to the two explicit sanitized report names and add a regression for that boundar
 narrows the failure to full-scenario state or completion; it does not reproduce
 or fix the original full ARM64 acceptance failure. The next full host diagnostic
 must retain the newly added early failure checkpoint; release remains blocked.
+
+Full standalone [run 42381114893](https://github.com/siercks/sierx/actions/runs/42381114893)
+on `fa4834e` passed both AMD64 profiles but failed ARM64 earlier, during the
+failed-health rollback scenario. Neither the final result nor the early guest
+failure checkpoint was recovered. The root service supervisor reported exit 1;
+there was no observed OOM, emulator assertion/allocation error or storage error.
+This does not establish an acquisition-specific cause. Production remains unchanged.
+
+Add independent failed-only capture to the existing root service-exit hook. It
+retains the last fixed phase, service exit code, allowlisted Python exception
+class/source-file line numbers and fixed strace-stderr categories. Raw journal
+messages, arguments, paths, credentials and trace contents remain private. The
+host can recover this root-owned checkpoint even when the guest never writes a
+result, and forwards only sanitized failure fields from the console. Completion
+marker, independent observer and full acceptance requirements remain intact.
+
+Validation: 163 Linux Python tests pass, including missing guest reports, failed
+journal collection, redaction, fixed source locations and rejection as release
+acceptance. Pinned actionlint and launcher ShellCheck pass. A real root strace in
+a fresh no-NIC namespace observed an unprivileged synthetic process exit 73
+without a guest report; independent service-exit capture preserved that failed
+status. This diagnostic is not VM or release acceptance and does not yet identify
+the underlying full ARM64 termination cause.

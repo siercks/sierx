@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import subprocess
 import sys
 from network_observer import safe_failure_fields
 
@@ -17,7 +18,13 @@ SIGNALS = {entry.name.removeprefix('SIG') for entry in signal.Signals}
 FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionError',
                  'FileNotFoundError', 'JSONDecodeError', 'UnicodeDecodeError',
                  'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError',
-                 'NetworkObservationError', 'HostCommandError'}
+                 'NetworkObservationError', 'HostCommandError', 'IndexError',
+                 'BrokenPipeError', 'ServiceExit'}
+FRAME_FILES = {'offline-host-guest.py','offline-host-scenarios.py','offline-local-registry.py',
+               'offline_host_diagnostics.py','offline_host_inputs.py','offline_host_evidence.py',
+               'offline-network-controls.py','offline.py'}
+OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-child',
+                  'unexpected-wait','other-error'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
 GUEST_COMMANDS = {'podman-info','podman-inspect','podman-pull'}
@@ -77,6 +84,28 @@ def sanitize_failure(value):
     if result['phase'] == 'network-audit' and result['failure_type'] == 'NetworkObservationError':
         observer = safe_failure_fields(value.get('observer'))
         if observer: result['observer'] = observer
+    if value.get('failure_source') == 'service-exit':
+        result['failure_source']='service-exit'
+    service_code=value.get('service_exit_code')
+    if type(service_code) is int and 0<=service_code<=255:result['service_exit_code']=service_code
+    frames=value.get('guest_frames')
+    if isinstance(frames,list):
+        safe=[]
+        for frame in frames[-16:]:
+            if (isinstance(frame,dict) and isinstance(frame.get('file'),str)
+                    and frame['file'] in FRAME_FILES and type(frame.get('line')) is int
+                    and 1<=frame['line']<=100000):
+                safe.append({'file':frame['file'],'line':frame['line']})
+        if safe:result['guest_frames']=safe
+    observers=value.get('observer_errors')
+    if isinstance(observers,dict):
+        safe={}
+        for name in ('installer','manager'):
+            flags=observers.get(name)
+            if isinstance(flags,list):
+                selected=sorted({f for f in flags if isinstance(f,str) and f in OBSERVER_FLAGS})
+                if selected:safe[name]=selected
+        if safe:result['observer_errors']=safe
     return result
 
 
@@ -126,6 +155,74 @@ def checkpoint_failure(home, value):
     pending.replace(Path(home)/'failure.json')
     os.sync()
     print('SIERX_FAILURE: '+json.dumps(failure, sort_keys=True), flush=True)
+    return failure
+
+
+def journal_failure(text):
+    """Keep fixed source names/line numbers and exception classes, never messages."""
+    value={}
+    for name in re.findall(r'^([A-Za-z]+):',text,re.MULTILINE):
+        if name in FAILURE_TYPES:value['failure_type']=name
+    frames=[]
+    for name,line in re.findall(r'^  File "/opt/acceptance/tests/([A-Za-z_-]+\.py)", line ([0-9]{1,6}),',text,re.MULTILINE):
+        if name in FRAME_FILES and 1<=int(line)<=100000:
+            frames.append({'file':name,'line':int(line)})
+    if frames:value['guest_frames']=frames[-16:]
+    return value
+
+
+def observer_errors(text):
+    """Fixed categories observed in strace stderr; not a root-cause assertion."""
+    flags=set()
+    patterns=(('ptrace','ptrace'),('seccomp','seccomp'),('wait','wait'),
+              ('input/output error','io-error'),('permission denied','permission-denied'),
+              ('operation not permitted','permission-denied'),('no child processes','no-child'),
+              ('unexpected wait','unexpected-wait'))
+    for line in text.splitlines():
+        if not line.startswith('strace: '):continue
+        if re.fullmatch(r'strace: Process [0-9]+ (?:attached|detached)',line):continue
+        selected={flag for pattern,flag in patterns if pattern in line.lower()}
+        flags.update(selected or {'other-error'})
+    return sorted(flags)
+
+
+def private_tail(path,limit=65536):
+    try:
+        with Path(path).open('rb') as stream:
+            stream.seek(0,os.SEEK_END)
+            stream.seek(max(0,stream.tell()-limit))
+            return stream.read(limit).decode(errors='replace')
+    except OSError:
+        return ''
+
+
+def checkpoint_service_failure(home,directory,environment=None):
+    """Independent root hook survives installer/observer death and missing result."""
+    status=service_exit(environment)
+    if status=={'service_result':'success','exit_kind':'exited','exit_status':0}:return None
+    value={'result':'failed','phase':'unknown','failure_type':'ServiceExit',
+           'failure_source':'service-exit','service_exit_code':status['exit_status']}
+    try:
+        progress=json.loads(private_tail(Path(home)/'progress.json',4096))
+        if isinstance(progress,dict):value['phase']=progress.get('phase')
+    except ValueError:
+        pass
+    try:
+        journal=subprocess.run(['journalctl','--no-pager','--all','--output=cat',
+            '-u','sierx-acceptance.service','-n','100'],stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,timeout=15)
+        if journal.returncode==0:value.update(journal_failure(journal.stdout[-65536:].decode(errors='replace')))
+    except (OSError,subprocess.SubprocessError):
+        pass
+    value['observer_errors']={name:observer_errors(private_tail(Path(directory)/(name+'.stderr')))
+                              for name in ('installer','manager')}
+    failure=sanitize_failure(value)
+    pending=Path(directory)/'service-failure.pending.json'
+    pending.write_text(json.dumps(failure)+'\n')
+    pending.chmod(0o600)
+    pending.replace(Path(directory)/'service-failure.json')
+    os.sync()
+    print('SIERX_FAILURE: '+json.dumps(failure,sort_keys=True),flush=True)
     return failure
 
 
@@ -188,6 +285,9 @@ def latest(console, marker):
                     and (type(data['exit_status']) is int and 0 <= data['exit_status'] <= 255
                          or isinstance(data['exit_status'], str) and data['exit_status'] in SIGNALS | {'unknown'})):
                 return data
+        elif marker == 'SIERX_FAILURE':
+            if isinstance(data,dict) and data.get('result')=='failed':
+                return sanitize_failure(data)
     return None
 
 
@@ -208,3 +308,5 @@ if __name__ == '__main__':
         raise SystemExit('Unsupported diagnostic operation')
     emit_resources()
     print('SIERX_GUEST_EXIT: '+json.dumps(service_exit(), sort_keys=True), flush=True)
+    if os.geteuid()!=0:raise SystemExit('Service-exit observation requires the guest root unit')
+    checkpoint_service_failure(Path('/home/acceptance'),Path('/var/log/sierx-network'))

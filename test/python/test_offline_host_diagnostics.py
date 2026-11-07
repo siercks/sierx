@@ -6,12 +6,63 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'scripts'))
 import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_root_service_checkpoint_survives_missing_guest_reports_and_failed_journal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);home=root/'home';directory=root/'root-observer'
+            home.mkdir();directory.mkdir()
+            (home/'progress.json').write_text(json.dumps({'phase':'failed-health-rollback','private':'credential'}))
+            (directory/'installer.stderr').write_text(
+                'strace: Process 42 attached\nstrace: ptrace(PTRACE_SYSCALL, private): Input/output error\n')
+            with patch.object(diagnostics.subprocess,'run',side_effect=PermissionError('private journal')), \
+                    patch.object(diagnostics.os,'sync'),contextlib.redirect_stdout(io.StringIO()) as console:
+                result=diagnostics.checkpoint_service_failure(home,directory,
+                    {'SERVICE_RESULT':'exit-code','EXIT_CODE':'exited','EXIT_STATUS':'1','private':'credential'})
+            self.assertEqual(result['phase'],'failed-health-rollback')
+            self.assertEqual(result['failure_type'],'ServiceExit')
+            self.assertEqual(result['service_exit_code'],1)
+            self.assertEqual(result['observer_errors'],{'installer':['io-error','ptrace']})
+            self.assertEqual(json.loads((directory/'service-failure.json').read_text()),result)
+            self.assertEqual((directory/'service-failure.json').stat().st_mode&0o077,0)
+            self.assertFalse((home/'result.json').exists())
+            self.assertFalse((home/'failure.json').exists())
+            self.assertNotIn('private',console.getvalue()+json.dumps(result))
+
+    def test_root_journal_retains_only_known_source_locations_and_exception_classes(self):
+        journal=('Traceback (most recent call last):\n'
+            '  File "/opt/acceptance/tests/offline-host-guest.py", line 344, in private_function\n'
+            '    private argument and credential\n'
+            '  File "/private/credential.py", line 1, in private_function\n'
+            'BrokenPipeError: private traceback message\n')
+        expected={'failure_type':'BrokenPipeError','guest_frames':[{'file':'offline-host-guest.py','line':344}]}
+        self.assertEqual(diagnostics.journal_failure(journal),expected)
+        planted={'result':'failed',**expected,'observer_errors':{'installer':['ptrace','private',[],12],
+            'private':['ptrace']},'private':'credential'}
+        planted['guest_frames'] += [{'file':'private','line':2}, {'file':[],'line':True},
+                                   {'file':'offline.py','line':100001}]
+        result=diagnostics.sanitize_failure(planted)
+        self.assertEqual(result['guest_frames'],expected['guest_frames'][:1])
+        self.assertEqual(result['observer_errors'],{'installer':['ptrace']})
+        self.assertNotIn('private',json.dumps(result))
+
+    def test_successful_service_exit_and_unknown_journal_cannot_make_acceptance(self):
+        with patch.object(diagnostics.subprocess,'run') as journal:
+            self.assertIsNone(diagnostics.checkpoint_service_failure('/unused','/unused',
+                {'SERVICE_RESULT':'success','EXIT_CODE':'exited','EXIT_STATUS':'0'}))
+            journal.assert_not_called()
+        self.assertEqual(diagnostics.journal_failure('PrivateException: credential\n'),{})
+        self.assertIsNone(diagnostics.latest('SIERX_FAILURE: {"result":"passed"}', 'SIERX_FAILURE'))
+        value=diagnostics.latest('SIERX_FAILURE: '+json.dumps({'result':'failed',
+            'phase':'failed-health-rollback','failure_type':'ServiceExit','private':'credential'}),'SIERX_FAILURE')
+        self.assertNotIn('private',json.dumps(value))
+        self.assertEqual(value['result'],'failed')
+
     def test_checkpoint_is_failed_only_and_sanitized_before_any_console_or_disk_output(self):
         with tempfile.TemporaryDirectory() as temporary,contextlib.redirect_stdout(io.StringIO()) as console:
             home=Path(temporary)

@@ -60,6 +60,22 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(result['phase'], 'acquisition-store-info')
             self.assertFalse(report.exists())
 
+    def test_independent_service_failure_is_recovered_when_guest_never_writes_a_result(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report=Path(temporary)/'acceptance.json'
+            raw={'result':'failed','phase':'failed-health-rollback','failure_type':'ServiceExit',
+                 'failure_source':'service-exit','service_exit_code':1,
+                 'observer_errors':{'installer':['ptrace','io-error']},'private':'credential'}
+            files={'service-failure.json':json.dumps(raw).encode(),'diagnostics.log':b'private journal'}
+            with patch.object(host,'disk_file',side_effect=lambda d,n:files.get(n,b'')):
+                result=host.retain_incomplete_failure(Path('/guest'),report,'arm64','c'*64,'a'*40)
+            saved=json.loads(report.with_suffix('.failure.json').read_text())
+            self.assertEqual(result['failure_source'],'service-exit')
+            self.assertEqual(set(saved['observer_errors']['installer']),{'ptrace','io-error'})
+            self.assertFalse(report.exists())
+            self.assertNotIn('private',json.dumps(saved))
+            with self.assertRaises(ValueError):evidence.validate_closeout(saved,self.bundle,'d'*64,'c'*64)
+
     def test_failed_guest_checkpoint_survives_a_crashing_optional_journal_collector(self):
         # Exercise the guest's actual exception handler. The collector used to
         # run before any recoverable failure record was written.

@@ -271,6 +271,7 @@ def qemu_command(arch, mode, disk, kernel, initrd, serial):
 def disk_file(disk, name):
     # Only fixed guest paths are accepted, never operator-provided debugfs commands.
     paths = {'result.json':'/home/acceptance/result.json', 'failure.json':'/home/acceptance/failure.json',
+             'service-failure.json':'/var/log/sierx-network/service-failure.json',
              'diagnostics.log':'/home/acceptance/diagnostics.log',
              'manager.trace':'/var/log/sierx-network/manager.trace', 'manager.stderr':'/var/log/sierx-network/manager.stderr',
              'installer.trace':'/var/log/sierx-network/installer.trace', 'installer.stderr':'/var/log/sierx-network/installer.stderr',
@@ -317,7 +318,7 @@ def retain_incomplete_failure(disk, report, arch, suite, revision):
     # Recover only a failure diagnostic; a recovered pass must NEVER bypass the
     # marker/kernel checks. Raw guest fields and journals remain private.
     result = None
-    for name in ('result.json', 'failure.json'):
+    for name in ('result.json', 'failure.json', 'service-failure.json'):
         try:
             raw = disk_file(disk, name)
             if not raw or len(raw) > 65536:
@@ -474,6 +475,7 @@ def main(args):
                 last_phase = None
                 last_operation = None
                 last_resources = None
+                last_failure = None
                 finished = None
                 while process.poll() is None and time.monotonic() < deadline:
                     if serial.exists():
@@ -482,6 +484,10 @@ def main(args):
                         if resources is not None and resources != last_resources:
                             last_resources = resources
                             print('offline-host: resources '+json.dumps(resources, sort_keys=True), flush=True)
+                        failure=diagnostics.latest(console_text,'SIERX_FAILURE')
+                        if failure is not None and failure!=last_failure:
+                            last_failure=failure
+                            print('offline-host: failed guest diagnostic '+json.dumps(failure,sort_keys=True),flush=True)
                         phases = re.findall(r'SIERX_PHASE: ([a-z-]{1,80})', console_text)
                         if phases and phases[-1] != last_phase:
                             last_phase = phases[-1]
@@ -581,7 +587,7 @@ def main(args):
                 if serial.exists():
                     stream.write(serial.read_bytes()[-65536:])
                 stream.write(disk_file(disk, 'diagnostics.log')[-65536:])
-            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','failure.json','network-controls.json',
+            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','failure.json','service-failure.json','network-controls.json',
                          'kernel.trace','kernel.json'):
                 private.with_suffix('.'+name).write_bytes(disk_file(disk,name))
 
