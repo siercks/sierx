@@ -2759,3 +2759,14 @@ requires development mode and cannot satisfy release/host promotion. All require
 release scenarios and the three-profile host matrix remain unchanged. Validation:
 158 Linux Python tests, pinned actionlint v1.7.12 and launcher ShellCheck pass.
 The underlying acquisition failure still requires diagnosis before a new release.
+
+The focused Ubuntu24 ARM64 VM acquisition operation on `4c06065` passed in
+[diagnostic run 42380272281](https://github.com/siercks/sierx/actions/runs/42380272281),
+including trusted HTTPS pull and image identity verification. The diagnostic
+workflow nevertheless failed during artifact upload: its broad JSON glob also
+selected root-only private captures. No artifact was accepted. Restrict upload
+to the two explicit sanitized report names and add a regression for that boundary.
+159 Linux Python tests, pinned actionlint and launcher ShellCheck pass. This
+narrows the failure to full-scenario state or completion; it does not reproduce
+or fix the original full ARM64 acceptance failure. The next full host diagnostic
+must retain the newly added early failure checkpoint; release remains blocked.

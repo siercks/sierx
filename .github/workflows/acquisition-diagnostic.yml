@@ -94,5 +94,7 @@ jobs:
         if: always()
         with:
           name: acquisition-vm-diagnostic-arm64
-          path: dist/acquisition-vm-probe-*.json
+          path: |
+            dist/acquisition-vm-probe-ubuntu24-arm64.json
+            dist/acquisition-vm-probe-ubuntu24-arm64.failure.json
           if-no-files-found: error

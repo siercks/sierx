@@ -165,6 +165,15 @@ class OfflinePromotionTests(unittest.TestCase):
                 self.assertTrue(helper.required(event,staged=True))
         self.assertTrue(helper.required({}))
 
+    def test_vm_diagnostic_upload_excludes_private_guest_json(self):
+        workflow=(ROOT/'.github/workflows/acquisition-diagnostic.yml').read_text()
+        upload=workflow.split('name: acquisition-vm-diagnostic-arm64\n',1)[1]
+        paths=upload.split('path: |\n',1)[1].split('if-no-files-found:',1)[0]
+        # A broad *.json also matches the root-only private result, kernel and
+        # network-control captures. Only these two sanitized outputs may leave.
+        self.assertEqual(set(paths.split()),{'dist/acquisition-vm-probe-ubuntu24-arm64.json',
+            'dist/acquisition-vm-probe-ubuntu24-arm64.failure.json'})
+
     def test_workflow_and_manifest_cannot_promote_before_offline_acceptance(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         offline_job = workflow.index("  offline-bundle:")
