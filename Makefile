@@ -311,7 +311,20 @@ prove-bundle: web-build
 web-test: ## Browser-client unit tests
 	@npm --prefix web test -- --exclude 'test/browser/**'
 gate-2: gate-1 gate-bundle gate-routes gate-contrast gate-stylelint gate-markdown gate-lint-focus gate-browser gate-virtualization
+	@$(MAKE) --no-print-directory phase3-foundation
 	@echo "gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)"
+
+.PHONY: phase3-foundation gate-3 prove-3
+phase3-foundation: ## Phase 3 gate scaffolding and deliberate-violation proofs (no feature acceptance claim)
+	@python3 -m unittest discover -s test/python -p 'test_phase3.py'
+	@node web/scripts/phase3-proof.mjs
+	@cd web && node scripts/routes.mjs --prove
+
+gate-3: gate-2 ## Full Phase 3 acceptance; deliberately fails until real candidate evidence exists
+	@python3 scripts/phase3.py acceptance
+
+prove-3: ## Prove Phase 3 acceptance rejects missing, stale and incomplete evidence
+	@$(MAKE) --no-print-directory phase3-foundation
 gate-contrast:
 	@cd web && npx --no-install vitest run src/themes/tokens.test.ts
 prove-contrast:

@@ -9,11 +9,14 @@ export function generate(source, reserved, handlers) {
     ),
   ];
   assert(rows.length > 0, 'No routes');
+  assert.equal(new Set(rows.map((r) => r[1])).size, rows.length, 'Duplicate route id');
+  assert.equal(new Set(rows.map((r) => r[2])).size, rows.length, 'Duplicate route path');
   assert.equal(
     rows.filter((r) => r[3] === 'true').length,
     1,
     'Exactly one eager route',
   );
+  assert(rows.every((r) => r[3] !== 'true' || r[1] === 'list'), 'Only List may be eager');
   for (const [, , path, , handler] of rows) {
     const root = path.split('/')[1];
     if (root && !root.startsWith(':'))
@@ -36,6 +39,10 @@ const reserved = readFileSync('../internal/api/reserved.go', 'utf8');
 const handlers = readFileSync('../internal/api/documents.go', 'utf8');
 const output = generate(source, reserved, handlers);
 if (process.argv.includes('--prove')) {
+  assert.throws(() => generate(source + rowsForProof(), reserved, handlers), /Duplicate route/);
+  assert.throws(() => generate(
+    source.replace("id: 'list'", "id: 'board'"), reserved, handlers,
+  ), /Only List may be eager/);
   assert.throws(() =>
     generate(source.replace("'/login'", "'/unreserved'"), reserved, handlers),
   );
@@ -61,3 +68,7 @@ if (process.argv.includes('--prove')) {
   );
   console.log('gate-routes: OK');
 } else writeFileSync('../internal/api/routes_generated.go', output);
+
+function rowsForProof() {
+  return "{ id: 'list', path: '/', eager: true, handler: 'bootstrapList' }";
+}

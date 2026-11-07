@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { brotliCompressSync, gzipSync, constants } from 'node:zlib';
 import assert from 'node:assert/strict';
+import { assertLazyModules } from './bundle-contract.mjs';
 const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
 const entry = Object.entries(manifest).find(([, v]) => v.isEntry)?.[0];
 assert(entry, 'Missing entry');
@@ -35,15 +36,7 @@ function budgets(js, css, lazy) {
 const lazy = [...sizes].filter(([f]) => f.endsWith('.js') && !scripts.has(f));
 budgets(jsBytes, cssBytes, lazy);
 const modules = JSON.parse(readFileSync('dist/modules.json', 'utf8'));
-for (const f of scripts) {
-  for (const module of modules[f] ?? [])
-    assert(
-      !/markdown-it|src\/routes\/(Item|Login)\.tsx/.test(
-        module.replaceAll('\\', '/'),
-      ),
-      `${module} entered eager graph`,
-    );
-}
+assertLazyModules(scripts, modules);
 const report = {
   convention:
     'decimal KB, Brotli quality 11; unique entry + transitive static imports and CSS',
@@ -56,6 +49,15 @@ if (process.argv.includes('--prove')) {
   assert.throws(() => budgets(250001, 0, []));
   assert.throws(() => budgets(0, 20001, []));
   assert.throws(() => budgets(0, 0, [['large import', 60001]]));
+  for (const module of [
+    'src/routes/Board.tsx', 'src/routes/AccountSecurity.tsx',
+    'src/components/AvatarEditor.tsx', 'src/components/DatePicker.tsx',
+    'node_modules/@dnd-kit/core/dist/core.js',
+  ]) {
+    const planted = structuredClone(modules);
+    planted[[...scripts][0]].push(module);
+    assert.throws(() => assertLazyModules(scripts, planted), /entered eager graph/);
+  }
   console.log('bundle proofs: initial JS/CSS and lazy excess rejected');
 }
 console.log(JSON.stringify(report, null, 2));

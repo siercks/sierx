@@ -2610,3 +2610,32 @@ both source gates/security/build/image/offline-bundle checks successful; Ubuntu
 arm64 host check failed, aggregate failed, promotion skipped. Main push CI was
 cancelled. Isolated branch: codex/phase-3-foundation. Historical Phase 2 checkout
 was left unchanged. No production change or completed Phase 3 feature is claimed.
+
+
+## 2026-11-06 — Phase 3 gate scaffolding (P3-02)
+
+- [x] P3-02: Phase 3 lazy-module checks cover entry and transitive shared chunks;
+  route checks reject duplicate IDs/paths and an eager non-List route. Added
+  phase3-foundation to Gate 2 and proved negative controls. gate-3 includes Gate 2
+  and deliberately rejects absent/stale/incomplete candidate acceptance evidence;
+  no Phase 3 acceptance report is manufactured. P3-33 must wire/retain actual
+  feature test, benchmark and human records.
+
+Pinned offline Linux environment (native amd64, Go 1.27.3, Node 24.22.1):
+```
+make phase3-foundation
+Ran 1 test ... OK
+Phase 3 lazy-graph proofs: direct/shared/Windows-path violations rejected
+route proofs: unreserved prefix, missing handler, eager count and generated drift rejected
+npm --prefix web run build
+initialJS: 105674; initialCSS: 19482; largest lazy chunk: 36179 bytes Brotli
+make gate-license
+gate-license: OK (every dependency on the section 15.1 allowlist)
+npm licenses: 181 lockfile components verified
+```
+
+Dependency review: no Go/npm runtime or build package was added; existing exact
+pins/lockfiles stay authoritative. Drag/avatar/calendar package selection remains
+with its owning task and requires license plus measured lazy-bundle acceptance.
+Full Gate 2 and release checks are recorded separately; the foundation proof is
+not a passing Phase 3 gate.
