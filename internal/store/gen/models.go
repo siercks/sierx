@@ -8,6 +8,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BoardBlockedStatus struct {
+	ProjectID pgtype.UUID
+	Version   int32
+	StatusID  pgtype.UUID
+}
+
+type BoardColumn struct {
+	ProjectID       pgtype.UUID
+	Version         int32
+	ColumnID        pgtype.UUID
+	Name            string
+	Position        int32
+	WipLimit        *int32
+	DefaultStatusID pgtype.UUID
+}
+
+type BoardColumnStatus struct {
+	ProjectID pgtype.UUID
+	Version   int32
+	ColumnID  pgtype.UUID
+	StatusID  pgtype.UUID
+}
+
+type BoardDefinition struct {
+	ProjectID        pgtype.UUID
+	Version          int32
+	PriorityFieldKey *string
+}
+
 type ChangeEvent struct {
 	WorkspaceID pgtype.UUID
 	Seq         int64

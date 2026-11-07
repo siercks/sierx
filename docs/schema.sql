@@ -956,6 +956,68 @@ END $$;
 
 SET default_tablespace = '';
 
+SET default_table_access_method = heap;
+
+--
+-- Name: board_blocked_status; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.board_blocked_status (
+    project_id uuid NOT NULL,
+    version integer NOT NULL,
+    status_id uuid NOT NULL
+);
+
+ALTER TABLE ONLY public.board_blocked_status FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: board_column; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.board_column (
+    project_id uuid NOT NULL,
+    version integer NOT NULL,
+    column_id uuid DEFAULT uuidv7() NOT NULL,
+    name text NOT NULL,
+    "position" integer NOT NULL,
+    wip_limit integer,
+    default_status_id uuid,
+    CONSTRAINT board_column_name_check CHECK (((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 80))),
+    CONSTRAINT board_column_position_check CHECK (("position" >= 0)),
+    CONSTRAINT board_column_wip_limit_check CHECK ((wip_limit > 0))
+);
+
+ALTER TABLE ONLY public.board_column FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: board_column_status; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.board_column_status (
+    project_id uuid NOT NULL,
+    version integer NOT NULL,
+    column_id uuid NOT NULL,
+    status_id uuid NOT NULL
+);
+
+ALTER TABLE ONLY public.board_column_status FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: board_definition; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.board_definition (
+    project_id uuid NOT NULL,
+    version integer NOT NULL,
+    priority_field_key text
+);
+
+ALTER TABLE ONLY public.board_definition FORCE ROW LEVEL SECURITY;
+
+
 --
 -- Name: change_event; Type: TABLE; Schema: public; Owner: -
 --
@@ -975,8 +1037,6 @@ PARTITION BY RANGE (at);
 
 ALTER TABLE ONLY public.change_event FORCE ROW LEVEL SECURITY;
 
-
-SET default_table_access_method = heap;
 
 --
 -- Name: change_event_2026_09; Type: TABLE; Schema: public; Owner: -
@@ -1550,6 +1610,54 @@ ALTER TABLE ONLY public.change_event ATTACH PARTITION public.change_event_2026_1
 --
 
 ALTER TABLE ONLY public.change_event ATTACH PARTITION public.change_event_2026_11 FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
+
+
+--
+-- Name: board_blocked_status board_blocked_status_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_blocked_status
+    ADD CONSTRAINT board_blocked_status_pkey PRIMARY KEY (project_id, version, status_id);
+
+
+--
+-- Name: board_column board_column_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column
+    ADD CONSTRAINT board_column_pkey PRIMARY KEY (project_id, version, column_id);
+
+
+--
+-- Name: board_column board_column_project_id_version_position_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column
+    ADD CONSTRAINT board_column_project_id_version_position_key UNIQUE (project_id, version, "position");
+
+
+--
+-- Name: board_column_status board_column_status_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column_status
+    ADD CONSTRAINT board_column_status_pkey PRIMARY KEY (project_id, version, status_id);
+
+
+--
+-- Name: board_column_status board_column_status_project_id_version_column_id_status_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column_status
+    ADD CONSTRAINT board_column_status_project_id_version_column_id_status_id_key UNIQUE (project_id, version, column_id, status_id);
+
+
+--
+-- Name: board_definition board_definition_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_definition
+    ADD CONSTRAINT board_definition_pkey PRIMARY KEY (project_id, version);
 
 
 --
@@ -2153,6 +2261,86 @@ CREATE TRIGGER workspace_create_seq_counter_trg AFTER INSERT ON public.workspace
 
 
 --
+-- Name: board_blocked_status board_blocked_status_project_id_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_blocked_status
+    ADD CONSTRAINT board_blocked_status_project_id_status_id_fkey FOREIGN KEY (project_id, status_id) REFERENCES public.status(project_id, id);
+
+
+--
+-- Name: board_blocked_status board_blocked_status_project_id_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_blocked_status
+    ADD CONSTRAINT board_blocked_status_project_id_version_fkey FOREIGN KEY (project_id, version) REFERENCES public.board_definition(project_id, version);
+
+
+--
+-- Name: board_blocked_status board_blocked_status_project_id_version_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_blocked_status
+    ADD CONSTRAINT board_blocked_status_project_id_version_status_id_fkey FOREIGN KEY (project_id, version, status_id) REFERENCES public.config_status(project_id, version, status_id);
+
+
+--
+-- Name: board_column board_column_default_mapping_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column
+    ADD CONSTRAINT board_column_default_mapping_fk FOREIGN KEY (project_id, version, column_id, default_status_id) REFERENCES public.board_column_status(project_id, version, column_id, status_id) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: board_column board_column_project_id_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column
+    ADD CONSTRAINT board_column_project_id_version_fkey FOREIGN KEY (project_id, version) REFERENCES public.board_definition(project_id, version);
+
+
+--
+-- Name: board_column_status board_column_status_project_id_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column_status
+    ADD CONSTRAINT board_column_status_project_id_status_id_fkey FOREIGN KEY (project_id, status_id) REFERENCES public.status(project_id, id);
+
+
+--
+-- Name: board_column_status board_column_status_project_id_version_column_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column_status
+    ADD CONSTRAINT board_column_status_project_id_version_column_id_fkey FOREIGN KEY (project_id, version, column_id) REFERENCES public.board_column(project_id, version, column_id);
+
+
+--
+-- Name: board_column_status board_column_status_project_id_version_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_column_status
+    ADD CONSTRAINT board_column_status_project_id_version_status_id_fkey FOREIGN KEY (project_id, version, status_id) REFERENCES public.config_status(project_id, version, status_id);
+
+
+--
+-- Name: board_definition board_definition_project_id_priority_field_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_definition
+    ADD CONSTRAINT board_definition_project_id_priority_field_key_fkey FOREIGN KEY (project_id, priority_field_key) REFERENCES public.field_def(project_id, key);
+
+
+--
+-- Name: board_definition board_definition_project_id_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_definition
+    ADD CONSTRAINT board_definition_project_id_version_fkey FOREIGN KEY (project_id, version) REFERENCES public.project_config(project_id, version);
+
+
+--
 -- Name: comment comment_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2510,6 +2698,86 @@ ALTER TABLE ONLY public.sprint
 
 ALTER TABLE ONLY public.status
     ADD CONSTRAINT status_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.project(id);
+
+
+--
+-- Name: board_blocked_status; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.board_blocked_status ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: board_blocked_status board_blocked_status_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_blocked_status_insert ON public.board_blocked_status FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: board_blocked_status board_blocked_status_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_blocked_status_read ON public.board_blocked_status FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: board_column; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.board_column ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: board_column board_column_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_column_insert ON public.board_column FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: board_column board_column_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_column_read ON public.board_column FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: board_column_status; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.board_column_status ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: board_column_status board_column_status_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_column_status_insert ON public.board_column_status FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: board_column_status board_column_status_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_column_status_read ON public.board_column_status FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
+
+
+--
+-- Name: board_definition; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.board_definition ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: board_definition board_definition_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_definition_insert ON public.board_definition FOR INSERT TO sierx_runtime WITH CHECK (((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()) AND (public.sierx_current_role() = 'admin'::text)));
+
+
+--
+-- Name: board_definition board_definition_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY board_definition_read ON public.board_definition FOR SELECT TO sierx_runtime USING ((public.sierx_project_workspace_id(project_id) = public.sierx_current_workspace_id()));
 
 
 --

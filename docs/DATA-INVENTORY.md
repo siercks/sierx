@@ -15,3 +15,16 @@ This inventory describes data represented by the current application schema and 
 | Lifecycle evidence | Holds, restrictions, case/receipt audit, encrypted off-database journal, trusted checkpoint | `migrations/0014_lifecycle_controls.sql`; `internal/lifecycle` | Restricted operator metadata; ordinary roles cannot modify receipts. Journal may contain encrypted correction text. Protect current checkpoint and master materials independently of restored backups; retention/review and off-machine custody are operator-specific. |
 
 Sierx currently has no public signup, invitation flow, analytics/replay SDK, notification email sender, or billing flow. `SIERX_REGISTRATION_MODE` defaults to `private` and fails closed for the reserved admission modes. Their future introduction requires a separate design and activation gate. This inventory does not establish legal applicability for a particular operator.
+
+
+Phase 3 schema increment (migration 0017): `board_definition`, `board_column`,
+`board_column_status` and `board_blocked_status` are shared project-configuration
+snapshots. They contain labels, status/field references, order and warning limits;
+no avatar, credentials or new account profile data. Tenant-scoped reads and
+admin-only inserts mirror workflow configuration. Historical snapshots remain
+stable. Logical/physical database backups include them. The existing limited
+account export excludes shared project configuration and therefore also excludes
+these tables; it does not claim a complete person-wide export. Account
+anonymization/deactivation needs no new user reference from these tables. P3-04
+owns population, complete status coverage and workflow carry-forward before any
+Board API is enabled.

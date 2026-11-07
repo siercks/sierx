@@ -123,6 +123,7 @@ gate-db-privileges: ## Verify app role attributes, ownership, DDL and RLS catalo
 	@bash scripts/psql.sh -f test/sql/rls_privileges_test.sql
 	@bash scripts/psql.sh -f test/sql/account_lifecycle_test.sql
 	@bash scripts/psql.sh -f test/sql/data_export_test.sql
+	@bash scripts/psql.sh -f test/sql/board_config_test.sql
 prove-db-privileges:
 	@if bash scripts/psql.sh -c 'BEGIN; GRANT TRUNCATE ON item TO sierx_runtime' -f test/sql/rls_privileges_test.sql >/dev/null 2>&1; then echo 'prove-db-privileges: planted TRUNCATE grant was not detected'; exit 1; else echo 'prove-db-privileges: planted runtime TRUNCATE grant rejected'; fi
 
@@ -315,6 +316,11 @@ gate-2: gate-1 gate-bundle gate-routes gate-contrast gate-stylelint gate-markdow
 	@echo "gate-2: GREEN (automated; deployment, restore and human acceptance remain separate)"
 
 .PHONY: phase3-foundation gate-3 prove-3
+.PHONY: test-board-schema
+test-board-schema: ## Board snapshot constraints and tenant/admin policies on a disposable database
+	@bash scripts/migrate.sh up
+	@bash scripts/psql.sh -f test/sql/board_config_test.sql
+
 phase3-foundation: ## Phase 3 gate scaffolding and deliberate-violation proofs (no feature acceptance claim)
 	@python3 -m unittest discover -s test/python -p 'test_phase3.py'
 	@node web/scripts/phase3-proof.mjs

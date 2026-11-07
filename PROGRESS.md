@@ -2639,3 +2639,40 @@ pins/lockfiles stay authoritative. Drag/avatar/calendar package selection remain
 with its owning task and requires license plus measured lazy-bundle acceptance.
 Full Gate 2 and release checks are recorded separately; the foundation proof is
 not a passing Phase 3 gate.
+
+
+## 2026-11-06 — Board schema foundation (P3-03)
+
+- [x] P3-03 structural schema foundation: migration 0017 adds project/config-scoped
+  board definitions, stable column IDs, unique positions/status mappings, positive
+  optional WIP limits, a deferred same-column default-status FK, explicit blocked
+  statuses, priority-field references and forced tenant/admin RLS. Runtime snapshots
+  are insert-only. Schema/sqlc outputs are regenerated. No configuration is seeded
+  until P3-04 supplies seeding and workflow carry-forward together; no Board route
+  is enabled. Inventory/limited-export/backup boundaries are documented.
+
+Disposable native amd64 database acceptance (Go 1.27.3, PostgreSQL 18.6):
+```
+make test-board-schema
+board-config: scoped snapshots, mapping/default/limit constraints and runtime policies passed
+make migrate-updown-up
+clean at zero: 0 tables, 0 extensions
+all migrations applied: 17 versions
+make schema-diff sqlc-diff gate-db-privileges
+schema-diff: from-scratch migration matches docs/schema.sql
+sqlc-diff: checked-in generated code matches fresh output
+gate-db-privileges: application role attributes, ownership, DDL, secret columns and RLS catalog passed
+```
+
+A separate disposable schema-16 bootstrap was migrated to 17: original account
+and project row fingerprints stayed identical. After populating historical board
+snapshots with the SQL controls, a custom-format database dump was restored into
+a second fresh database. All four board-table counts/row fingerprints and original
+account/project fingerprints matched. Both scratch databases were removed.
+The first rehearsal failed before bootstrap because the temporary runner omitted
+required fixture inputs; supplying the complete synthetic bootstrap inputs passed.
+This was a runner correction, not a production or migration failure.
+
+Full Gate 2 integration and packaged-image acceptance are separate evidence; no
+native ARM64/host release, production migration, phone test or Phase 3 exit is
+claimed by the schema controls.
