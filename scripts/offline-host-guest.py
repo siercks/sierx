@@ -281,7 +281,7 @@ def main():
         spec=importlib.util.spec_from_file_location('registry','/opt/acceptance/tests/offline-local-registry.py')
         registry=importlib.util.module_from_spec(spec)
         spec.loader.exec_module(registry)
-        scenarios['acquisition']=registry.main(BUNDLE,lock,ENV,run)
+        scenarios['acquisition']=registry.main(BUNDLE,lock,ENV,run,phase)
     addresses = json.loads(run('podman','inspect','sierx-postgres'))[0]['NetworkSettings'].get('Networks') or {}
     peers=run('psql',ENV['DATABASE_URL'],'-XAt','-v','ON_ERROR_STOP=1','-c',
         "SELECT host(inet_client_addr()) UNION SELECT host(inet_server_addr()) UNION SELECT host(client_addr) FROM pg_stat_activity WHERE datname=current_database() AND client_addr IS NOT NULL").splitlines()

@@ -79,6 +79,20 @@ class RuntimeTests(unittest.TestCase):
             'guest_command':'private command','guest_command_detail':'private error'})
         self.assertNotIn('guest_command',value)
 
+    def test_acquisition_failure_keeps_only_fixed_pull_or_inspect_metadata(self):
+        private = b'private credential and registry path '
+        for arguments, message, operation, category in (
+            (('podman','pull','private-reference'), b'x509: private authority', 'podman-pull', 'tls-verification'),
+            (('podman','pull','private-reference'), b'connection refused', 'podman-pull', 'connection-refused'),
+            (('podman','image','inspect','private-id'), private, 'podman-inspect', 'other'),
+        ):
+            detail = diagnostics.guest_command_failure(arguments, private+message)
+            self.assertEqual(detail, {'guest_command':operation, 'guest_command_detail':category})
+            failure = diagnostics.sanitize_failure({'result':'failed','phase':'acquisition-pull',
+                'failure_type':'RuntimeError', **detail})
+            self.assertNotIn('private', json.dumps(failure))
+        self.assertEqual(diagnostics.guest_command_failure(('podman','login','private'), private), {})
+
     def test_invalid_delivery_failure_keeps_exact_substep_and_restores_certificate(self):
         with tempfile.TemporaryDirectory() as temporary:
             home=Path(temporary);config=home/'config';(config/'tls').mkdir(parents=True)

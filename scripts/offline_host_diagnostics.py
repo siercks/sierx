@@ -20,10 +20,11 @@ FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionErro
                  'NetworkObservationError', 'HostCommandError'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
-GUEST_COMMANDS = {'podman-info','podman-inspect'}
+GUEST_COMMANDS = {'podman-info','podman-inspect','podman-pull'}
 GUEST_COMMAND_DETAILS = {'storage-configuration','database-lock','permission-denied',
                          'storage-full','resource-unavailable','namespace-clone',
-                         'reexec','deadline','unexpected-eof','other'}
+                         'reexec','deadline','unexpected-eof','tls-verification',
+                         'connection-refused','manifest-unknown','other'}
 HOST_PHASES = {'host-verify-inputs','host-extract-os','host-configure-os','host-unpack-delivery',
                'host-create-filesystem','host-launch','host-read-evidence'}
 FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bootstrap',
@@ -38,7 +39,9 @@ FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bo
         'empty-store-info','empty-store-plan','snapshot-after')} | {
     'runtime-'+name for name in ('reject-implicit-timers', 'reload-units', 'start-timer',
                                 'observe', 'verify-maintenance', 'inventory-services',
-                                'inventory-timers', 'inventory-enabled')}
+                                'inventory-timers', 'inventory-enabled')} | {
+    'acquisition-'+name for name in ('prepare', 'start-registry', 'store-info',
+                                    'empty-store', 'pull', 'inspect', 'verify')}
 
 
 def sanitize_failure(value):
@@ -79,7 +82,12 @@ def sanitize_failure(value):
 
 def guest_command_failure(args, stderr):
     """Classify only fixed Podman operations/errors; never expose argv/stderr."""
-    if len(args)<2 or str(args[0])!='podman' or str(args[1]) not in {'info','inspect'}:
+    if len(args)<2 or str(args[0])!='podman':
+        return {}
+    operation = str(args[1])
+    if tuple(map(str, args[:3])) == ('podman', 'image', 'inspect'):
+        operation = 'inspect'
+    if operation not in {'info','inspect','pull'}:
         return {}
     text=stderr.lower() if isinstance(stderr,bytes) else b''
     patterns=((b'database configuration mismatch','storage-configuration'),
@@ -87,9 +95,11 @@ def guest_command_failure(args, stderr):
               (b'no space left on device','storage-full'),
               (b'resource temporarily unavailable','resource-unavailable'),
               (b'cannot clone','namespace-clone'),(b'cannot re-exec','reexec'),
-              (b'context deadline exceeded','deadline'),(b'unexpected eof','unexpected-eof'))
+              (b'context deadline exceeded','deadline'),(b'unexpected eof','unexpected-eof'),
+              (b'x509:','tls-verification'),(b'connection refused','connection-refused'),
+              (b'manifest unknown','manifest-unknown'))
     detail=next((label for message,label in patterns if message in text),'other')
-    return {'guest_command':'podman-'+str(args[1]),'guest_command_detail':detail}
+    return {'guest_command':'podman-'+operation,'guest_command_detail':detail}
 
 
 def failure_record(error, phase):

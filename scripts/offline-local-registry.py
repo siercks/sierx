@@ -15,8 +15,9 @@ import threading
 from offline_host_inputs import isolated_storage, require_empty_storage
 
 
-def main(bundle, lock, env, run):
-    home=Path(os.environ['HOME'])
+def main(bundle, lock, env, run, phase, *, fixture_home=None):
+    phase('acquisition-prepare')
+    home=Path(fixture_home) if fixture_home is not None else Path(os.environ['HOME'])
     archive=bundle/'images/app.tar'
     with tarfile.open(archive) as stream:
         index=json.load(stream.extractfile('index.json'))
@@ -70,6 +71,7 @@ def main(bundle, lock, env, run):
                 if body:
                     counts[kind]+=1
                     shutil.copyfileobj(stream.extractfile(member),self.wfile)
+    phase('acquisition-start-registry')
     server=ThreadingHTTPServer(('127.0.0.1',19444),Handler)
     tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(home/'.config/sierx/tls/server.crt',home/'.config/sierx/tls/server.key')
@@ -85,12 +87,17 @@ def main(bundle, lock, env, run):
     isolated=isolated_storage(storage,runroot,env)
     def acquire(*args):return run(*args,env=isolated)
     try:
+        phase('acquisition-store-info')
         require_empty_storage(json.loads(acquire('podman','info','--format','json')),storage,runroot)
+        phase('acquisition-empty-store')
         if json.loads(acquire('podman','images','--format','json')):
             raise ValueError('Synthetic acquisition store was not empty')
         source='localhost:19444/sierx@'+digest
+        phase('acquisition-pull')
         acquire('podman','pull','--tls-verify=true','--cert-dir',certs,'--authfile',auth,source)
+        phase('acquisition-inspect')
         metadata=json.loads(acquire('podman','image','inspect',lock['images']['app']['id']))[0]
+        phase('acquisition-verify')
         if (metadata['Id'].removeprefix('sha256:')!=lock['images']['app']['id'].removeprefix('sha256:')
                 or metadata['Labels']['org.opencontainers.image.revision']!=lock['release']['revision']
                 or not counts['manifest'] or not counts['blob']):

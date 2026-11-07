@@ -310,6 +310,27 @@ def record_failure(report, result, log, arch, suite, revision):
     return failure
 
 
+def retain_incomplete_failure(disk, report, arch, suite, revision):
+    # A failed service can power off before the independent completion marker.
+    # Recover only a failure diagnostic; a recovered pass must NEVER bypass the
+    # marker/kernel checks. Raw guest fields and journals remain private.
+    try:
+        raw = disk_file(disk, 'result.json')
+        if not raw or len(raw) > 65536:
+            return None
+        result = json.loads(raw)
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return None
+    if not isinstance(result, dict) or result.get('result') != 'failed':
+        return None
+    # Do not let an unreadable private journal discard the primary diagnostic.
+    try:
+        log = disk_file(disk, 'diagnostics.log')
+    except (ValueError, OSError, subprocess.SubprocessError):
+        log = b''
+    return record_failure(report, result, log, arch, suite, revision)
+
+
 def audit_network(disk, result, report, arch, suite, revision, mode):
     # The guest can finish successfully while its independent host audit fails.
     # Preserve the same strictly sanitized failure artifact in that case too.
@@ -485,6 +506,9 @@ def main(args):
             if finished is None or finished[0]!=args.suite_sha256:
                 summary = diagnostics.stopped(process.returncode, serial.read_text(errors='replace'), private.read_text(errors='replace'), host_resources)
                 print('offline-host: incomplete VM result '+json.dumps(summary, sort_keys=True), flush=True)
+                failure = retain_incomplete_failure(disk, report, arch, args.suite_sha256, data['release']['revision'])
+                if failure is not None:
+                    print('offline-host: recovered failed guest diagnostic '+json.dumps(failure, sort_keys=True), flush=True)
                 raise ValueError('Guest stopped before a complete synced acceptance result')
             raw_result = disk_file(disk, 'result.json')
             if not raw_result.strip():

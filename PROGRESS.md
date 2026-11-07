@@ -2694,3 +2694,36 @@ Pre-existing ARM64 host acceptance still blocks promotion. Support stays both
 architectures pending an explicit owner decision; no release bypass is implied.
 Details/digests/limits and next tasks: docs/PHASE-3-ACCEPTANCE.md. The owner-reported
 seven-day collection is retained there separately from unfilled formal exit evidence.
+
+
+## 2026-11-06 — Preserve ARM64; investigate acquisition failure
+
+The owner explicitly chose to preserve AMD64 and ARM64 support and investigate the
+existing ARM64 release failure. The live site remains on its accepted image.
+
+Release 42163914084's ARM64 guest exited 1 during final explicit acquisition,
+without an independent completion marker. The host checked that marker before
+reading the recovered guest failure, so the public artifact retained only
+host-read-evidence/ValueError. Add strictly sanitized recovery of FAILED guest
+reports on that path; missing markers and recovered passing reports remain
+rejected. Invalid/missing/oversized failure records cannot produce acceptance.
+Private journals/arguments/credentials are never copied into public evidence.
+
+Add fixed acquisition substeps and narrow pull/inspect failure categories.
+The short native no-NIC acquisition diagnostic uses the actual candidate archive,
+verified image identity, ephemeral certificates/stores, unprivileged Podman and
+root tracing. Its separate report explicitly cannot satisfy release acceptance;
+the full Ubuntu/Rocky amd64 and Ubuntu arm64 VM gate remains unchanged.
+
+Validation: 155 Linux Python tests pass, including failed-result-only recovery,
+unreadable journal, operation-specific failure preservation and cleanup. ShellCheck
+and shell syntax pass for the diagnostic launcher. A real native amd64 no-NIC,
+traced probe against the 6d84b86 candidate passed HTTPS acquisition from a fresh
+VFS store (1 manifest and 5 blob requests), verified the source label/image ID,
+and issued diagnostic evidence only. The initial attempt to run Linux-only tests
+on Windows could not supply fcntl/statvfs; the complete suite passed in WSL.
+The development ARM64 host was unavailable by its configured name, so a separate
+native hosted AMD64/ARM64 diagnostic is added. These changes repair an evidence gap;
+they do not claim to have fixed or reproduced the underlying ARM64 failure yet.
+
+Pinned actionlint v1.7.12 also passed for the native diagnostic workflow.

@@ -114,9 +114,9 @@ Production promotion remains blocked by the pre-existing required ARM64 host
 failure described above. The host uses a pinned reviewed manifest rather than
 following candidate tags: image transfer alone cannot update the site. No release
 check, architecture requirement, automatic updater, backup policy or branch
-protection was bypassed or changed. The owner was asked whether to preserve both
-architectures and investigate or explicitly approve an AMD64-only release scope;
-no compatibility change is inferred without a response.
+protection was bypassed or changed. The owner subsequently chose to preserve both architectures and investigate
+the ARM64 failure. Both native architectures and all three existing host profiles
+remain required; AMD64-only release support is not approved.
 
 Hosted code-candidate evidence:
 [CI](https://github.com/siercks/sierx/actions/runs/42327857483) and

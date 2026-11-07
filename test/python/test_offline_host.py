@@ -24,6 +24,40 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_incomplete_completion_retains_only_failed_guest_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary)/'acceptance.json'
+            raw = {'result':'failed', 'phase':'acquisition-pull',
+                   'failure_type':'RuntimeError', 'command_exit_code':125,
+                   'private':'fixture credential'}
+            with patch.object(host, 'disk_file', side_effect=[json.dumps(raw).encode(), b'private fixture credential']):
+                failure = host.retain_incomplete_failure(Path('/guest'), report, 'arm64', 'c'*64, 'a'*40)
+            saved = json.loads(report.with_suffix('.failure.json').read_text())
+            self.assertEqual(failure['phase'], 'acquisition-pull')
+            self.assertEqual(saved['command_exit_code'], 125)
+            self.assertFalse(report.exists())
+            self.assertNotIn('private', json.dumps(saved))
+            self.assertNotIn('credential', json.dumps(saved))
+            with self.assertRaises(ValueError): evidence.validate(saved, self.bundle, 'd'*64, 'c'*64)
+            # Recovery is diagnostic only: no pass or malformed data can create
+            # either a passing report or a recovered guest failure.
+            report.with_suffix('.failure.json').unlink()
+            for invalid in (b'', b'{broken', b'[]', b'null', b'x'*65537,
+                            b'{"result":"passed"}', b'{"result":"unknown"}'):
+                with self.subTest(raw=invalid[:40]), patch.object(host, 'disk_file', return_value=invalid):
+                    self.assertIsNone(host.retain_incomplete_failure(Path('/guest'), report, 'arm64', 'c'*64, 'a'*40))
+                self.assertFalse(report.exists())
+                self.assertFalse(report.with_suffix('.failure.json').exists())
+
+    def test_incomplete_failure_survives_unreadable_private_journal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary)/'acceptance.json'
+            raw = b'{"result":"failed","phase":"acquisition-store-info","failure_type":"RuntimeError"}'
+            with patch.object(host, 'disk_file', side_effect=[raw, PermissionError('private')]):
+                result = host.retain_incomplete_failure(Path('/guest'), report, 'arm64', 'c'*64, 'a'*40)
+            self.assertEqual(result['phase'], 'acquisition-store-info')
+            self.assertFalse(report.exists())
+
     def test_closeout_rejects_missing_kernel_controls_or_invalid_cancellation_counts(self):
         network=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',
             {'release':self.bundle['release'],'bundle_sha256':'e'*64})['network']

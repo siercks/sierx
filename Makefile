@@ -372,6 +372,10 @@ release-manifest: ## Combine the two published image digests and write the pull 
 	@TAG="$(TAG)" bash scripts/release.sh manifest
 
 .PHONY: release-login release-stage release-test
+.PHONY: probe-offline-acquisition
+probe-offline-acquisition: ## Native no-NIC HTTPS acquisition diagnostic; never release acceptance
+	@bash scripts/probe-acquisition.sh
+
 release-login: ## Authenticate the publishing job; credentials arrive through its environment
 	@bash scripts/release.sh login
 release-stage: ## Publish a candidate digest without approving a release
