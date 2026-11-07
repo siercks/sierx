@@ -2843,3 +2843,35 @@ all three cases. This is diagnostic evidence, not full VM/release acceptance.
 The original ephemeral trace is unavailable, so this does not establish that the
 specific hosted failure had this cause. Fresh exact staged release acceptance
 and all three host profiles still must pass before production activation.
+
+Exact staged [release 42405995213](https://github.com/siercks/sierx/actions/runs/42405995213)
+on `4ca3acc` passed both native source/image/bundle checks and both AMD64 host
+profiles. ARM64 completed every guest scenario, then its independent audit
+rejected an opaque terminal Firefox sendmsg. Kernel diagnostics showed 33 earlier
+entries/returns and no event in the final uncertainty window. Those aggregate
+counts cannot prove which calls executed; promotion was correctly skipped.
+
+New regressions reproduced two gaps in the lifetime-only cancellation criterion:
+it rejects a terminal non-execution even when every earlier call is independently
+accounted for, and can overlook missing kernel entries for earlier decoded calls.
+Require a complete one-to-one ledger of all prior calls in the same thread,
+matching syscall, descriptor, normalized return value, order and bounded times.
+Every kernel entry and return must be accounted for before the terminal window.
+Loss-free capture, clock/exit constraints and all positive controls remain required.
+Missing, extra, restarted, mismatched or ambiguous calls fail closed. Executed
+opaque calls still fail; explicit external destinations still count as attempts,
+including failed or terminal calls. Required host receipts now include bounded
+per-process ledger accounting; failure diagnostics expose only fixed categories
+and numeric counts. All architectures, profiles and scenarios remain mandatory.
+
+Validation: 183 Linux Python tests, `prove-offline-host`, pinned actionlint and
+launcher ShellCheck pass. A private real ptrace/kernel control ran unprivileged
+processes in a fresh no-NIC namespace: each performed 33 real Unix sends before
+an opaque terminal call. Cancelling that call at entry via a controlled invalid
+syscall number produced no kernel execution, and the complete ledger verified;
+allowing the opaque call to execute remained rejected. The archived old observer
+rejected the fully accounted cancellation. Native diagnostic CPU/PID adaptation
+was private; production VM CPU restrictions are unchanged. This is not actual-VM
+or release acceptance. The ephemeral Firefox trace was unavailable for complete
+matching, so the original failed report remains rejected. Fresh exact staged
+release and independent archive/receipt verification are still required.

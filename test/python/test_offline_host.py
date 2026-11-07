@@ -113,7 +113,8 @@ class EvidenceTests(unittest.TestCase):
         network=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',
             {'release':self.bundle['release'],'bundle_sha256':'e'*64})['network']
         evidence.validate_network(network)
-        for field,value in (('kernel_syscalls',None),('cancelled_before_kernel_entry',{})):
+        for field,value in (('kernel_syscalls',None),('cancelled_before_kernel_entry',{}),
+                            ('cancelled_after_verified_ledger',{})):
             report=copy.deepcopy(network);report[field]=value
             with self.assertRaises(ValueError):evidence.validate_network(report)
         for field in ('lost_events','positive_controls','execution_controls'):
@@ -121,6 +122,9 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):evidence.validate_network(report)
         report=copy.deepcopy(network);report['cancelled_before_kernel_entry']['installer']=True
         with self.assertRaises(ValueError):evidence.validate_network(report)
+        for value in (True,-1,1):
+            report=copy.deepcopy(network);report['cancelled_after_verified_ledger']['installer']=value
+            with self.assertRaises(ValueError):evidence.validate_network(report)
 
     def test_preboot_command_failure_retains_stage_and_private_stderr_without_disclosing_it(self):
         with tempfile.TemporaryDirectory() as temporary:

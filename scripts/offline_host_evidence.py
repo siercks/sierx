@@ -177,6 +177,10 @@ def validate_network(report):
     if (not isinstance(cancelled,dict) or set(cancelled)!=PROCESSES | {'other'}
             or any(type(count) is not int or count<0 for count in cancelled.values())):
         raise ValueError('Missing non-executed syscall accounting')
+    ledger=report.get('cancelled_after_verified_ledger')
+    if (not isinstance(ledger,dict) or set(ledger)!=set(cancelled)
+            or any(type(count) is not int or not 0<=count<=cancelled[role] for role,count in ledger.items())):
+        raise ValueError('Missing completed-call ledger accounting')
 
 
 def validate_closeout(report,bundle,expected,suite_sha256):

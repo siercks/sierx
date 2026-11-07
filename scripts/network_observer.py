@@ -6,6 +6,7 @@ closed rather than being reported as zero traffic.
 """
 from dataclasses import dataclass
 from collections import Counter
+import errno
 import ipaddress
 import math
 from pathlib import Path
@@ -38,9 +39,13 @@ def safe_failure_fields(value):
         for key in ('terminal_window','ptrace_time_in_capture'):
             if type(correlation.get(key)) is bool:safe[key]=correlation[key]
         for key in ('network_entries','network_returns','process_exits',
-                    'entries_in_or_after_window','returns_in_or_after_window'):
+                    'entries_in_or_after_window','returns_in_or_after_window',
+                    'trace_network_records','matched_prior_calls'):
             count=correlation.get(key)
             if type(count) is int and 0<=count<=0x7fffffff:safe[key]=count
+        if isinstance(correlation.get('ledger_status'),str) and correlation['ledger_status'] in {'not-terminal','ptrace-incomplete','count-mismatch',
+                                               'call-mismatch','time-mismatch','verified'}:
+            safe['ledger_status']=correlation['ledger_status']
         if safe:result['kernel']=safe
     return result
 
@@ -256,6 +261,7 @@ def parse(lines,stats=None,kernel=None):
     stats.setdefault('kernel_control_truncations',0)
     if kernel is not None:
         stats.setdefault('cancelled_before_kernel_entry', {role:0 for role in sorted(PROCESSES | {'other'})})
+        stats.setdefault('cancelled_after_verified_ledger', {role:0 for role in sorted(PROCESSES | {'other'})})
     sockets, connected, attempts, executed, owners, roles, inode_family, inode_peer, members = {}, {}, [], set(), {}, {}, {}, {}, {}
     close_on_exec={}
     generation=0
@@ -284,6 +290,18 @@ def parse(lines,stats=None,kernel=None):
     decoded=records(lines,unfinished)
     if kernel is not None and (not decoded or not kernel.covers_start(decoded[0][2])):
         raise ValueError('Kernel observation did not begin before process tracing')
+    histories={}
+    if kernel is not None:
+        for trace_pid,_,when,body in decoded:
+            call=re.match(r'(connect|sendto|sendmsg|sendmmsg)\((.*)',body)
+            if not call:continue
+            returned=list(re.finditer(r'\)\s*=\s*(-?[0-9]+)',body))
+            result=int(returned[-1][1]) if returned else None
+            if result==-1:
+                error=re.match(r'\s+([A-Z][A-Z0-9]+)\b',body[returned[-1].end():])
+                number=getattr(errno,error[1],None) if error else None
+                result=-number if type(number) is int else None
+            histories.setdefault(trace_pid,[]).append((when,call[1],fd(call[2]),result))
     for pid,program,timestamp,body in decoded:
         role=roles.get(pid,component(program))
         call = re.match(r'([a-z0-9_]+)\((.*)', body)
@@ -485,8 +503,9 @@ def parse(lines,stats=None,kernel=None):
             if destination is None and family in {'AF_UNIX', 'AF_NETLINK'}: destination = (family, '', 0)
             if destination is None:
                 if (name != 'sendmmsg' and returned is None and (pid,name,timestamp) in unfinished and kernel is not None
-                        and kernel.cancelled_before_entry(pid,timestamp)):
+                        and kernel.terminal_without_execution(pid,timestamp,histories.get(pid,[]))):
                     stats['cancelled_before_kernel_entry'][role] += 1
+                    if len(histories[pid])>1:stats['cancelled_after_verified_ledger'][role]+=1
                     continue
                 kind=re.search(r'<([A-Za-z0-9_-]+)',args[0])
                 descriptor = kind[1] if kind else 'opaque'
@@ -498,7 +517,7 @@ def parse(lines,stats=None,kernel=None):
                     'header':'not-message' if name != 'sendmsg' else 'null' if header == 'NULL' else
                         'structure' if header and header.startswith('{') else
                         'pointer' if header and re.fullmatch(r'0x[0-9a-fA-F]+', header) else 'other',
-                    'kernel':kernel.cancellation_diagnostic(pid,timestamp) if kernel is not None else None})
+                    'kernel':kernel.cancellation_diagnostic(pid,timestamp,histories.get(pid,[])) if kernel is not None else None})
             if destination[0]=='AF_UNSPEC' and name!='connect':
                 raise ValueError('An unspecified send destination cannot be classified')
             if name == 'connect':

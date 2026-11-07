@@ -52,7 +52,8 @@ class KernelEvidenceTests(unittest.TestCase):
         correlation=caught.exception.observer_details['kernel']
         self.assertEqual(correlation,{'terminal_window':True,'ptrace_time_in_capture':True,
             'network_entries':1,'network_returns':0,'process_exits':1,
-            'entries_in_or_after_window':0,'returns_in_or_after_window':0})
+            'entries_in_or_after_window':0,'returns_in_or_after_window':0,
+            'trace_network_records':1,'matched_prior_calls':0,'ledger_status':'count-mismatch'})
         self.assertNotIn('private',str(caught.exception)+str(correlation))
 
     def test_amd64_abort_return_is_only_allowed_for_the_cancelled_control(self):

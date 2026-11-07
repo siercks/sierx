@@ -61,6 +61,7 @@ class KernelEvidence:
         self.offset_lower, self.offset_upper = lower/1e9, upper/1e9
         self.entries, self.exits, returns = defaultdict(list), defaultdict(list), defaultdict(list)
         self.return_events=defaultdict(list)
+        self.returned_calls=defaultdict(list)
         prefix = re.compile(r'^\s*.+-(\d+)\s+\[(\d+)\]\s+\S+\s+(\d+\.\d+):\s+(.*)$')
         started=False
         for line in text.splitlines():
@@ -93,6 +94,7 @@ class KernelEvidence:
                 if value >= 2**63: value -= 2**64
                 returns[(int(pid), returned[1])].append((timestamp, value))
                 self.return_events[int(pid)].append(timestamp)
+                self.returned_calls[int(pid)].append((timestamp, returned[1], value))
             elif body.startswith('sched_process_exit:'):
                 identity = re.search(r' pid=([0-9]+) prio=[0-9]+$', body)
                 if not identity or identity[1] != pid:
@@ -158,19 +160,61 @@ class KernelEvidence:
         # lifetime also covers delayed/misordered userspace trace rendering.
         return not self.entries.get(pid) and not self.return_events.get(pid)
 
-    def cancellation_diagnostic(self,pid,timestamp):
+    def terminal_without_execution(self, pid, timestamp, history):
+        """Require a bijection for ALL completed calls, not just empty late windows.
+
+        A thread may have performed earlier, fully decoded sends before dying
+        at a new ptrace entry stop. Every prior call must have exactly one
+        matching kernel entry AND return (name, descriptor, result and order),
+        before the terminal uncertainty interval. No orphan, restarted, extra,
+        missing or overlapping execution can be assigned to the terminal stop.
+        The caller still classifies all completed/explicit outgoing attempts.
+        """
+        return self._terminal_ledger(pid,timestamp,history)[0]
+
+    def _terminal_ledger(self,pid,timestamp,history):
+        pid=int(pid)
+        if self._terminal_window(pid,timestamp) is None or not history:
+            return False,0,'not-terminal'
+        if history[-1][0]!=timestamp or history[-1][3] is not None:
+            return False,0,'ptrace-incomplete'
+        prior=history[:-1]
+        entries=self.entries.get(pid,[])
+        returns=self.returned_calls.get(pid,[])
+        if len(entries)!=len(prior) or len(returns)!=len(prior):
+            return False,0,'count-mismatch'
+        terminal_lower=timestamp-self.offset_upper-0.001
+        previous_exit=self.begin
+        for index,((when,call,descriptor,result),entry,returned) in enumerate(zip(prior,entries,returns)):
+            next_time=history[index+1][0]
+            lower=when-self.offset_upper-0.001
+            upper=next_time-self.offset_lower+0.001
+            if (result is None or descriptor is None
+                    or entry[1:]!=(call,descriptor) or returned[1:]!=(call,result)):
+                return False,index,'call-mismatch'
+            if (when>=next_time or not self.begin<=lower<=entry[0]<=returned[0]<terminal_lower
+                    or previous_exit>entry[0] or returned[0]>upper):
+                return False,index,'time-mismatch'
+            previous_exit=returned[0]
+        return True,len(prior),'verified'
+
+    def cancellation_diagnostic(self,pid,timestamp,history=None):
         """Payload-free explanation only; never changes the exclusion decision."""
         pid=int(pid)
         lower=timestamp-self.offset_upper-0.001
         upper=timestamp-self.offset_lower+0.001
         entries=self.entries.get(pid,[])
         returns=self.return_events.get(pid,[])
-        return {'terminal_window':self._terminal_window(pid,timestamp) is not None,
+        diagnostic={'terminal_window':self._terminal_window(pid,timestamp) is not None,
                 'ptrace_time_in_capture':self.begin<=lower<=upper<=self.end,
                 'network_entries':len(entries),'network_returns':len(returns),
                 'process_exits':len(self.exits.get(pid,[])),
                 'entries_in_or_after_window':sum(row[0]>=lower for row in entries),
                 'returns_in_or_after_window':sum(when>=lower for when in returns)}
+        if history is not None:
+            _,matched,status=self._terminal_ledger(pid,timestamp,history)
+            diagnostic.update(trace_network_records=len(history),matched_prior_calls=matched,ledger_status=status)
+        return diagnostic
 
     def covers_start(self, timestamp):
         return timestamp-self.offset_upper >= self.begin
