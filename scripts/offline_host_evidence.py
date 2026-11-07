@@ -246,6 +246,27 @@ def validate_runtime(runtime,emulated=False):
         raise ValueError('Runtime inventory omits actual installed services')
 
 
+def validate_acquisition_probe(report,bundle,expected,suite_sha256):
+    if (report.get('schema')!=1 or report.get('suite')!='offline-acquisition-probe-v1'
+            or report.get('coverage')!='acquisition-probe' or report.get('result')!='passed'
+            or report.get('release_acceptance') is not False
+            or not re.fullmatch(r'[a-f0-9]{64}',suite_sha256)
+            or report.get('suite_sha256')!=suite_sha256 or report.get('arch')!=bundle['arch']
+            or report.get('release')!=bundle['release'] or report.get('bundle_sha256')!=expected
+            or report.get('virtual_cpu') not in {'tcg','kvm'}
+            or type(report.get('virtual_cpus')) is not int
+            or report['virtual_cpus']!=(4 if report['virtual_cpu']=='tcg' else 2)
+            or not re.fullmatch(r'(?:ubuntu-24\.04|rocky-10(?:\.[0-9]+)?)',report.get('profile',''))
+            or any(not re.fullmatch(r'[a-f0-9]{64}',report.get(name,''))
+                   for name in ('rootfs_sha256','kernel_sha256','archive_sha256'))):
+        raise ValueError('Incomplete or mismatched development acquisition probe')
+    acquisition=report.get('acquisition',{})
+    if (acquisition.get('result')!='passed' or acquisition.get('source')!='synthetic-loopback-registry'
+            or any(acquisition.get(name) is not True for name in ('opt_in','https_verified','empty_store','image_identity_verified'))
+            or any(type(acquisition.get(name)) is not int or acquisition[name]<1 for name in ('manifest_requests','blob_requests'))):
+        raise ValueError('Missing explicit trusted HTTPS acquisition control')
+
+
 def validate_runtime_probe(report,bundle,expected,suite_sha256):
     if (report.get('schema')!=1 or report.get('suite')!='offline-runtime-probe-v1'
             or report.get('coverage')!='runtime-probe' or report.get('result')!='passed'

@@ -114,6 +114,33 @@ def await_database():
     raise RuntimeError('Database TCP endpoint did not become ready')
 
 
+def configure_tls():
+    tls = HOME / '.config/sierx/tls'
+    tls.mkdir(parents=True)
+    ca=HOME/'fixture-ca'
+    ca.mkdir(mode=0o700)
+    run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+        '-keyout',ca/'ca.key','-out',ca/'ca.crt','-subj','/CN=Sierx fixture CA',
+        '-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign,cRLSign')
+    run('openssl','req','-new','-newkey','rsa:2048','-nodes','-keyout',tls/'server.key',
+        '-out',ca/'server.csr','-subj','/CN=localhost')
+    (ca/'server.ext').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n'
+        'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1\n')
+    run('openssl','x509','-req','-in',ca/'server.csr','-CA',ca/'ca.crt','-CAkey',ca/'ca.key',
+        '-CAcreateserial','-out',tls/'server.crt','-days','1','-extfile',ca/'server.ext')
+    (tls / 'server.key').chmod(0o600)
+    ENV['SSL_CERT_FILE'] = str(ca/'ca.crt')
+    ENV['SIERX_TEST_SERVER_CERT']=str(tls/'server.crt')
+    ENV['NODE_EXTRA_CA_CERTS'] = ENV['SSL_CERT_FILE']
+
+
+def acquisition(lock):
+    spec=importlib.util.spec_from_file_location('registry','/opt/acceptance/tests/offline-local-registry.py')
+    registry=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(registry)
+    return registry.main(BUNDLE,lock,ENV,run,phase)
+
+
 def main():
     os.umask(0o077)
     require(os.getuid() == 1001, 'Guest fixture requires the unprivileged synthetic account')
@@ -133,6 +160,17 @@ def main():
     require(info['store']['imageStore']['number'] == 0, 'Image store is not fresh')
     require(info['store']['graphDriverName'] == 'overlay', 'Native rootless overlay storage is required')
     profile = platform.freedesktop_os_release()
+    if OPTIONS.get('acquisition_probe'):
+        require(not OPTIONS['closeout'], 'Acquisition probes cannot produce closeout evidence')
+        phase('acquisition-prepare')
+        configure_tls()
+        lock = json.loads((BUNDLE/'bundle.lock.json').read_text())
+        result = acquisition(lock)
+        return {'schema':1,'suite':'offline-acquisition-probe-v1','coverage':'acquisition-probe',
+                'release_acceptance':False,'result':'passed','suite_sha256':OPTIONS['suite_sha256'],
+                'profile':profile['ID']+'-'+profile['VERSION_ID'],'arch':lock['arch'],
+                'release':lock['release'],'bundle_sha256':OPTIONS['bundle_sha256'],
+                'virtual_cpus':os.cpu_count(),'acquisition':result}
     phase('import')
     password = secrets.token_urlsafe(32)
     database = 'postgres://sierx:' + password + '@127.0.0.1:15432/sierx?sslmode=disable'
@@ -165,25 +203,10 @@ def main():
     run(BUNDLE / 'bin/sierxctl', 'lifecycle', 'init')
     config = HOME / '.config/sierx'
     tls = config / 'tls'
-    tls.mkdir(parents=True)
-    ca=HOME/'fixture-ca'
-    ca.mkdir(mode=0o700)
-    run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
-        '-keyout',ca/'ca.key','-out',ca/'ca.crt','-subj','/CN=Sierx fixture CA',
-        '-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign,cRLSign')
-    run('openssl','req','-new','-newkey','rsa:2048','-nodes','-keyout',tls/'server.key',
-        '-out',ca/'server.csr','-subj','/CN=localhost')
-    (ca/'server.ext').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n'
-        'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1\n')
-    run('openssl','x509','-req','-in',ca/'server.csr','-CA',ca/'ca.crt','-CAkey',ca/'ca.key',
-        '-CAcreateserial','-out',tls/'server.crt','-days','1','-extfile',ca/'server.ext')
-    (tls / 'server.key').chmod(0o600)
-    ENV['SSL_CERT_FILE'] = str(ca/'ca.crt')
-    ENV['SIERX_TEST_SERVER_CERT']=str(tls/'server.crt')
+    configure_tls()
     ENV['SIERX_TEST_EMULATED']='1' if OPTIONS['virtual_cpu']=='tcg' else '0'
     timeout_seconds=10 if OPTIONS['virtual_cpu']=='tcg' else 1
     ENV['SIERX_LIFECYCLE_CHECK_TIMEOUT']=str(timeout_seconds)+'s'
-    ENV['NODE_EXTRA_CA_CERTS'] = ENV['SSL_CERT_FILE']
     app = {key: ENV[key] for key in ('SIERX_ENV','SIERX_AUTH_MODE','SIERX_BASE_URL',
         'SIERX_LISTEN_ADDR','SIERX_SESSION_KEY','SIERX_RUNTIME_DATABASE_URL','SIERX_AUTH_DATABASE_URL',
         'SIERX_LIFECYCLE_CHECK_TIMEOUT')}
@@ -278,10 +301,7 @@ def main():
         request('/api/v1/auth/login',{'email':'offline@example.test','password':password})
         scenarios['runtime']=scenario.runtime(BUNDLE,OPTIONS['soak_seconds'],ENV,run,LOG,request,phase)
         phase('explicit-opt-in-acquisition')
-        spec=importlib.util.spec_from_file_location('registry','/opt/acceptance/tests/offline-local-registry.py')
-        registry=importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(registry)
-        scenarios['acquisition']=registry.main(BUNDLE,lock,ENV,run,phase)
+        scenarios['acquisition']=acquisition(lock)
     addresses = json.loads(run('podman','inspect','sierx-postgres'))[0]['NetworkSettings'].get('Networks') or {}
     peers=run('psql',ENV['DATABASE_URL'],'-XAt','-v','ON_ERROR_STOP=1','-c',
         "SELECT host(inet_client_addr()) UNION SELECT host(inet_server_addr()) UNION SELECT host(client_addr) FROM pg_stat_activity WHERE datname=current_database() AND client_addr IS NOT NULL").splitlines()
@@ -316,6 +336,7 @@ if __name__ == '__main__':
         with LOG.open('a') as log:
             log.write('\nFailed phase: ' + PHASE + '\n' + type(error).__name__ + ': ' + str(error) + '\n')
         result = diagnostics.failure_record(error, PHASE)
+        diagnostics.checkpoint_failure(HOME, result)
         diagnostics.emit_resources()
         for name in ('sierx-postgres.service','sierx.service','sierx-caddy.service'):
             with LOG.open('ab') as log:

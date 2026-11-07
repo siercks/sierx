@@ -182,6 +182,11 @@ class OfflinePromotionTests(unittest.TestCase):
         # Reusable release calls expose only the staged-candidate option.
         call=host_workflow.split('  workflow_call:\n',1)[1].split('\npermissions:',1)[0]
         self.assertNotIn('runtime_probe',call)
+        self.assertNotIn('acquisition_probe',host_workflow)
+        diagnostic=(ROOT/'.github/workflows/acquisition-diagnostic.yml').read_text()
+        self.assertIn('make probe-offline-acquisition-vm',diagnostic)
+        self.assertNotIn('make offline-host-aggregate',diagnostic)
+        self.assertNotIn('packages: write',diagnostic)
         self.assertIn('make offline-host-aggregate',host_workflow)
         self.assertIn('profile: rocky10',host_workflow)
         self.assertIn('runner: ubuntu-26.04-arm\n            profile: ubuntu24\n            arch: arm64',host_workflow)

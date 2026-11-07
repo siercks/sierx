@@ -118,6 +118,17 @@ def failure_record(error, phase):
     return sanitize_failure(value)
 
 
+def checkpoint_failure(home, value):
+    """Sync a failed-only diagnostic before optional journal collection can fail."""
+    failure = sanitize_failure(value)
+    pending = Path(home)/'failure.pending.json'
+    pending.write_text(json.dumps(failure)+'\n')
+    pending.replace(Path(home)/'failure.json')
+    os.sync()
+    print('SIERX_FAILURE: '+json.dumps(failure, sort_keys=True), flush=True)
+    return failure
+
+
 def resources(root=Path('/')):
     result = dict.fromkeys(RESOURCE_KEYS)
     try:

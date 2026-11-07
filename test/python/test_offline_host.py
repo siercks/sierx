@@ -1,5 +1,7 @@
 """Reject stale evidence and hostile OS archives before launching a guest."""
 import copy
+import ast
+import contextlib
 import hashlib
 import importlib.util
 import io
@@ -57,6 +59,39 @@ class EvidenceTests(unittest.TestCase):
                 result = host.retain_incomplete_failure(Path('/guest'), report, 'arm64', 'c'*64, 'a'*40)
             self.assertEqual(result['phase'], 'acquisition-store-info')
             self.assertFalse(report.exists())
+
+    def test_failed_guest_checkpoint_survives_a_crashing_optional_journal_collector(self):
+        # Exercise the guest's actual exception handler. The collector used to
+        # run before any recoverable failure record was written.
+        import offline_host_diagnostics as diagnostics
+        source=ast.parse((ROOT/'scripts/offline-host-guest.py').read_text())
+        entry=source.body[-1]
+        with tempfile.TemporaryDirectory() as temporary:
+            home=Path(temporary)
+            original=RuntimeError('private original error')
+            original.fixture_exit_code=125
+            original.fixture_command='podman-inspect'
+            original.fixture_command_detail='other'
+            def fail(): raise original
+            namespace={'__name__':'__main__','sys':SimpleNamespace(argv=['guest.py']),
+                'main':fail,'LOG':home/'diagnostics.log','HOME':home,'PHASE':'acquisition-inspect',
+                'diagnostics':diagnostics,'subprocess':SimpleNamespace(TimeoutExpired=subprocess.TimeoutExpired,
+                    run=lambda *a,**k: (_ for _ in ()).throw(PermissionError('private journal error')))}
+            with patch.object(diagnostics.os,'sync'),patch.object(diagnostics,'emit_resources'), \
+                    contextlib.redirect_stdout(io.StringIO()) as console,self.assertRaises(PermissionError):
+                exec(compile(ast.Module(body=[entry],type_ignores=[]),'guest-entry-test','exec'),namespace)
+            self.assertFalse((home/'result.json').exists())
+            report=home/'host-acceptance.json'
+            def read_disk(disk,name):
+                return (home/name).read_bytes()
+            with patch.object(host,'disk_file',side_effect=read_disk):
+                failure=host.retain_incomplete_failure(Path('/guest'),report,'arm64','c'*64,'a'*40)
+            self.assertEqual(failure['phase'],'acquisition-inspect')
+            self.assertEqual(failure['guest_command'],'podman-inspect')
+            self.assertEqual(failure['command_exit_code'],125)
+            self.assertNotIn('private',console.getvalue()+report.with_suffix('.failure.json').read_text())
+            self.assertFalse(report.exists())
+            with self.assertRaises(ValueError):evidence.validate_closeout(failure,self.bundle,'d'*64,'c'*64)
 
     def test_closeout_rejects_missing_kernel_controls_or_invalid_cancellation_counts(self):
         network=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',
@@ -228,6 +263,29 @@ class EvidenceTests(unittest.TestCase):
         broken=copy.deepcopy(probe)
         broken['runtime']['maintenance_timer_triggered']=False
         with self.assertRaises(ValueError):evidence.validate_runtime_probe(broken,self.bundle,'d'*64,'c'*64)
+
+    def test_vm_acquisition_probe_cannot_satisfy_release_acceptance(self):
+        with self.assertRaisesRegex(ValueError,'require --development'):
+            host.main(SimpleNamespace(acquisition_probe=True,development=False))
+        with self.assertRaisesRegex(ValueError,'one diagnostic'):
+            host.main(SimpleNamespace(acquisition_probe=True,runtime_probe=True,development=True))
+        report=full_host_report(self.bundle,'d'*64,'c'*64,'ubuntu-24.04',
+            {'release':self.bundle['release'],'bundle_sha256':'e'*64})
+        probe={key:report[key] for key in ('result','suite_sha256','profile','arch','release','bundle_sha256',
+               'virtual_cpus','virtual_cpu','rootfs_sha256','kernel_sha256','archive_sha256')}
+        probe.update(schema=1,suite='offline-acquisition-probe-v1',coverage='acquisition-probe',
+            release_acceptance=False,acquisition=report['scenarios']['acquisition'])
+        evidence.validate_acquisition_probe(probe,self.bundle,'d'*64,'c'*64)
+        with self.assertRaises(ValueError):evidence.validate_closeout(probe,self.bundle,'d'*64,'c'*64)
+        for key,value in (('release_acceptance',True),('coverage','closeout'),('release',{}),
+                          ('arch','other'),('suite_sha256','e'*64),('virtual_cpu','tcg')):
+            with self.subTest(key=key),self.assertRaises(ValueError):
+                evidence.validate_acquisition_probe({**probe,key:value},self.bundle,'d'*64,'c'*64)
+        for key,value in (('https_verified',False),('image_identity_verified',False),
+                          ('blob_requests',0),('manifest_requests',True)):
+            broken=copy.deepcopy(probe);broken['acquisition'][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):
+                evidence.validate_acquisition_probe(broken,self.bundle,'d'*64,'c'*64)
 
     def test_closeout_timing_budgets_must_match_actual_acceleration(self):
         previous={'release':{'revision':'9'*40,'image':'example.test/previous@sha256:'+'f'*64},'bundle_sha256':'e'*64}

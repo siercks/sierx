@@ -375,6 +375,9 @@ release-manifest: ## Combine the two published image digests and write the pull 
 .PHONY: probe-offline-acquisition
 probe-offline-acquisition: ## Native no-NIC HTTPS acquisition diagnostic; never release acceptance
 	@bash scripts/probe-acquisition.sh
+.PHONY: probe-offline-acquisition-vm
+probe-offline-acquisition-vm: ## Diagnose acquisition in the actual no-NIC OS guest; never release acceptance
+	@bash scripts/offline-host-release.sh acquisition-probe
 
 release-login: ## Authenticate the publishing job; credentials arrive through its environment
 	@bash scripts/release.sh login

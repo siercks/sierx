@@ -2737,3 +2737,25 @@ successfully in 8.74 seconds; all 155 Python regressions still pass. The first
 local leftover helper was identified by its tracer and isolated network namespace
 before removal. Superseded hosted diagnostic attempts are cancelled, not called
 successful. This launcher correction does not assert an ARM64 root-cause fix.
+
+The full release at `37710ad4e9e4ec88f5aaf45b39989908967f08fc`
+([run 42329886746](https://github.com/siercks/sierx/actions/runs/42329886746))
+passed both source gates, security, native builds/image tests/offline bundles and
+both AMD64 host profiles. Ubuntu ARM64 failed after acquisition-inspect; the
+guest final result was absent, so failed-result recovery could not expose the
+original error. Promotion was skipped and production was not changed.
+
+Persist a separate sanitized failed-only checkpoint before optional journal
+collection and emit its fixed fields immediately. It can recover diagnostics but
+cannot produce passing evidence. A regression executes the actual guest failure
+handler with a crashing journal collector and verifies that the original failed
+operation survives without private output or a passing report.
+
+Add a manually dispatched focused acquisition probe in the actual Ubuntu24 ARM64
+no-NIC VM, using the same rootless account, systemd manager, storage isolation,
+TLS setup and acquisition function as full acceptance. The earlier short native
+probe used a newer host OS/Podman. This VM probe has a separate report contract,
+requires development mode and cannot satisfy release/host promotion. All required
+release scenarios and the three-profile host matrix remain unchanged. Validation:
+158 Linux Python tests, pinned actionlint v1.7.12 and launcher ShellCheck pass.
+The underlying acquisition failure still requires diagnosis before a new release.

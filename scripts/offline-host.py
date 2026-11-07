@@ -229,7 +229,8 @@ After=basic.target
     options = {'bundle_sha256': args.expected_sha256, 'previous_sha256': args.previous_sha256,
                'soak_seconds': args.soak_seconds, 'suite_sha256': args.suite_sha256,
                'closeout':not args.development,'virtual_cpu':args.virtual_cpu,
-               'runtime_probe':getattr(args,'runtime_probe',False)}
+               'runtime_probe':getattr(args,'runtime_probe',False),
+               'acquisition_probe':getattr(args,'acquisition_probe',False)}
     (home / 'options.json').write_text(json.dumps(options))
     os.chown(home / 'options.json', 1001, 1001)
 
@@ -269,7 +270,8 @@ def qemu_command(arch, mode, disk, kernel, initrd, serial):
 
 def disk_file(disk, name):
     # Only fixed guest paths are accepted, never operator-provided debugfs commands.
-    paths = {'result.json':'/home/acceptance/result.json', 'diagnostics.log':'/home/acceptance/diagnostics.log',
+    paths = {'result.json':'/home/acceptance/result.json', 'failure.json':'/home/acceptance/failure.json',
+             'diagnostics.log':'/home/acceptance/diagnostics.log',
              'manager.trace':'/var/log/sierx-network/manager.trace', 'manager.stderr':'/var/log/sierx-network/manager.stderr',
              'installer.trace':'/var/log/sierx-network/installer.trace', 'installer.stderr':'/var/log/sierx-network/installer.stderr',
              'network-controls.json':'/home/acceptance/network-controls.json',
@@ -314,14 +316,19 @@ def retain_incomplete_failure(disk, report, arch, suite, revision):
     # A failed service can power off before the independent completion marker.
     # Recover only a failure diagnostic; a recovered pass must NEVER bypass the
     # marker/kernel checks. Raw guest fields and journals remain private.
-    try:
-        raw = disk_file(disk, 'result.json')
-        if not raw or len(raw) > 65536:
-            return None
-        result = json.loads(raw)
-    except (ValueError, OSError, subprocess.SubprocessError):
-        return None
-    if not isinstance(result, dict) or result.get('result') != 'failed':
+    result = None
+    for name in ('result.json', 'failure.json'):
+        try:
+            raw = disk_file(disk, name)
+            if not raw or len(raw) > 65536:
+                continue
+            candidate = json.loads(raw)
+        except (ValueError, OSError, subprocess.SubprocessError):
+            continue
+        if isinstance(candidate, dict) and candidate.get('result') == 'failed':
+            result = candidate
+            break
+    if result is None:
         return None
     # Do not let an unreadable private journal discard the primary diagnostic.
     try:
@@ -360,8 +367,10 @@ def recover_disk(disk):
 
 def main(args):
     stage(args,'host-verify-inputs')
-    if getattr(args,'runtime_probe',False) and not args.development:
-        raise ValueError('Runtime probes require --development and cannot satisfy promotion')
+    if (getattr(args,'runtime_probe',False) or getattr(args,'acquisition_probe',False)) and not args.development:
+        raise ValueError('Diagnostic probes require --development and cannot satisfy promotion')
+    if getattr(args,'runtime_probe',False) and getattr(args,'acquisition_probe',False):
+        raise ValueError('Select one diagnostic probe')
     args.suite_sha256 = suite_digest()
     report = Path(args.report).absolute()
     report.unlink(missing_ok=True)
@@ -532,6 +541,14 @@ def main(args):
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             if result.get('virtual_cpus') != (4 if mode=='tcg' else 2):
                 raise ValueError('Guest CPU count differs from its declared emulation profile')
+            if getattr(args,'acquisition_probe',False):
+                result.update(virtual_cpu=mode,rootfs_sha256=args.rootfs_sha256,
+                              archive_sha256=args.archive_sha256,kernel_sha256=kernel_digest)
+                evidence.validate_acquisition_probe(result,data,args.expected_sha256,args.suite_sha256)
+                report.write_text(json.dumps(result,indent=2)+'\n')
+                report.chmod(0o644)
+                print('offline-host: development acquisition probe passed; no release acceptance',flush=True)
+                return
             if getattr(args,'runtime_probe',False):
                 result.update(virtual_cpu=mode,rootfs_sha256=args.rootfs_sha256,
                               archive_sha256=args.archive_sha256,kernel_sha256=kernel_digest)
@@ -564,7 +581,7 @@ def main(args):
                 if serial.exists():
                     stream.write(serial.read_bytes()[-65536:])
                 stream.write(disk_file(disk, 'diagnostics.log')[-65536:])
-            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','network-controls.json',
+            for name in ('manager.trace','installer.trace','manager.stderr','installer.stderr','result.json','failure.json','network-controls.json',
                          'kernel.trace','kernel.json'):
                 private.with_suffix('.'+name).write_bytes(disk_file(disk,name))
 
@@ -603,6 +620,7 @@ if __name__ == '__main__':
     parser.add_argument('--previous-evidence')
     parser.add_argument('--development',action='store_true',help='Limited fixture development; never valid for promotion')
     parser.add_argument('--runtime-probe',action='store_true',help='Development-only runtime/timer diagnosis; omits closeout scenarios')
+    parser.add_argument('--acquisition-probe',action='store_true',help='Development-only acquisition diagnosis in the real guest; never release acceptance')
     parser.add_argument('--soak-seconds', type=int, default=120)
     parser.add_argument('--acceleration', choices=('auto', 'kvm', 'tcg'), default='auto')
     args=parser.parse_args()

@@ -8,6 +8,11 @@ on:
       - "scripts/probe-acquisition*"
       - ".github/workflows/acquisition-diagnostic.yml"
   workflow_dispatch:
+    inputs:
+      vm_probe:
+        description: Diagnose ARM64 acquisition in the Ubuntu24 no-NIC guest; not release acceptance
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -15,6 +20,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   probe:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.vm_probe) }}
     name: Native acquisition diagnostic (${{ matrix.arch }}; no release acceptance)
     strategy:
       fail-fast: false
@@ -49,4 +55,44 @@ jobs:
         with:
           name: acquisition-diagnostic-${{ matrix.arch }}
           path: dist/acquisition-diagnostic-*.json
+          if-no-files-found: error
+
+  vm-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.vm_probe }}
+    name: ARM64 Ubuntu24 VM acquisition diagnostic (no release acceptance)
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 60
+    env:
+      ARCH: arm64
+      PROFILE: ubuntu24
+      SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install disposable VM prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman python3 curl qemu-system-arm e2fsprogs
+          if ! sudo modprobe kvm; then
+            echo 'KVM unavailable; diagnostic will use bounded native emulation.'
+          fi
+      - run: make release-binaries release-image sbom offline-candidate-prepare
+        env:
+          TAG: ${{ github.sha }}
+          SBOM_OUT: dist/sbom-arm64.cdx.json
+      - run: make offline-host-prepare
+      - run: make probe-offline-acquisition-vm
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: acquisition-vm-diagnostic-arm64
+          path: dist/acquisition-vm-probe-*.json
           if-no-files-found: error

@@ -1,5 +1,7 @@
 """Failure metadata must expose no untrusted console or environment content."""
 import json
+import contextlib
+import io
 from pathlib import Path
 import sys
 import tempfile
@@ -10,6 +12,18 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_checkpoint_is_failed_only_and_sanitized_before_any_console_or_disk_output(self):
+        with tempfile.TemporaryDirectory() as temporary,contextlib.redirect_stdout(io.StringIO()) as console:
+            home=Path(temporary)
+            with self.assertRaises(ValueError):diagnostics.checkpoint_failure(home,{'result':'passed'})
+            self.assertFalse((home/'failure.json').exists())
+            value=diagnostics.checkpoint_failure(home,{'result':'failed','phase':'acquisition-inspect',
+                'failure_type':'RuntimeError','private':'credential','guest_command':'private argument'})
+            self.assertEqual(json.loads((home/'failure.json').read_text()),value)
+            self.assertNotIn('private',console.getvalue()+(home/'failure.json').read_text())
+            self.assertFalse((home/'result.json').exists())
+            self.assertFalse((home/'failure.pending.json').exists())
+
     def test_json_decode_failure_keeps_fixed_type_and_position_without_private_output(self):
         for document,kind in (('', 'empty'), ('private-credential', 'other'), ('{private-credential', 'object')):
             error=json.JSONDecodeError('private exception message',document,0)
