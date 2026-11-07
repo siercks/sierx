@@ -207,14 +207,14 @@ def records(lines, unfinished=None):
     for raw in lines:
         line = pattern.match(raw.strip())
         if not line:
-            changed = re.search(r'\b(connect|sendto|sendmsg|sendmmsg|recvmsg|socket|socketpair|accept4?|getpeername|close|dup[23]?|fcntl|execve(?:at)?|clone3?|fork|vfork|io_uring_\w+)(?:\(| resumed>)', raw)
+            changed = re.search(r'\b(connect|sendto|sendmsg|sendmmsg|recvmsg|socket|socketpair|accept4?|getpeername|close|close_range|unshare|dup[23]?|fcntl|execve(?:at)?|clone3?|fork|vfork|io_uring_\w+)(?:\(| resumed>)', raw)
             if changed:
                 # A failed ephemeral runner cannot retain its private trace.
                 # Report only fixed header/completion categories, never the
                 # process label, arguments, path, payload or raw trace prefix.
                 call = changed[1] if changed[1] in {'connect','sendto','sendmsg','sendmmsg','recvmsg','socket',
                     'socketpair','accept','accept4','getpeername','close','dup','dup2','dup3','fcntl',
-                    'execve','execveat','clone','clone3','fork','vfork'} else 'io_uring'
+                    'execve','execveat','clone','clone3','fork','vfork','close_range','unshare'} else 'io_uring'
                 prefix = ('numbered' if re.match(r'^\d+(?:<|\s)',raw.strip()) else
                           'bracketed' if re.match(r'^\[pid\s+[0-9]+\]',raw.strip()) else 'other')
                 shape = ('nul-padding' if raw.lstrip().startswith('\0') else
@@ -257,6 +257,29 @@ def parse(lines,stats=None,kernel=None):
     if kernel is not None:
         stats.setdefault('cancelled_before_kernel_entry', {role:0 for role in sorted(PROCESSES | {'other'})})
     sockets, connected, attempts, executed, owners, roles, inode_family, inode_peer, members = {}, {}, [], set(), {}, {}, {}, {}, {}
+    close_on_exec={}
+    generation=0
+    def split_table(pid,owner):
+        nonlocal generation
+        generation+=1
+        # The original owner can split too; a PID alone cannot identify both
+        # its new table and the table still shared by its peers.
+        replacement=(pid,generation)
+        owners[pid]=replacement
+        members[replacement]=set(members.get(owner,()))
+        close_on_exec[replacement]=set(close_on_exec.get(owner,()))
+        for table in (sockets,connected):
+            for number in members[replacement]:
+                if (owner,number) in table:table[(replacement,number)]=table[(owner,number)]
+        return replacement
+    def forget(owner,number):
+        sockets.pop((owner,number),None);connected.pop((owner,number),None)
+        members.setdefault(owner,set()).discard(number)
+        close_on_exec.setdefault(owner,set()).discard(number)
+    def mark_cloexec(owner,number,enabled):
+        flags=close_on_exec.setdefault(owner,set())
+        if enabled:flags.add(number)
+        else:flags.discard(number)
     unfinished=set()
     decoded=records(lines,unfinished)
     if kernel is not None and (not decoded or not kernel.covers_start(decoded[0][2])):
@@ -280,6 +303,9 @@ def parse(lines,stats=None,kernel=None):
                     ' call='+name+' result='+str(returned))
             stats['blocked_io_uring_setups']+=1
         if name in {'execve','execveat'} and returned==0:
+            owner=split_table(pid,owner)
+            owned=members[owner]
+            for number in list(close_on_exec[owner]):forget(owner,number)
             path=args[0] if name=='execve' else args[1]
             executable=re.match(r'"([^"]+)"',path)
             inherited=re.search(r'<([^>]+)>',args[0]) if name=='execveat' else None
@@ -297,12 +323,29 @@ def parse(lines,stats=None,kernel=None):
             else:
                 owners[child]=child
                 members[child]=set(owned)
+                close_on_exec[child]=set(close_on_exec.get(owner,()))
                 for table in (sockets,connected):
                     for number in owned:
                         if (owner,number) in table:table[(child,number)]=table[(owner,number)]
-        if name == 'close' and args:
-            sockets.pop(key,None);connected.pop(key,None)
-            owned.discard(key[1])
+        if name=='unshare' and returned==0 and args and re.search(r'\bCLONE_FILES\b',args[0]):
+            owner=split_table(pid,owner);owned=members[owner]
+        if name=='close_range' and returned==0:
+            if len(args)!=3:raise ValueError('Successful bulk close lacks complete arguments')
+            try:
+                bounds=[0xffffffff if value=='~0U' else int(value,0) for value in args[:2]]
+            except ValueError:
+                raise ValueError('Successful bulk close has unreadable bounds') from None
+            flags=set(args[2].split('|'))
+            if (not 0<=bounds[0]<=bounds[1]<=0xffffffff
+                    or not flags<= {'0','CLOSE_RANGE_UNSHARE','CLOSE_RANGE_CLOEXEC'}):
+                raise ValueError('Successful bulk close has unsupported bounds or flags')
+            if 'CLOSE_RANGE_UNSHARE' in flags:
+                owner=split_table(pid,owner);owned=members[owner]
+            for number in list(owned):
+                if bounds[0]<=number<=bounds[1]:
+                    if 'CLOSE_RANGE_CLOEXEC' in flags:mark_cloexec(owner,number,True)
+                    else:forget(owner,number)
+        if name == 'close' and args:forget(owner,key[1])
         if name == 'socket' and len(args) >= 2:
             if args[0]=='AF_INET6' and returned is not None and returned<0 and re.search(r'\b(?:EAFNOSUPPORT|EPERM|ENOSYS)\b',body):
                 stats['blocked_ipv6_sockets']+=1
@@ -310,6 +353,7 @@ def parse(lines,stats=None,kernel=None):
                 created=(owner,returned)
                 owned.add(returned)
                 connected.pop(created,None)
+                mark_cloexec(owner,returned,'SOCK_CLOEXEC' in args[1])
                 protocol='udp' if 'SOCK_DGRAM' in args[1] else 'tcp' if 'SOCK_STREAM' in args[1] else 'other'
                 if len(args)>2 and args[2] not in {'0','IPPROTO_IP','IPPROTO_TCP','IPPROTO_UDP'}:protocol='other'
                 sockets[created]=(args[0],protocol)
@@ -330,6 +374,7 @@ def parse(lines,stats=None,kernel=None):
                 sockets[(owner,number)] = ('AF_UNIX','local')
                 connected.pop((owner,number),None)
                 owned.add(number)
+                mark_cloexec(owner,number,'SOCK_CLOEXEC' in args[1])
                 pair_inode = socket_identity(value)
                 if pair_inode:
                     inode_family[pair_inode] = ('AF_UNIX','local')
@@ -338,6 +383,7 @@ def parse(lines,stats=None,kernel=None):
             created=(owner,returned)
             owned.add(returned)
             connected.pop(created,None)
+            mark_cloexec(owner,returned,name=='accept4' and len(args)>3 and 'SOCK_CLOEXEC' in args[3])
             destination=endpoint(args[1]) if len(args)>1 else None
             sockets[created]=sockets.get(key,(destination[0] if destination else '','tcp'))
             if destination:connected[created]=destination
@@ -387,6 +433,7 @@ def parse(lines,stats=None,kernel=None):
                         # entry; an opaque/file descriptor grants no local family.
                         sockets.pop(received, None); connected.pop(received, None)
                         owned.add(received[1])
+                        mark_cloexec(owner,received[1],len(args)>2 and 'MSG_CMSG_CLOEXEC' in args[2])
                         kind = re.match(r'[0-9]+<(TCPv6|TCP|UDPv6|UDP|UNIX(?:-[A-Z]+)?|NETLINK):', value)
                         if not kind:
                             continue
@@ -407,10 +454,19 @@ def parse(lines,stats=None,kernel=None):
             duplicate=(owner,returned)
             family=sockets.get(key) or inode_family.get(identity)
             destination=connected.get(key) or inode_peer.get(identity) or inline_endpoint(args[0])
+            if not (name=='dup2' and returned==key[1]):
+                mark_cloexec(owner,returned,name=='dup3' and len(args)>2 and 'O_CLOEXEC' in args[2]
+                             or name=='fcntl' and args[1]=='F_DUPFD_CLOEXEC')
             sockets.pop(duplicate,None);connected.pop(duplicate,None)
             if family:sockets[duplicate]=family
             if destination:connected[duplicate]=destination
             if family or destination:owned.add(returned)
+        if name=='fcntl' and returned==0 and len(args)>2 and args[1]=='F_SETFD':
+            if 'FD_CLOEXEC' in args[2]:enabled=True
+            else:
+                try:enabled=bool(int(args[2],0)&1)
+                except ValueError:raise ValueError('Successful descriptor flag change is unreadable') from None
+            mark_cloexec(owner,key[1],enabled)
         if name not in {'connect', 'sendto', 'sendmsg', 'sendmmsg'}: continue
         if not args: raise ValueError('Incomplete outgoing syscall')
         family, protocol = sockets.get(key, inode_family.get(identity,('', 'udp' if '<UDP' in args[0] else 'tcp')))
@@ -436,7 +492,7 @@ def parse(lines,stats=None,kernel=None):
                 descriptor = kind[1] if kind else 'opaque'
                 header = args[1] if name == 'sendmsg' and len(args) > 1 else None
                 raise NetworkObservationError({'pid':int(pid), 'role':role, 'call':name,
-                    'fd':key[1], 'table_owner':int(owner), 'returned':returned,
+                    'fd':key[1], 'table_owner':int(owner[0] if isinstance(owner,tuple) else owner), 'returned':returned,
                     'descriptor':descriptor if descriptor in DESCRIPTOR_KINDS else 'other',
                     'fd_family':family if family in {'AF_INET','AF_INET6','AF_UNIX','AF_NETLINK'} else 'unknown',
                     'header':'not-message' if name != 'sendmsg' else 'null' if header == 'NULL' else

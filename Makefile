@@ -434,6 +434,7 @@ probe-offline-runtime: ## Development-only runtime/timer diagnosis; never closeo
 prove-offline-host: ## Reject stale/incomplete reports, opaque traffic and altered delivery fixtures
 	@python3 -B -m unittest discover -s test/python -p test_offline_host.py
 	@python3 -B -m unittest discover -s test/python -p test_network_observer.py
+	@python3 -B -m unittest discover -s test/python -p test_network_fd_tables.py
 	@python3 -B -m unittest discover -s test/python -p test_offline_host_inputs.py
 
 .PHONY: offline-host-scope offline-host-aggregate offline-host-evidence offline-current-unpack

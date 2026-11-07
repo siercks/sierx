@@ -2813,3 +2813,33 @@ then wraps only explicit sanitized outputs in `host-audit-diagnostic-v1` with
 `release_acceptance:false`. It has no publishing permission or promotion path.
 The normal release matrix still requires both architectures and all three host
 profiles. Validation: 166 Linux Python tests, pinned actionlint and ShellCheck pass.
+
+Focused [run 42403081126](https://github.com/siercks/sierx/actions/runs/42403081126)
+passed the full Ubuntu AMD64 workload and audit on `afb4379`; source CI/security
+also passed. The earlier opaque-call failure did not reproduce. Do not relabel
+its original failure or claim the diagnostic envelope approves a release.
+
+Further review found and reproduced a concrete descriptor-ownership bug: the
+observer copied/shared tables at clone but never separated them after successful
+[`unshare(CLONE_FILES)`](https://man7.org/linux/man-pages/man2/unshare.2.html) or
+[`execve`](https://man7.org/linux/man-pages/man2/execve.2.html). One process's
+subsequent close could erase its peer's positively identified socket. It also
+missed [`close_range`](https://man7.org/linux/man-pages/man2/close_range.2.html)
+and close-on-exec state. New regressions failed against the prior implementation.
+
+Track separate table generations, successful table splits/bulk closes, and
+close-on-exec state for sockets, descriptor receipts, duplication and fcntl.
+Trace the added mutation syscalls and reject malformed/unknown successful forms.
+Known Unix socket ownership now survives a peer's split/close; closed or unknown
+descriptors remain rejected and explicit external attempts remain counted.
+Kernel non-execution exclusions, required scenarios and release matrix are unchanged.
+
+Validation: 175 Linux Python tests, pinned actionlint and ShellCheck pass. A real
+unprivileged C workload under root strace in a fresh no-NIC namespace verified
+peer descriptor survival after unshare, exec and bulk-close unsharing. Removing
+only the synthetic Unix send's descriptor annotation recreated the opaque shape:
+the old model rejected it and the corrected model retained the proven family in
+all three cases. This is diagnostic evidence, not full VM/release acceptance.
+The original ephemeral trace is unavailable, so this does not establish that the
+specific hosted failure had this cause. Fresh exact staged release acceptance
+and all three host profiles still must pass before production activation.
