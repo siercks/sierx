@@ -2596,3 +2596,17 @@ all six required rejection calls, certificate cleanup, service snapshots,
 bounded private-safe command categories and streaming stderr preservation on
 timeout. This is a correction to the evidence gap, not an underlying Podman fix;
 the next full attempt must supply the missing information if it fails again.
+
+
+## 2026-11-06 — Phase 3 entry (P3-01)
+
+- [x] P3-01: reconciled exact main base, release matrix and outstanding human evidence;
+  recorded portable scope and fixed contracts in docs/PHASE-3-PLAN.md, ADR-031 and
+  docs/PHASE-3-ACCEPTANCE.md. The owner's request authorizes starting Phase 3 without
+  inventing Phase 2 exit evidence. Current delivery remains amd64 AND arm64.
+
+Entry inspection (GitHub API, November 6): release 42163914084 at 4b73427 reports
+both source gates/security/build/image/offline-bundle checks successful; Ubuntu
+arm64 host check failed, aggregate failed, promotion skipped. Main push CI was
+cancelled. Isolated branch: codex/phase-3-foundation. Historical Phase 2 checkout
+was left unchanged. No production change or completed Phase 3 feature is claimed.

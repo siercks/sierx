@@ -1232,3 +1232,96 @@ Acceptance requires direct runtime authorization/forged-context rejection,
 credential/duplicate preservation, generated route/golden coverage, migration
 checks and real browser create/login/assignment/keyboard/mobile checks. Owner
 acceptance and deployed release evidence remain separate.
+
+
+## ADR-031 — Phase 3 board and personal-settings contracts
+
+Date: November 6, 2026. Status: accepted for implementation under the owner's
+Phase 3 coding-guide instruction. Feature/release acceptance remains separate.
+[PHASE-3-PLAN.md](PHASE-3-PLAN.md) owns P3-01 through P3-33.
+
+### Routes and authority
+
+Adopt the browser paths and HTTP paths in sections 4.1 and 6 of the plan, including
+`/board`, `/account` and the five account subpages. They are contracts, not installed
+routes. Each ships with handler, canonical/generated routes, golden/bootstrap
+coverage and lazy import in its owning task. Check existing ACCOUNT/BOARD project
+prefixes before reserving them; report a collision rather than renaming a project.
+Only existing workspace administrators configure boards/review username requests.
+Project ownership adds no permission.
+
+### Board snapshots and card semantics
+
+Use `board_definition`, `board_column`, `board_column_status` and
+`board_blocked_status`, keyed by project/config version. Column UUIDs survive edits.
+A snapshot maps each configured status exactly once; a nullable default must belong
+to its column. Save-time complete coverage/priority-select validation and seeding
+arrive with P3-04, not a half-populated new API. P3-03 enforces structural foreign
+keys, positive limits, unique positions/mappings and tenant/admin policies.
+
+Priority identifies a project select field by key; reuse compatible `priority`,
+provision optional Low/Normal/High/Urgent only if absent, and never rewrite an
+incompatible definition. Null means No priority. Blocked is a live nonterminal
+item with an explicitly configured blocked status or a live unfinished incoming
+blocks source, using authorized/lifecycle-filtered reads. No substring heuristics.
+Due dates remain calendar dates; timezone affects today's date, not stored values.
+
+Board reads share sxq/List visibility and project-wide rank. Return total live,
+filtered and loaded counts separately. WIP uses total live, warns and never blocks.
+First page: up to 20 cards per column, at most 50 columns; subsequent column pages
+at most 100 cards. Cursors bind project, normalized query, sort, column and config
+version. Only bounded projected card/parent/priority data is returned.
+
+### Transaction and conflict contract
+
+Add a transaction-stage board operation inside store, never two client mutations
+or race-sensitive checks in Mutate's accumulation callback. Lock order is workspace
+sequence row first, project row second, then moving/anchor item rows in UUID order;
+recheck membership, lifecycle visibility, current config, item version, transitions,
+required fields and full-order rank anchors before writing. Sequence allocation
+rolls back on failure. Config editors take project lock only and must never then
+acquire the workspace sequence lock. Rank rebalance remains under workspace writer
+serialization. Test move/config, anchor-change and concurrent-move interleavings.
+
+Moves require item If-Match, config version, destination column, explicit status
+when ambiguous, before/after anchor or start/end intent and optional required-field
+patch. Within-column reorder preserves status. Invalid/stale anchors conflict;
+column-end resolves unloaded neighbors. Counts/canonical rows reconcile via the
+existing cache/feed. Timeouts refetch before retry. Drafts/focus survive conflicts;
+rollback must not restore an old whole-cache snapshot. Menu/keyboard precede drag.
+
+### Preferences, identity and security
+
+One versioned self-only preference row plus per-user/workspace/project view rows.
+Adopt section 4.2 enums/defaults (Monday=1; comfortable; display_name; device zone;
+system date/clock). Existing theme/motion remain authoritative. GET/PATCH preferences
+use ETag/If-Match and partial updates; bootstrap includes safe styling preferences.
+View memory stores list/board only, never a query, and explicit URLs take precedence.
+IANA validation/formatting is local. Shared lazy ISO typed-entry/date-picker controls
+rotate headings and cells together for all seven week starts. Shared formatting
+handles date-only values separately from instants and refreshes at local midnight.
+
+Username UUID references remain stable; initial claim is transactional and once only;
+retired handles stay reserved, with original-account reclaim allowed only by admin
+review. Viewer-wide person labels use a shared helper and safe actor projections.
+Auth service owns password/factor changes and session-revocation race protection;
+runtime gains no credential columns. Capability metadata describes existing local
+or proxy modes without inactive provider buttons or email auto-linking.
+
+Avatar contract for P3-28/29: JPEG/PNG still input only, at most 2 MiB and 4 million
+decoded pixels, decode/re-encode to a 128x128 JPEG with metadata stripped, at most
+20,000 output bytes, bounded processing deadline. Reject animation and malformed
+input; prove the actual encoder/output/deadline before release. PostgreSQL stores
+only normalized bytes; self-only writes, private versioned delivery and safe
+replacement/removal. Include restore/export/account-lifecycle evidence.
+
+### Gates and delivery
+
+No new runtime dependency in this increment. Drag selection/pinning/license and
+actual chunk measurement belong to P3-12. Board/Account/calendar/avatar/drag code
+must stay outside the first-route graph; retain 250/20/60 decimal KB Brotli limits.
+`gate-3` includes Gate 2 plus feature proofs and candidate-bound manual/performance
+evidence. It must fail while those are missing, without making Gate 2 meaningless.
+The current release continues to require both native architectures and existing
+host checks; no bypass is authorized. Exercise migrations and restore on disposable
+copies before production. Reverting binaries alone is not schema recovery.
