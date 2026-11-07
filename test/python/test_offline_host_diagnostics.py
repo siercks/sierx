@@ -13,6 +13,31 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_direct_root_tracee_stderr_survives_empty_journal_without_disclosing_messages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);home=root/'home';directory=root/'observer'
+            home.mkdir();directory.mkdir()
+            (home/'progress.json').write_text('{"phase":"two-approved-releases"}')
+            direct=directory/'installer-guest.stderr'
+            direct.write_text('Traceback (most recent call last):\n'
+                '  File "/opt/acceptance/tests/offline-host-guest.py", line 88, in private_function\n'
+                '    private credential\nRuntimeError: private credential\n')
+            direct.chmod(0o600)
+            journal=__import__('subprocess').CompletedProcess([],0,stdout=b'')
+            with patch.object(diagnostics.subprocess,'run',return_value=journal),patch.object(diagnostics.os,'sync'), \
+                    contextlib.redirect_stdout(io.StringIO()) as console:
+                result=diagnostics.checkpoint_service_failure(home,directory,
+                    {'SERVICE_RESULT':'exit-code','EXIT_CODE':'exited','EXIT_STATUS':'1'})
+            self.assertEqual(result['failure_type'],'RuntimeError')
+            self.assertEqual(result['guest_frames'],[{'file':'offline-host-guest.py','line':88}])
+            self.assertEqual(result['tracee_stderr_bytes'],direct.stat().st_size)
+            self.assertEqual(direct.stat().st_mode&0o777,0o600)
+            self.assertFalse((home/'result.json').exists())
+            self.assertNotIn('private',console.getvalue()+json.dumps(result))
+            for value in (-1,True,2**32,'private'):
+                self.assertNotIn('tracee_stderr_bytes',diagnostics.sanitize_failure(
+                    {'result':'failed','tracee_stderr_bytes':value}))
+
     def test_root_service_checkpoint_survives_missing_guest_reports_and_failed_journal(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);home=root/'home';directory=root/'root-observer'

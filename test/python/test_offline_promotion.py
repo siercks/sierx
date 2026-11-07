@@ -174,8 +174,11 @@ class OfflinePromotionTests(unittest.TestCase):
         self.assertNotIn('runtime-probe',workflow)
         self.assertNotIn('packages: write',workflow)
         self.assertIn("'suite':'host-audit-diagnostic-v1','release_acceptance':False",workflow)
-        upload=workflow.split('name: diagnostic-host-audit-ubuntu24-amd64',1)[1]
-        self.assertIn('path: dist/host-audit-diagnostic-amd64.json',upload)
+        self.assertIn('options: [arm64, amd64]',workflow)
+        self.assertIn("ARCH: ${{ inputs.arch || 'arm64' }}",workflow)
+        self.assertIn("'ubuntu-26.04-arm'",workflow)
+        upload=workflow.split('name: diagnostic-host-audit-ubuntu24-${{ env.ARCH }}',1)[1]
+        self.assertIn('path: dist/host-audit-diagnostic-${{ env.ARCH }}.json',upload)
         self.assertNotIn('*',upload)
         self.assertNotIn('host-audit-diagnostic', (ROOT/'.github/workflows/release.yml').read_text())
 

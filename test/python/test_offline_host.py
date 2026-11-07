@@ -26,6 +26,18 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_installer_stderr_is_opened_by_root_and_never_added_to_host_recovery_paths(self):
+        wrapper=host.tracer_wrapper('installer','socket,execve')
+        self.assertIn('umask 077\nexec 3>/var/log/sierx-network/installer-guest.stderr\n',wrapper)
+        self.assertLess(wrapper.index('exec 3>'),wrapper.index('-u acceptance'))
+        manager=host.tracer_wrapper('manager','socket,execve')
+        self.assertIn('exec 3>&2\n',manager)
+        self.assertNotIn('installer-guest.stderr',manager)
+        with self.assertRaises(ValueError):host.tracer_wrapper('private','socket')
+        with patch.object(host,'run') as run:
+            with self.assertRaises(ValueError):host.disk_file(Path('/unused'),'installer-guest.stderr')
+            run.assert_not_called()
+
     def test_incomplete_completion_retains_only_failed_guest_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary)/'acceptance.json'

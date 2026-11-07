@@ -1,4 +1,4 @@
-# Focus the full Ubuntu AMD64 workload on observer diagnosis, never promotion.
+# Focus a full Ubuntu guest on failure diagnosis, never promotion.
 name: host-audit-diagnostic
 on:
   push:
@@ -6,6 +6,12 @@ on:
     paths:
       - ".github/workflows/host-audit-diagnostic.yml"
   workflow_dispatch:
+    inputs:
+      arch:
+        description: Full diagnostic guest architecture; cannot approve a release
+        type: choice
+        options: [arm64, amd64]
+        default: arm64
 permissions:
   contents: read
   actions: read
@@ -14,11 +20,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   diagnose:
-    name: Ubuntu AMD64 full host audit diagnostic (no release acceptance)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    name: Ubuntu ${{ inputs.arch || 'arm64' }} full guest diagnostic (no release acceptance)
+    runs-on: ${{ inputs.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-26.04-arm' }}
+    timeout-minutes: 210
     env:
-      ARCH: amd64
+      ARCH: ${{ inputs.arch || 'arm64' }}
       PROFILE: ubuntu24
       SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
     steps:
@@ -35,14 +41,14 @@ jobs:
       - name: Install disposable VM prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq podman python3 curl qemu-system-x86 e2fsprogs
+          sudo apt-get install -y -qq podman python3 curl qemu-system-x86 qemu-system-arm e2fsprogs
           if ! sudo modprobe kvm; then
             echo 'KVM unavailable; diagnostic will use bounded native emulation.'
           fi
       - run: make release-binaries release-image sbom offline-candidate-prepare
         env:
           TAG: ${{ github.sha }}
-          SBOM_OUT: dist/sbom-amd64.cdx.json
+          SBOM_OUT: dist/sbom-${{ env.ARCH }}.cdx.json
       - run: make offline-previous-prepare
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,21 +64,22 @@ jobs:
           sys.path.insert(0,'scripts')
           import offline_host_diagnostics as diagnostics
           root=Path('dist');root.mkdir(exist_ok=True)
+          arch=os.environ['ARCH'];assert arch in {'amd64','arm64'}
           result={'suite':'host-audit-diagnostic-v1','release_acceptance':False,
                   'revision':os.environ['GITHUB_SHA']}
           for key,name in (
-              ('input_receipt','host-input-ubuntu24-amd64.json'),
-              ('host_report','host-acceptance-ubuntu24-amd64.json'),
-              ('failure','host-acceptance-ubuntu24-amd64.failure.json')):
+              ('input_receipt',f'host-input-ubuntu24-{arch}.json'),
+              ('host_report',f'host-acceptance-ubuntu24-{arch}.json'),
+              ('failure',f'host-acceptance-ubuntu24-{arch}.failure.json')):
               path=root/name
               if path.is_file():
                   value=json.loads(path.read_text())
                   result[key]=diagnostics.sanitize_failure(value) if key=='failure' else value
-          (root/'host-audit-diagnostic-amd64.json').write_text(json.dumps(result,indent=2)+'\n')
+          (root/f'host-audit-diagnostic-{arch}.json').write_text(json.dumps(result,indent=2)+'\n')
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: diagnostic-host-audit-ubuntu24-amd64
-          path: dist/host-audit-diagnostic-amd64.json
+          name: diagnostic-host-audit-ubuntu24-${{ env.ARCH }}
+          path: dist/host-audit-diagnostic-${{ env.ARCH }}.json
           if-no-files-found: error

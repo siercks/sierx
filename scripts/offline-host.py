@@ -33,6 +33,20 @@ SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidenc
                'offline_host_diagnostics.py', 'kernel_network_evidence.py', 'offline-kernel-observer.py')
 
 
+def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network')):
+    if name not in {'installer','manager'}:raise ValueError('Unknown root observer')
+    # Root opens the private file BEFORE strace drops its tracee identity. An
+    # inherited stderr descriptor retains tracebacks even if the journal loses
+    # them. The unprivileged tracee cannot open/list the root-only directory.
+    stderr=('umask 077\nexec 3>'+str(directory/'installer-guest.stderr')+'\n'
+            if name=='installer' else 'exec 3>&2\n')
+    filtering=' --seccomp-bpf' if name=='installer' else ''
+    return ('#!/bin/sh\n'+stderr+'exec /usr/bin/strace -qq -f'+filtering+
+        ' --decode-pids=comm,pidns -ttt -yy -s 256 -e trace='+trace_calls+
+        ' -o '+str(directory/(name+'.trace'))+' -u acceptance /usr/sbin/sierx-observed-'+name+
+        ' 2>'+str(directory/(name+'.stderr'))+'\n')
+
+
 def suite_digest(scripts=None, packages=None):
     digest = hashlib.sha256()
     scripts = scripts or ROOT / 'scripts'
@@ -153,10 +167,7 @@ def setup(root, args):
         # through the observer on every read/write under software emulation.
         # Keep the manager's ordinary ptrace observer: browser service seccomp
         # denials take precedence over RET_TRACE and must remain observable.
-        filtering = ' --seccomp-bpf' if name == 'installer' else ''
-        wrapper.write_text('#!/bin/sh\nexec 3>&2\nexec /usr/bin/strace -qq -f'+filtering+' --decode-pids=comm,pidns -ttt -yy -s 256 -e trace='+trace_calls+
-            ' -o /var/log/sierx-network/'+name+'.trace -u acceptance /usr/sbin/sierx-observed-'+name+
-            ' 2>/var/log/sierx-network/'+name+'.stderr\n')
+        wrapper.write_text(tracer_wrapper(name,trace_calls))
         tracee = root / ('usr/sbin/sierx-observed-'+name)
         tracee.write_text('#!/bin/sh\nexec '+command+' 2>&3 3>&-\n')
         wrapper.chmod(0o755)

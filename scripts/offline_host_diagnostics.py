@@ -88,6 +88,8 @@ def sanitize_failure(value):
         result['failure_source']='service-exit'
     service_code=value.get('service_exit_code')
     if type(service_code) is int and 0<=service_code<=255:result['service_exit_code']=service_code
+    size=value.get('tracee_stderr_bytes')
+    if type(size) is int and 0<=size<=0x7fffffff:result['tracee_stderr_bytes']=size
     frames=value.get('guest_frames')
     if isinstance(frames,list):
         safe=[]
@@ -213,6 +215,14 @@ def checkpoint_service_failure(home,directory,environment=None):
             stderr=subprocess.DEVNULL,timeout=15)
         if journal.returncode==0:value.update(journal_failure(journal.stdout[-65536:].decode(errors='replace')))
     except (OSError,subprocess.SubprocessError):
+        pass
+    # This root-opened descriptor is independent of journal delivery/rate
+    # limits. Publish only fixed exception classes/public source locations.
+    direct=Path(directory)/'installer-guest.stderr'
+    try:
+        value['tracee_stderr_bytes']=direct.stat().st_size
+        value.update(journal_failure(private_tail(direct)))
+    except OSError:
         pass
     value['observer_errors']={name:observer_errors(private_tail(Path(directory)/(name+'.stderr')))
                               for name in ('installer','manager')}

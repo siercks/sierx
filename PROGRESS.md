@@ -2875,3 +2875,28 @@ was private; production VM CPU restrictions are unchanged. This is not actual-VM
 or release acceptance. The ephemeral Firefox trace was unavailable for complete
 matching, so the original failed report remains rejected. Fresh exact staged
 release and independent archive/receipt verification are still required.
+
+Exact staged [release 42413538496](https://github.com/siercks/sierx/actions/runs/42413538496)
+on `aee4c40` passed all native/source/security/bundle checks and both AMD64 host
+profiles. ARM64 stopped earlier in the two-approved-releases scenario with root
+service exit 1 and no guest completion or exception report. The root failure
+checkpoint survived, but journal-only traceback collection yielded no exception
+class/source locations. This did not reach or validate the terminal-ledger audit;
+promotion was skipped. No storage, OOM or emulator-failure indicator was observed.
+
+Have root open a mode-600 private tracee stderr file before dropping the installer
+identity. The guest inherits only its writable stderr descriptor; the root-only
+directory prevents it from reopening/reading the file. The independent root exit
+hook reads a bounded tail and emits only allowlisted exception classes, public
+source-file line numbers and the byte count. Raw stderr is excluded from guest
+evidence recovery and artifact uploads. The manager's journal routing is unchanged.
+
+The focused full Ubuntu diagnostic now supports either architecture and defaults
+to ARM64, using the same host emulator as normal ARM64 acceptance. It still runs
+every scenario and can upload only its sanitized non-promotion envelope. Normal
+release acceptance still requires both architectures and all three profiles.
+Validation: 185 Linux Python tests, pinned actionlint and launcher ShellCheck pass.
+A real root wrapper in a fresh no-NIC namespace dropped its tracee to an ordinary
+user; an uncaught synthetic exception was recovered with an empty journal and no
+guest reports. File ownership/mode and denial of unprivileged reads were verified.
+This improves failure capture; it is not a root-cause fix or release acceptance.
