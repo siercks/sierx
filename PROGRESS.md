@@ -2727,3 +2727,13 @@ native hosted AMD64/ARM64 diagnostic is added. These changes repair an evidence 
 they do not claim to have fixed or reproduced the underlying ARM64 failure yet.
 
 Pinned actionlint v1.7.12 also passed for the native diagnostic workflow.
+
+
+The first focused traced probe wrote a successful operation report but strace kept
+following its private rootless Podman pause helper. Add explicit `system migrate`
+cleanup scoped to the verified fixture config and private runtime directory before
+reporting success/deleting that store. The corrected native no-NIC probe exits
+successfully in 8.74 seconds; all 155 Python regressions still pass. The first
+local leftover helper was identified by its tracer and isolated network namespace
+before removal. Superseded hosted diagnostic attempts are cancelled, not called
+successful. This launcher correction does not assert an ARM64 root-cause fix.

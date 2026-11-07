@@ -41,7 +41,7 @@ FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bo
                                 'observe', 'verify-maintenance', 'inventory-services',
                                 'inventory-timers', 'inventory-enabled')} | {
     'acquisition-'+name for name in ('prepare', 'start-registry', 'store-info',
-                                    'empty-store', 'pull', 'inspect', 'verify')}
+                                    'empty-store', 'pull', 'inspect', 'verify', 'stop-store')}
 
 
 def sanitize_failure(value):

@@ -44,6 +44,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='sierx-acquisition-') as temporary:
         scratch = Path(temporary)
         private = scratch/'commands.private.log'
+        isolated_env = None
 
         def run(*command, env=None):
             with private.open('ab') as log:
@@ -99,6 +100,12 @@ def main():
             env = {**os.environ, 'XDG_RUNTIME_DIR':str(runtime), 'SSL_CERT_FILE':str(ca/'ca.crt')}
             result = registry.main(bundle, {'images':{'app':{'id':config_digest}},
                 'release':{'revision':args.revision}}, env, run, phase, fixture_home=home)
+            # Rootless Podman's namespace helper survives a successful pull.
+            # Stop only this fixture's helper before deleting its private
+            # runtime/store, so strace can finish instead of following it forever.
+            isolated_env = {**env, 'XDG_CONFIG_HOME':str(home/'acquisition-store/config')}
+            phase('acquisition-stop-store')
+            run('podman','system','migrate',env=isolated_env)
             args.report.parent.mkdir(parents=True, exist_ok=True)
             args.report.write_text(json.dumps({'suite':'acquisition-diagnostic-v1',
                 'release_acceptance':False,'arch':arch,'revision':args.revision,
@@ -106,6 +113,14 @@ def main():
             print('acquisition diagnostic: passed; no release acceptance issued', flush=True)
         except Exception as error:
             failure = diagnostics.failure_record(error, phase_name)
+            # Preserve the operation that failed even if best-effort fixture
+            # cleanup also fails. No ordinary user store is ever selected.
+            if 'env' in locals() and (home/'acquisition-store/config/containers/storage.conf').is_file():
+                isolated_env = {**env, 'XDG_CONFIG_HOME':str(home/'acquisition-store/config')}
+                try:
+                    run('podman','system','migrate',env=isolated_env)
+                except Exception:
+                    pass
             args.report.parent.mkdir(parents=True, exist_ok=True)
             args.report.with_suffix('.failure.json').write_text(json.dumps({
                 'suite':'acquisition-diagnostic-v1', 'release_acceptance':False,
