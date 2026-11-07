@@ -2676,3 +2676,21 @@ This was a runner correction, not a production or migration failure.
 Full Gate 2 integration and packaged-image acceptance are separate evidence; no
 native ARM64/host release, production migration, phone test or Phase 3 exit is
 claimed by the schema controls.
+
+
+## 2026-11-06 — Phase 3 first-increment integration and staging
+
+Code candidate: 6d84b86dc2178d6520b5f0f2058c5b219a8e5f02. Full isolated native amd64
+`make gate-2` is GREEN: 151 Python tests, 45 frontend unit tests, 63 Chromium and
+63 Firefox HTTPS workflow cases, and one 10k scale/focus case per browser. Gate
+proofs: 17 proven, 8 exempt, 0 missing/failing. Initial JS/CSS: 105674/19482 bytes
+Brotli; largest lazy chunk 36179. Source security workflow 42327857516 passed.
+
+The exact native amd64 image passed scripts/test-release-image.py, including
+shipped bootstrap/maintenance, authenticated writes/deep links and restart.
+The verified archive/receipt are staged on the private deployment host; live
+container ID/image are unchanged and no production migration/activation occurred.
+Pre-existing ARM64 host acceptance still blocks promotion. Support stays both
+architectures pending an explicit owner decision; no release bypass is implied.
+Details/digests/limits and next tasks: docs/PHASE-3-ACCEPTANCE.md. The owner-reported
+seven-day collection is retained there separately from unfilled formal exit evidence.
