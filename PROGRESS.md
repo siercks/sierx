@@ -2900,3 +2900,25 @@ A real root wrapper in a fresh no-NIC namespace dropped its tracee to an ordinar
 user; an uncaught synthetic exception was recovered with an empty journal and no
 guest reports. File ownership/mode and denial of unprivileged reads were verified.
 This improves failure capture; it is not a root-cause fix or release acceptance.
+
+Focused full ARM64 [run 42424668907](https://github.com/siercks/sierx/actions/runs/42424668907)
+on `4ac49ff` passed every guest scenario and the independent audit. Its one host
+report/input pair was independently validated against archived exact source,
+suite bytes and retained-release approval. The audit corroborated one terminal
+installer call using complete prior-call accounting. Archive bytes, all profiles
+and promotion are not covered by that diagnostic envelope. The earlier early
+service exit did not reproduce; its cause remains unconfirmed.
+
+Add a bounded transition stress diagnostic: retain every normal full scenario,
+and perform the complete real two-release update/rollback cycle twice. Stop on
+the first failed operation; never retry a failed cycle. Record fixed cycle phases
+so independent exit capture identifies the failing boundary. Guest and workflow
+deadlines are unchanged. Normal release execution still uses exactly one cycle.
+The stress output has its own filename and `offline-transition-stress-v1` envelope
+with `release_acceptance:false`; normal evidence validators reject both it and
+unprocessed stress-marked guest results. The focused diagnostic defaults to this
+stress workload, with a dispatch option for the original full workload. This is a
+changed reproduction workload at the known intermittent failure boundary, not
+release acceptance or a claim to have fixed the early exit. Validation: 189 Linux
+Python tests, pinned actionlint and launcher ShellCheck pass, including first/second
+cycle failure, incomplete/mismatched results and promotion rejection.

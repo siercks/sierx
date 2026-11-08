@@ -126,6 +126,7 @@ def validate_browser(report):
 
 def validate(report, bundle, expected, suite_sha256):
     if (not isinstance(report, dict) or type(report.get('schema')) is not int or report.get('schema') != SCHEMA or report.get('suite') != SUITE
+            or 'transition_stress' in report or report.get('release_acceptance') is False
             or report.get('suite_sha256') != suite_sha256
             or not re.fullmatch(r'[a-f0-9]{64}', suite_sha256)
             or report.get('result') != 'passed' or report.get('arch') != bundle['arch']

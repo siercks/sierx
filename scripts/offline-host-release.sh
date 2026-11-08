@@ -34,7 +34,7 @@ PY
   prepare)
     bash scripts/offline-host-prepare.sh "$profile"
     ;;
-  test|runtime-probe|acquisition-probe)
+  test|runtime-probe|acquisition-probe|transition-stress)
     rootfs=$PWD/dist/host-fixture-$profile-$arch.tar
     rootfs_hash=$(cut -d ' ' -f1 "$rootfs.sha256")
     bundle_hash=$(sha256sum "$bundle/bundle.lock.json" | cut -d ' ' -f1)
@@ -48,6 +48,10 @@ PY
       extra+=(--development --acquisition-probe)
       report=$PWD/dist/acquisition-vm-probe-$profile-$arch.json
     else
+      if [[ $1 == transition-stress ]]; then
+        extra+=(--transition-stress)
+        report=$PWD/dist/transition-stress-$profile-$arch.json
+      fi
       previous_hash=$(python3 -B -c 'import json,sys; print(json.load(open("deploy/ci/previous-offline-release.json"))["architectures"][sys.argv[1]]["bundle_sha256"])' "$arch")
       extra+=(--previous-bundle "$PWD/dist/previous/sierx-offline-$arch" --previous-sha256 "$previous_hash"
         --previous-evidence "$PWD/dist/previous/offline-acceptance-$arch.json")
@@ -59,5 +63,5 @@ PY
       --rootfs "$rootfs" --rootfs-sha256 "$rootfs_hash" \
       "${extra[@]}" --report "$report"
     ;;
-  *) echo 'Usage: offline-host-release.sh local|previous|prepare|test|runtime-probe|acquisition-probe' >&2; exit 1 ;;
+  *) echo 'Usage: offline-host-release.sh local|previous|prepare|test|runtime-probe|acquisition-probe|transition-stress' >&2; exit 1 ;;
 esac

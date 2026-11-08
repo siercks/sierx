@@ -47,6 +47,14 @@ def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network')):
         ' 2>'+str(directory/(name+'.stderr'))+'\n')
 
 
+def transition_stress_envelope(report,cycles):
+    if (not isinstance(cycles,list) or len(cycles)!=2
+            or any(row!=report['scenarios']['two_release'] for row in cycles)):
+        raise ValueError('Both complete transition cycles must pass with the same approved releases')
+    return {'suite':'offline-transition-stress-v1','release_acceptance':False,
+            'revision':report['release']['revision'],'transition_cycles':cycles,'host_report':report}
+
+
 def suite_digest(scripts=None, packages=None):
     digest = hashlib.sha256()
     scripts = scripts or ROOT / 'scripts'
@@ -241,6 +249,7 @@ After=basic.target
                'soak_seconds': args.soak_seconds, 'suite_sha256': args.suite_sha256,
                'closeout':not args.development,'virtual_cpu':args.virtual_cpu,
                'runtime_probe':getattr(args,'runtime_probe',False),
+               'transition_stress':getattr(args,'transition_stress',False),
                'acquisition_probe':getattr(args,'acquisition_probe',False)}
     (home / 'options.json').write_text(json.dumps(options))
     os.chown(home / 'options.json', 1001, 1001)
@@ -383,6 +392,9 @@ def main(args):
         raise ValueError('Diagnostic probes require --development and cannot satisfy promotion')
     if getattr(args,'runtime_probe',False) and getattr(args,'acquisition_probe',False):
         raise ValueError('Select one diagnostic probe')
+    if getattr(args,'transition_stress',False) and (args.development or getattr(args,'runtime_probe',False)
+                                                  or getattr(args,'acquisition_probe',False)):
+        raise ValueError('Transition stress requires every normal full guest scenario')
     args.suite_sha256 = suite_digest()
     report = Path(args.report).absolute()
     report.unlink(missing_ok=True)
@@ -574,6 +586,7 @@ def main(args):
                 report.chmod(0o644)
                 print('offline-host: development runtime probe passed; no closeout claim',flush=True)
                 return
+            stress=result.pop('transition_stress',None) if getattr(args,'transition_stress',False) else None
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             result['network'] = audit_network(disk, result, report, arch, args.suite_sha256,
                                              data['release']['revision'], mode)
@@ -584,6 +597,12 @@ def main(args):
             result['kernel_sha256'] = kernel_digest
             if not args.development:
                 evidence.validate_closeout(result,data,args.expected_sha256,args.suite_sha256)
+            if getattr(args,'transition_stress',False):
+                result=transition_stress_envelope(result,stress)
+                report.write_text(json.dumps(result,indent=2)+'\n')
+                report.chmod(0o644)
+                print('offline-host: transition stress diagnostic passed; no release acceptance',flush=True)
+                return
             report.write_text(json.dumps(result, indent=2) + '\n')
             report.chmod(0o644)  # Sanitized evidence is readable by the artifact uploader.
             print('offline-host: real isolated rootless installer passed on ' + result['profile'], flush=True)
@@ -638,6 +657,7 @@ if __name__ == '__main__':
     parser.add_argument('--development',action='store_true',help='Limited fixture development; never valid for promotion')
     parser.add_argument('--runtime-probe',action='store_true',help='Development-only runtime/timer diagnosis; omits closeout scenarios')
     parser.add_argument('--acquisition-probe',action='store_true',help='Development-only acquisition diagnosis in the real guest; never release acceptance')
+    parser.add_argument('--transition-stress',action='store_true',help='Repeat full transition cycle; diagnostic envelope only, never promotion')
     parser.add_argument('--soak-seconds', type=int, default=120)
     parser.add_argument('--acceleration', choices=('auto', 'kvm', 'tcg'), default='auto')
     args=parser.parse_args()

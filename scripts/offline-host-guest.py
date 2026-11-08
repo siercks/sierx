@@ -286,6 +286,7 @@ def main():
     browser = json.loads(run(*command,'/usr/local/bin/node','/opt/acceptance/tests/offline-browser.mjs'))
     evidence.validate_browser(browser)
     scenarios = {}
+    stress=[]
     if OPTIONS['closeout']:
         spec=importlib.util.spec_from_file_location('host_scenarios','/opt/acceptance/tests/offline-host-scenarios.py')
         scenario=importlib.util.module_from_spec(spec)
@@ -294,7 +295,11 @@ def main():
         OPTIONS['invalid_hashes']=json.loads((HOME/'invalid-inputs.json').read_text())
         scenarios['invalid_deliveries']=scenario.delivery_failures(BUNDLE,OPTIONS,ENV,run,LOG,phase)
         phase('two-approved-releases')
-        scenarios['two_release']=scenario.two_release(BUNDLE,OPTIONS,ENV,operation,run,require)
+        if OPTIONS.get('transition_stress'):
+            stress=scenario.transition_stress(BUNDLE,OPTIONS,ENV,operation,run,require,phase)
+            scenarios['two_release']=stress[-1]
+        else:
+            scenarios['two_release']=scenario.two_release(BUNDLE,OPTIONS,ENV,operation,run,require)
         phase('failed-health-rollback')
         scenarios['failed_health']=scenario.failed_health(BUNDLE,ENV,operation,run,LOG)
         phase('bounded-runtime')
@@ -323,7 +328,8 @@ def main():
             'coverage':'closeout' if OPTIONS['closeout'] else 'development','browser':browser,
             'virtual_cpus':os.cpu_count(),
             'lifecycle_check_timeout_seconds':timeout_seconds,
-            'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions}
+            'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions,
+            **({'transition_stress':stress} if stress else {})}
 
 
 if __name__ == '__main__':

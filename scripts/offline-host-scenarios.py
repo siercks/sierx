@@ -123,6 +123,15 @@ def two_release(bundle, options, env, operation, run, require):
             'update':True, 'compatible_rollback':True,'data_scope':DATA_TABLES}
 
 
+def transition_stress(bundle,options,env,operation,run,require,progress):
+    """Repeat the full real transition cycle once; never retry a failed cycle."""
+    results=[]
+    for index in (1,2):
+        progress('two-release-stress-'+str(index))
+        results.append(two_release(bundle,options,env,operation,run,require))
+    return results
+
+
 def failed_health(bundle, env, operation, run, log):
     """Break the delivered executable, without modifying installer or live config."""
     before = service_snapshot(run)
