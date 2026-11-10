@@ -16,6 +16,10 @@ on:
         description: Repeat the complete update/rollback cycle once; no release acceptance
         type: boolean
         default: true
+      historical_replay:
+        description: Replay the exact failed staged ARM64 artifact; diagnostic only
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -32,15 +36,18 @@ jobs:
       PROFILE: ubuntu24
       SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
       SIERX_HOST_TRANSITION_STRESS: ${{ github.event_name == 'push' || inputs.transition_stress }}
+      SIERX_HOST_HISTORICAL_REPLAY: ${{ github.event_name == 'push' || inputs.historical_replay }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: env.SIERX_HOST_HISTORICAL_REPLAY != 'true'
         with:
           go-version-file: go.mod
           cache: true
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.SIERX_HOST_HISTORICAL_REPLAY != 'true'
         with:
           node-version-file: .nvmrc
       - name: Install disposable VM prerequisites
@@ -51,16 +58,28 @@ jobs:
             echo 'KVM unavailable; diagnostic will use bounded native emulation.'
           fi
       - run: make release-binaries release-image sbom offline-candidate-prepare
+        if: env.SIERX_HOST_HISTORICAL_REPLAY != 'true'
         env:
           TAG: ${{ github.sha }}
           SBOM_OUT: dist/sbom-${{ env.ARCH }}.cdx.json
+      - name: Retrieve the original failed staged ARM64 bundle
+        if: env.SIERX_HOST_HISTORICAL_REPLAY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$ARCH" = arm64
+          mkdir -p dist
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/42413538496" > dist/historical-run.json
+          gh run download 42413538496 --repo "$GITHUB_REPOSITORY" --name offline-delivery-arm64 --dir dist
       - run: make offline-previous-prepare
         env:
           GH_TOKEN: ${{ github.token }}
       - run: make offline-host-prepare
       - name: Diagnose the full workload and independent network audit
         run: |
-          if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
+          if [[ $SIERX_HOST_HISTORICAL_REPLAY == true ]]; then
+            python3 -B scripts/offline-historical-replay.py
+          elif [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
             make probe-offline-transition
           else
             make gate-offline-host
@@ -76,15 +95,19 @@ jobs:
           root=Path('dist');root.mkdir(exist_ok=True)
           arch=os.environ['ARCH'];assert arch in {'amd64','arm64'}
           prefix='transition-stress' if os.environ['SIERX_HOST_TRANSITION_STRESS']=='true' else 'host-acceptance'
+          replay=os.environ['SIERX_HOST_HISTORICAL_REPLAY']=='true'
+          if replay:prefix='historical-replay'
           result={'suite':'host-audit-diagnostic-v1','release_acceptance':False,
                   'revision':os.environ['GITHUB_SHA']}
           for key,name in (
+              ('replay_input','historical-replay-input.json'),
               ('input_receipt',f'host-input-ubuntu24-{arch}.json'),
               ('host_report',f'{prefix}-ubuntu24-{arch}.json'),
               ('failure',f'{prefix}-ubuntu24-{arch}.failure.json')):
               path=root/name
               if path.is_file():
                   value=json.loads(path.read_text())
+                  if replay and key=='host_report':value['release_acceptance']=False
                   result[key]=diagnostics.sanitize_failure(value) if key=='failure' else value
           (root/f'host-audit-diagnostic-{arch}.json').write_text(json.dumps(result,indent=2)+'\n')
           PY

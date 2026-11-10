@@ -2922,3 +2922,19 @@ changed reproduction workload at the known intermittent failure boundary, not
 release acceptance or a claim to have fixed the early exit. Validation: 189 Linux
 Python tests, pinned actionlint and launcher ShellCheck pass, including first/second
 cycle failure, incomplete/mismatched results and promotion rejection.
+
+The two-cycle ARM64 stress run `42435875507` passed all scenarios and the network
+audit. Exact archived source and retained approval validated its one diagnostic
+host report and both transitions. The early service exit still did not reproduce.
+Both passing diagnostics built new candidate images, so neither tested the bytes
+of the staged ARM64 image from failed release `42413538496`.
+
+Add a targeted replay of that exact failed staged archive. Pin its workflow run,
+source, image, archive and lock digests to the original host receipt, and pin the
+retained-release approval to its bytes from that source. Verify the archive and
+baseline receipt before starting the current protected guest observer. Run all
+normal scenarios with one update/rollback cycle, using a freshly prepared guest.
+This tests whether failure follows the historical artifact; the instrumentation
+and guest build are deliberately current. The diagnostic has read-only workflow
+permissions, separate output names and explicit non-promotion markers. Normal
+release checks and inputs are unchanged. The cause-first requirement remains.
