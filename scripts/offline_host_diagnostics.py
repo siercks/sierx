@@ -84,6 +84,10 @@ def sanitize_failure(value):
     if result['phase'] == 'network-audit' and result['failure_type'] == 'NetworkObservationError':
         observer = safe_failure_fields(value.get('observer'))
         if observer: result['observer'] = observer
+    if result['phase'] == 'delivered-browser-workflows':
+        browser_exit = value.get('browser_service_exit')
+        if valid_service_exit(browser_exit):
+            result['browser_service_exit'] = browser_exit
     if value.get('failure_source') == 'service-exit':
         result['failure_source']='service-exit'
     service_code=value.get('service_exit_code')
@@ -146,6 +150,7 @@ def failure_record(error, phase):
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
              'host_detail':getattr(error,'host_detail',None),
+             'browser_service_exit':getattr(error,'browser_service_exit',None),
              'guest_command':getattr(error,'fixture_command',None),
              'guest_command_detail':getattr(error,'fixture_command_detail',None)}
     if isinstance(error, json.JSONDecodeError):
@@ -310,6 +315,29 @@ def service_exit(environment=None):
             'exit_kind': kind if kind in EXIT_KINDS else 'unknown', 'exit_status': status}
 
 
+def valid_service_exit(value):
+    return (isinstance(value, dict) and set(value) == {'service_result', 'exit_kind', 'exit_status'}
+            and isinstance(value['service_result'], str) and value['service_result'] in SERVICE_RESULTS
+            and isinstance(value['exit_kind'], str) and value['exit_kind'] in EXIT_KINDS
+            and (type(value['exit_status']) is int and 0 <= value['exit_status'] <= 255
+                 or isinstance(value['exit_status'], str) and value['exit_status'] in SIGNALS | {'unknown'}))
+
+
+def write_browser_exit(path):
+    """Save the browser unit's main process status before systemd collects it."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w') as output:
+        json.dump(service_exit(), output)
+
+
+def read_browser_exit(path):
+    try:
+        value = json.loads(private_tail(path, 4096))
+    except ValueError:
+        return None
+    return value if valid_service_exit(value) else None
+
+
 def emit_resources():
     print('SIERX_RESOURCES: '+json.dumps(resources(), sort_keys=True), flush=True)
 
@@ -325,11 +353,7 @@ def latest(console, marker):
                     and all(v is None or type(v) is int and 0 <= v < 2**63 for v in data.values())):
                 return data
         elif marker == 'SIERX_GUEST_EXIT':
-            if (isinstance(data, dict) and set(data) == {'service_result', 'exit_kind', 'exit_status'}
-                    and isinstance(data['service_result'], str) and data['service_result'] in SERVICE_RESULTS
-                    and isinstance(data['exit_kind'], str) and data['exit_kind'] in EXIT_KINDS
-                    and (type(data['exit_status']) is int and 0 <= data['exit_status'] <= 255
-                         or isinstance(data['exit_status'], str) and data['exit_status'] in SIGNALS | {'unknown'})):
+            if valid_service_exit(data):
                 return data
         elif marker == 'SIERX_FAILURE':
             if isinstance(data,dict) and data.get('result')=='failed':
@@ -350,6 +374,9 @@ def stopped(returncode, console, emulator_output, host_before=None):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) == 3 and sys.argv[1] == '--browser-exit':
+        write_browser_exit(Path(sys.argv[2]))
+        sys.exit(0)
     if sys.argv[1:] != ['--service-exit']:
         raise SystemExit('Unsupported diagnostic operation')
     emit_resources()

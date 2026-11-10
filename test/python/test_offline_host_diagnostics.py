@@ -13,6 +13,22 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_empty_browser_report_retains_only_fixed_service_status(self):
+        error = json.JSONDecodeError('No report', '', 0)
+        status = {'service_result': 'success', 'exit_kind': 'killed', 'exit_status': 'TERM'}
+        error.browser_service_exit = status
+        failure = diagnostics.failure_record(error, 'delivered-browser-workflows')
+        self.assertEqual(failure['result'], 'failed')
+        self.assertEqual(failure['json_input'], 'empty')
+        self.assertEqual(failure['browser_service_exit'], status)
+        self.assertNotIn('browser_service_exit', diagnostics.failure_record(error, 'two-approved-releases'))
+        for invalid in ({**status, 'private': 'credential'}, {**status, 'exit_status': 'private'},
+                        {**status, 'exit_status': True}, {**status, 'exit_kind': []}):
+            error.browser_service_exit = invalid
+            failure = diagnostics.failure_record(error, 'delivered-browser-workflows')
+            self.assertNotIn('browser_service_exit', failure)
+            self.assertNotIn('private', json.dumps(failure))
+
     def test_service_checkpoint_distinguishes_installer_exit_from_child_and_tracer_status(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

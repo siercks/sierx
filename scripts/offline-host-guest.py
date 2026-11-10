@@ -280,11 +280,21 @@ def main():
              '--property=Type=exec','--property=SystemCallFilter=~io_uring_setup io_uring_enter io_uring_register',
              '--property=SystemCallErrorNumber=ENOSYS',
              '--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK']
+    browser_exit_path = HOME / 'browser-exit.json'
+    if OPTIONS.get('transition_stress'):
+        command.append('--property=ExecStopPost=/usr/bin/python3 '
+                       '/opt/acceptance/tests/offline_host_diagnostics.py --browser-exit '
+                       '/home/acceptance/browser-exit.json')
     for name in ('HOME','PATH','PLAYWRIGHT_BROWSERS_PATH','SIERX_BASE_URL','SSL_CERT_FILE','NODE_EXTRA_CA_CERTS',
                  'SIERX_BOOTSTRAP_ADMIN_EMAIL','SIERX_BOOTSTRAP_ADMIN_PASSWORD','SIERX_TEST_SERVER_CERT','SIERX_TEST_EMULATED'):
         command.append('--setenv='+name+'='+ENV[name])
-    browser = json.loads(run(*command,'/usr/local/bin/node','/opt/acceptance/tests/offline-browser.mjs'))
-    evidence.validate_browser(browser)
+    try:
+        browser = json.loads(run(*command,'/usr/local/bin/node','/opt/acceptance/tests/offline-browser.mjs'))
+        evidence.validate_browser(browser)
+    except Exception as error:
+        if OPTIONS.get('transition_stress'):
+            error.browser_service_exit = diagnostics.read_browser_exit(browser_exit_path)
+        raise
     scenarios = {}
     stress=[]
     if OPTIONS['closeout']:

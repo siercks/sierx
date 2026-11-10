@@ -2953,3 +2953,18 @@ be mistaken for the installer's. Tests cover normal exits, signals and missing
 records. An unprivileged process in an isolated network namespace confirmed
 capture of exit 73 and SIGKILL while a child exited 7. Normal release tracing
 and acceptance are unchanged.
+
+The staged two-cycle diagnostic `42919198562` stopped during the browser
+workload. The transient command returned zero and the guest rejected its empty
+JSON output. A local systemd 255 user unit with the same exec, wait and pipe
+options reproduced zero status with empty output for SIGTERM and SIGPIPE. A
+normal report arrived on stdout and an explicit exit 73 propagated status 73.
+This identifies a possible explanation for the empty report. The diagnostic
+artifact does not identify the browser's termination cause.
+
+During stress diagnostics, record the browser unit's main process status from
+its stop hook before systemd collects the unit. Retain only fixed result, exit
+kind and status fields on failure. The browser still has to return valid JSON
+and pass the existing scenario validator. The real local unit tests confirmed
+the status for both signals and both explicit exits. The replay also retains
+the separate installer exit diagnostics for the original early exit.
