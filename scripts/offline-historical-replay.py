@@ -1,4 +1,5 @@
 """Replay one exact failed ARM64 bundle with current diagnostic instrumentation."""
+import argparse
 import importlib.util
 import json
 import os
@@ -42,7 +43,7 @@ def verify_input(directory,run):
         'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,'bundle_sha256':BUNDLE_SHA256}}},ARCH)
 
 
-def main():
+def main(transition_stress=False):
     if offline.native_arch()!=ARCH:
         raise ValueError('Historical replay requires the original native ARM64 host architecture')
     directory=ROOT/'dist'
@@ -53,24 +54,29 @@ def main():
     bundle=verify_input(directory,json.loads((directory/'historical-run.json').read_text()))
     proof={'run_id':RUN_ID,'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
-           'release_acceptance':False}
+           'transition_stress':transition_stress,'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
     receipts=load('replay_host_receipts','offline-host-evidence.py')
     receipts.receipt(directory,PROFILE,'ghcr.io/siercks/sierx',REVISION)
     rootfs=directory/'host-fixture-ubuntu24-arm64.tar'
     rootfs_hash=rootfs.with_suffix('.tar.sha256').read_text().split()[0]
     print('offline-historical-replay: original failed ARM64 archive, lock and baseline evidence verified',flush=True)
-    return subprocess.run(['sudo','env','PATH='+os.environ['PATH'],'python3','-B',str(ROOT/'scripts/offline-host.py'),
+    command = ['sudo','env','PATH='+os.environ['PATH'],'python3','-B',str(ROOT/'scripts/offline-host.py'),
         '--bundle',str(bundle),'--expected-sha256',BUNDLE_SHA256,
         '--archive',str(directory/'sierx-offline-arm64.tar.gz'),'--archive-sha256',ARCHIVE_SHA256,
         '--rootfs',str(rootfs),'--rootfs-sha256',rootfs_hash,
         '--previous-bundle',str(directory/'previous/sierx-offline-arm64'),
         '--previous-sha256',retained['bundle_sha256'],
         '--previous-evidence',str(directory/'previous/offline-acceptance-arm64.json'),
-        '--report',str(directory/'historical-replay-ubuntu24-arm64.json')]).returncode
+        '--report',str(directory/'historical-replay-ubuntu24-arm64.json')]
+    if transition_stress:
+        command.append('--transition-stress')
+    return subprocess.run(command).returncode
 
 
 if __name__=='__main__':
-    try:sys.exit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--transition-stress', action='store_true')
+    try:sys.exit(main(parser.parse_args().transition_stress))
     except (ValueError,OSError,TypeError,KeyError,IndexError,tarfile.TarError):
         raise SystemExit('offline-historical-replay: missing or mismatched input; no diagnostic pass') from None

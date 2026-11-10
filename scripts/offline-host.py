@@ -33,7 +33,7 @@ SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidenc
                'offline_host_diagnostics.py', 'kernel_network_evidence.py', 'offline-kernel-observer.py')
 
 
-def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network')):
+def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False):
     if name not in {'installer','manager'}:raise ValueError('Unknown root observer')
     # Root opens the private file BEFORE strace drops its tracee identity. An
     # inherited stderr descriptor retains tracebacks even if the journal loses
@@ -41,7 +41,8 @@ def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network')):
     stderr=('umask 077\nexec 3>'+str(directory/'installer-guest.stderr')+'\n'
             if name=='installer' else 'exec 3>&2\n')
     filtering=' --seccomp-bpf' if name=='installer' else ''
-    return ('#!/bin/sh\n'+stderr+'exec /usr/bin/strace -qq -f'+filtering+
+    quiet = ' -q' if report_exits and name == 'installer' else ' -qq'
+    return ('#!/bin/sh\n'+stderr+'exec /usr/bin/strace'+quiet+' -f'+filtering+
         ' --decode-pids=comm,pidns -ttt -yy -s 256 -e trace='+trace_calls+
         ' -o '+str(directory/(name+'.trace'))+' -u acceptance /usr/sbin/sierx-observed-'+name+
         ' 2>'+str(directory/(name+'.stderr'))+'\n')
@@ -175,7 +176,7 @@ def setup(root, args):
         # through the observer on every read/write under software emulation.
         # Keep the manager's ordinary ptrace observer: browser service seccomp
         # denials take precedence over RET_TRACE and must remain observable.
-        wrapper.write_text(tracer_wrapper(name,trace_calls))
+        wrapper.write_text(tracer_wrapper(name,trace_calls,report_exits=getattr(args,'transition_stress',False)))
         tracee = root / ('usr/sbin/sierx-observed-'+name)
         tracee.write_text('#!/bin/sh\nexec '+command+' 2>&3 3>&-\n')
         wrapper.chmod(0o755)
@@ -511,7 +512,7 @@ def main(args):
                         if failure is not None and failure!=last_failure:
                             last_failure=failure
                             print('offline-host: failed guest diagnostic '+json.dumps(failure,sort_keys=True),flush=True)
-                        phases = re.findall(r'SIERX_PHASE: ([a-z-]{1,80})', console_text)
+                        phases = re.findall(r'SIERX_PHASE: ([a-z0-9-]{1,80})', console_text)
                         if phases and phases[-1] != last_phase:
                             last_phase = phases[-1]
                             print('offline-host: ' + last_phase, flush=True)

@@ -2938,3 +2938,18 @@ This tests whether failure follows the historical artifact; the instrumentation
 and guest build are deliberately current. The diagnostic has read-only workflow
 permissions, separate output names and explicit non-promotion markers. Normal
 release checks and inputs are unchanged. The cause-first requirement remains.
+
+The exact staged ARM64 replay `42898843830` passed the complete workload with
+6,873 network attempts examined and zero external attempts. Its input receipt
+matches the failed release's image, archive and bundle hashes. Independent review
+validated the scenarios and audit using the replay source and original retained
+approval. The early exit remains unexplained.
+
+Run the existing two-cycle workload with those same staged bytes. During stress
+diagnostics, retain process exits in the root-only installer trace and report
+the initial installer's terminal status separately from the tracer's service
+status. Match the process at its original launcher exec so a child exit cannot
+be mistaken for the installer's. Tests cover normal exits, signals and missing
+records. An unprivileged process in an isolated network namespace confirmed
+capture of exit 73 and SIGKILL while a child exited 7. Normal release tracing
+and acceptance are unchanged.

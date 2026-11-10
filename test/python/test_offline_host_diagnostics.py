@@ -13,6 +13,32 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_service_checkpoint_distinguishes_installer_exit_from_child_and_tracer_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / 'progress.json').write_text('{"phase":"two-release-stress-2"}')
+            trace = directory / 'installer.trace'
+            prefix = ('42 1700000000.000001 execve("/usr/sbin/sierx-observed-installer", '
+                      '["private argument"], 0x1234) = 0\n'
+                      '421<child> 1700000001.000000 +++ exited with 7 +++\n')
+            journal = __import__('subprocess').CompletedProcess([], 0, stdout=b'')
+            for terminal, expected in (
+                ('42<python3> 1700000002.000000 +++ exited with 73 +++\n', {'kind':'exited','status':73}),
+                ('42<python3> 1700000002.000000 +++ killed by SIGKILL +++\n', {'kind':'killed','status':'KILL'}),
+                ('42<python3> 1700000002.000000 +++ exited with 999 +++\n', None),
+                ('', None),
+            ):
+                with self.subTest(expected=expected):
+                    trace.write_text(prefix + terminal)
+                    with patch.object(diagnostics.subprocess, 'run', return_value=journal), \
+                            patch.object(diagnostics.os, 'sync'), contextlib.redirect_stdout(io.StringIO()) as console:
+                        result = diagnostics.checkpoint_service_failure(directory, directory,
+                            {'SERVICE_RESULT':'exit-code','EXIT_CODE':'exited','EXIT_STATUS':'1'})
+                    self.assertEqual(result['service_exit_code'], 1)
+                    self.assertEqual(result['phase'], 'two-release-stress-2')
+                    self.assertEqual(result.get('tracee_exit'), expected)
+                    self.assertNotIn('private', console.getvalue())
+
     def test_direct_root_tracee_stderr_survives_empty_journal_without_disclosing_messages(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);home=root/'home';directory=root/'observer'

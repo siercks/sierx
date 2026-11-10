@@ -78,7 +78,11 @@ jobs:
       - name: Diagnose the full workload and independent network audit
         run: |
           if [[ $SIERX_HOST_HISTORICAL_REPLAY == true ]]; then
-            python3 -B scripts/offline-historical-replay.py
+            replay_args=()
+            if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
+              replay_args+=(--transition-stress)
+            fi
+            python3 -B scripts/offline-historical-replay.py "${replay_args[@]}"
           elif [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
             make probe-offline-transition
           else

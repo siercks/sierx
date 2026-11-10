@@ -88,6 +88,13 @@ def sanitize_failure(value):
         result['failure_source']='service-exit'
     service_code=value.get('service_exit_code')
     if type(service_code) is int and 0<=service_code<=255:result['service_exit_code']=service_code
+    tracee_exit = value.get('tracee_exit')
+    if isinstance(tracee_exit, dict):
+        kind, status = tracee_exit.get('kind'), tracee_exit.get('status')
+        if kind == 'exited' and type(status) is int and 0 <= status <= 255:
+            result['tracee_exit'] = {'kind': 'exited', 'status': status}
+        elif kind == 'killed' and isinstance(status, str) and status in SIGNALS:
+            result['tracee_exit'] = {'kind': 'killed', 'status': status}
     size=value.get('tracee_stderr_bytes')
     if type(size) is int and 0<=size<=0x7fffffff:result['tracee_stderr_bytes']=size
     frames=value.get('guest_frames')
@@ -198,6 +205,34 @@ def private_tail(path,limit=65536):
         return ''
 
 
+def installer_exit(path):
+    """Read the terminal record for the initial installer, ignoring children."""
+    header = rb'(?:<[^>\r\n]+>)?[ \t]+[0-9]+\.[0-9]+[ \t]+'
+    try:
+        with Path(path).open('rb') as stream:
+            start = re.fullmatch(rb'([0-9]+)' + header +
+                rb'execve\("/usr/sbin/sierx-observed-installer", .*\) += 0\n', stream.readline(4096))
+            if not start:
+                return None
+            terminal = re.compile(start[1] + header +
+                rb'\+\+\+ (?:exited with ([0-9]{1,3})|killed by SIG([A-Z0-9]+)(?: \(core dumped\))?) \+\+\+\n')
+            # Start at the original exec so a later reuse of its PID cannot
+            # supersede a terminal status already recorded for this process.
+            for line in stream:
+                if not line.startswith(start[1]):
+                    continue
+                match = terminal.fullmatch(line)
+                if match:
+                    if match[1] is not None and int(match[1]) <= 255:
+                        return {'kind': 'exited', 'status': int(match[1])}
+                    if match[2] is not None and match[2].decode('ascii') in SIGNALS:
+                        return {'kind': 'killed', 'status': match[2].decode('ascii')}
+                    return None
+    except OSError:
+        pass
+    return None
+
+
 def checkpoint_service_failure(home,directory,environment=None):
     """Independent root hook survives installer/observer death and missing result."""
     status=service_exit(environment)
@@ -224,6 +259,7 @@ def checkpoint_service_failure(home,directory,environment=None):
         value.update(journal_failure(private_tail(direct)))
     except OSError:
         pass
+    value['tracee_exit'] = installer_exit(Path(directory) / 'installer.trace')
     value['observer_errors']={name:observer_errors(private_tail(Path(directory)/(name+'.stderr')))
                               for name in ('installer','manager')}
     failure=sanitize_failure(value)
