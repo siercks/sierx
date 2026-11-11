@@ -1006,8 +1006,9 @@ test('keyboard-only create, transition, reparent, reorder and comment', async ({
   await page.keyboard.type('Keyboard-only comment');
   await keyboardActivate(page, 'Add comment');
   await expect(
-    page.getByText('Keyboard-only comment', { exact: true }),
+    page.locator('.comment-body').getByText('Keyboard-only comment', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByLabel('New comment', { exact: true })).toHaveValue('');
   expect(
     await page.evaluate(
       () => (window as unknown as { mouseEvents: number }).mouseEvents,
