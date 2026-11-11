@@ -54,7 +54,8 @@ def main(transition_stress=False):
     bundle=verify_input(directory,json.loads((directory/'historical-run.json').read_text()))
     proof={'run_id':RUN_ID,'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
-           'transition_stress':transition_stress,'release_acceptance':False}
+           'transition_stress':transition_stress,'transition_before_browser':transition_stress,
+           'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
     receipts=load('replay_host_receipts','offline-host-evidence.py')
     receipts.receipt(directory,PROFILE,'ghcr.io/siercks/sierx',REVISION)
@@ -70,7 +71,7 @@ def main(transition_stress=False):
         '--previous-evidence',str(directory/'previous/offline-acceptance-arm64.json'),
         '--report',str(directory/'historical-replay-ubuntu24-arm64.json')]
     if transition_stress:
-        command.append('--transition-stress')
+        command.extend(('--transition-stress', '--transition-before-browser'))
     return subprocess.run(command).returncode
 
 

@@ -123,11 +123,11 @@ def two_release(bundle, options, env, operation, run, require):
             'update':True, 'compatible_rollback':True,'data_scope':DATA_TABLES}
 
 
-def transition_stress(bundle,options,env,operation,run,require,progress):
+def transition_stress(bundle,options,env,operation,run,require,progress,*,first_cycle=None):
     """Repeat the full real transition cycle once; never retry a failed cycle."""
-    results=[]
-    for index in (1,2):
-        progress('two-release-stress-'+str(index))
+    results=[] if first_cycle is None else [first_cycle]
+    while len(results) < 2:
+        progress('two-release-stress-'+str(len(results)+1))
         results.append(two_release(bundle,options,env,operation,run,require))
     return results
 

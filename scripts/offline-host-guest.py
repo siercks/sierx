@@ -147,6 +147,14 @@ def acquisition(lock):
     return registry.main(BUNDLE,lock,ENV,run,phase)
 
 
+def load_scenarios():
+    spec = importlib.util.spec_from_file_location(
+        'host_scenarios', '/opt/acceptance/tests/offline-host-scenarios.py')
+    scenario = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scenario)
+    return scenario
+
+
 def main():
     os.umask(0o077)
     require(os.getuid() == 1001, 'Guest fixture requires the unprivileged synthetic account')
@@ -265,9 +273,7 @@ def main():
     lock = json.loads((BUNDLE / 'bundle.lock.json').read_text())
     if OPTIONS.get('runtime_probe'):
         require(not OPTIONS['closeout'],'Runtime probes cannot produce closeout evidence')
-        spec=importlib.util.spec_from_file_location('host_scenarios','/opt/acceptance/tests/offline-host-scenarios.py')
-        scenario=importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(scenario)
+        scenario = load_scenarios()
         phase('bounded-runtime')
         runtime=scenario.runtime(BUNDLE,OPTIONS['soak_seconds'],ENV,run,LOG,request,phase)
         return {'schema':1,'suite':'offline-runtime-probe-v1','coverage':'runtime-probe',
@@ -281,6 +287,14 @@ def main():
     controls = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(controls)
     controls.main(ENV,lock,run,phase)
+    scenario = None
+    first_cycle = None
+    if OPTIONS.get('transition_before_browser'):
+        require(OPTIONS.get('transition_stress') and OPTIONS['closeout'],
+                'Early transition requires the complete stress diagnostic')
+        scenario = load_scenarios()
+        phase('two-release-stress-1')
+        first_cycle = scenario.two_release(BUNDLE,OPTIONS,ENV,operation,run,require)
     phase('delivered-browser-workflows')
     # Confine only the JavaScript test driver and its browsers to observable
     # socket syscalls. Shipped app/database/gateway services keep their normal
@@ -307,15 +321,15 @@ def main():
     scenarios = {}
     stress=[]
     if OPTIONS['closeout']:
-        spec=importlib.util.spec_from_file_location('host_scenarios','/opt/acceptance/tests/offline-host-scenarios.py')
-        scenario=importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(scenario)
+        if scenario is None:
+            scenario = load_scenarios()
         phase('invalid-deliveries')
         OPTIONS['invalid_hashes']=json.loads((HOME/'invalid-inputs.json').read_text())
         scenarios['invalid_deliveries']=scenario.delivery_failures(BUNDLE,OPTIONS,ENV,run,LOG,phase)
         phase('two-approved-releases')
         if OPTIONS.get('transition_stress'):
-            stress=scenario.transition_stress(BUNDLE,OPTIONS,ENV,operation,run,require,phase)
+            stress=scenario.transition_stress(BUNDLE,OPTIONS,ENV,operation,run,require,phase,
+                                             first_cycle=first_cycle)
             scenarios['two_release']=stress[-1]
         else:
             scenarios['two_release']=scenario.two_release(BUNDLE,OPTIONS,ENV,operation,run,require)

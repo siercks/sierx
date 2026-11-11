@@ -70,5 +70,18 @@ class TransitionStressTests(unittest.TestCase):
         self.assertIn('report=$PWD/dist/transition-stress-$profile-$arch.json',launcher)
         self.assertIn('--previous-evidence "$PWD/dist/previous/offline-acceptance-$arch.json"',launcher)
 
+    def test_early_transition_is_counted_once_and_requires_the_full_stress_mode(self):
+        earlier = self.report['scenarios']['two_release']
+        later = copy.deepcopy(earlier)
+        progress = Mock()
+        with patch.object(scenarios, 'two_release', return_value=later) as transition:
+            cycles = scenarios.transition_stress(None, None, None, None, None, None, progress,
+                                                first_cycle=earlier)
+        self.assertEqual(cycles, [earlier, later])
+        transition.assert_called_once()
+        progress.assert_called_once_with('two-release-stress-2')
+        with self.assertRaisesRegex(ValueError, 'Early transition requires'):
+            host.main(SimpleNamespace(development=False, transition_before_browser=True))
+
 
 if __name__=='__main__':unittest.main()
