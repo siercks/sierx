@@ -9,6 +9,13 @@ import sys
 import traceback
 from network_observer import safe_failure_fields
 
+INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
+INSTALLER_MARKER_FD = 4
+INSTALLER_OPERATIONS = {'import', 'db-up', 'migrate-up', 'bootstrap', 'plan', 'apply', 'smoke'}
+EXIT_ROLES = {'tracer', 'installer'}
+EXIT_TRACE_RESULTS = {'observed', 'unavailable', 'lost-events', 'invalid-records'}
+EXIT_TRACE_LINE = re.compile(r'^\s*.+-(\d+)\s+\[\d+\]\s+\S+\s+\d+\.\d+:\s+(.*)$')
+
 RESOURCE_KEYS = {'disk_available_bytes', 'memory_available_bytes', 'oom_kills',
                  'manager_trace_bytes', 'installer_trace_bytes'}
 SERVICE_RESULTS = {'success', 'resources', 'timeout', 'exit-code', 'signal',
@@ -93,6 +100,29 @@ def sanitize_failure(value):
         result['failure_source']='service-exit'
     service_code=value.get('service_exit_code')
     if type(service_code) is int and 0<=service_code<=255:result['service_exit_code']=service_code
+    if result.get('failure_source') == 'service-exit':
+        if valid_service_exit(value.get('service_exit')):
+            result['service_exit'] = value['service_exit']
+        capture = value.get('kernel_exit_capture')
+        if isinstance(capture, str) and capture in EXIT_TRACE_RESULTS:
+            result['kernel_exit_capture'] = capture
+        kernel_exit = value.get('kernel_exit')
+        if isinstance(kernel_exit, dict):
+            observed = {}
+            for role in sorted(EXIT_ROLES):
+                task = kernel_exit.get(role)
+                if not isinstance(task, dict) or type(task.get('task_exited')) is not bool:
+                    continue
+                observed[role] = {'task_exited': task['task_exited']}
+                code = task.get('requested_exit_code')
+                if type(code) is int and 0 <= code <= 255:
+                    observed[role]['requested_exit_code'] = code
+            if observed:
+                result['kernel_exit'] = observed
+        operation = value.get('last_operation')
+        if isinstance(operation, str) and re.fullmatch(r'(?:start|complete) [a-z-]+', operation):
+            if operation.split()[1] in INSTALLER_OPERATIONS:
+                result['last_operation'] = operation
     tracee_exit = value.get('tracee_exit')
     if isinstance(tracee_exit, dict):
         kind, status = tracee_exit.get('kind'), tracee_exit.get('status')
@@ -246,12 +276,111 @@ def installer_exit(path):
     return None
 
 
-def checkpoint_service_failure(home,directory,environment=None):
+def start_installer_exit_trace(instance=INSTALLER_EXIT_TRACE):
+    """Use a separate, bounded kernel trace for the stress diagnostic only."""
+    instance.mkdir()
+    (instance / 'tracing_on').write_text('0')
+    (instance / 'trace_clock').write_text('mono')
+    (instance / 'trace').write_text('')
+    for event in ('syscalls/sys_enter_exit_group', 'sched/sched_process_exit'):
+        (instance / 'events' / event / 'enable').write_text('1')
+    (instance / 'tracing_on').write_text('1')
+
+
+def mark_installer(message):
+    os.write(INSTALLER_MARKER_FD, (message + '\n').encode('ascii'))
+
+
+def installer_exit_events(lines):
+    """Bind events to the two kernel-attributed start markers, without exporting PIDs."""
+    entries = None
+    records = 0
+    roles = {}
+    observed = {}
+    phase = operation = None
+    for line in lines:
+        match = EXIT_TRACE_LINE.match(line.rstrip('\n'))
+        if not match:
+            if line.startswith('#') and records == 0:
+                header = re.match(r'# entries-in-buffer/entries-written:\s+(\d+)/(\d+)', line)
+                if header:
+                    if header[1] != header[2] or not 0 < int(header[1]) <= 250000:
+                        return {}
+                    entries = int(header[1])
+                continue
+            return {}
+        records += 1
+        if entries is None or records > entries:
+            return {}
+        pid, event = match.groups()
+        start = re.fullmatch(r'tracing_mark_write: sierx-(tracer|installer)-start', event)
+        if start:
+            role = start[1]
+            if pid in roles or role in observed:
+                return {}
+            roles[pid] = role
+            observed[role] = {'task_exited': False}
+            continue
+        role = roles.get(pid)
+        if role is None:
+            continue
+        task = observed[role]
+        exit_request = re.fullmatch(r'sys_exit_group\(error_code: ((?:0x)?[0-9a-f]+)\)', event)
+        exit_event = re.fullmatch(r'sched_process_exit: comm=.* pid=(\d+) prio=\d+', event)
+        if exit_request:
+            if task['task_exited'] or 'requested_exit_code' in task:
+                return {}
+            task['requested_exit_code'] = int(exit_request[1], 16) & 255
+        elif exit_event:
+            if task['task_exited'] or exit_event[1] != pid:
+                return {}
+            task['task_exited'] = True
+        elif role == 'installer' and not task['task_exited']:
+            if event.startswith('tracing_mark_write: sierx-phase '):
+                phase = event.removeprefix('tracing_mark_write: sierx-phase ')
+                operation = None
+            elif event.startswith('tracing_mark_write: sierx-operation '):
+                operation = event.removeprefix('tracing_mark_write: sierx-operation ')
+    if records != entries:
+        return {}
+    return {'kernel_exit': observed, 'operation_phase': phase, 'last_operation': operation}
+
+
+def read_installer_exit_trace(instance):
+    try:
+        (instance / 'tracing_on').write_text('0')
+    except FileNotFoundError:
+        return {}
+    except OSError:
+        return {'kernel_exit_capture': 'unavailable'}
+    try:
+        for cpu in (instance / 'per_cpu').iterdir():
+            losses = {}
+            for line in (cpu / 'stats').read_text().splitlines():
+                key, _, count = line.partition(':')
+                if key.strip() in {'overrun', 'commit overrun', 'dropped events'}:
+                    losses[key.strip()] = int(count)
+            if len(losses) != 3:
+                return {'kernel_exit_capture': 'invalid-records'}
+            if any(losses.values()):
+                return {'kernel_exit_capture': 'lost-events'}
+        with (instance / 'trace').open(encoding='ascii', errors='replace') as trace:
+            evidence = installer_exit_events(trace)
+        return {'kernel_exit_capture': 'observed' if evidence.get('kernel_exit') else 'invalid-records',
+                **evidence}
+    except OSError:
+        return {'kernel_exit_capture': 'unavailable'}
+    except ValueError:
+        return {'kernel_exit_capture': 'invalid-records'}
+
+
+def checkpoint_service_failure(home,directory,environment=None,exit_trace=INSTALLER_EXIT_TRACE):
     """Independent root hook survives installer/observer death and missing result."""
     status=service_exit(environment)
     if status=={'service_result':'success','exit_kind':'exited','exit_status':0}:return None
     value={'result':'failed','phase':'unknown','failure_type':'ServiceExit',
-           'failure_source':'service-exit','service_exit_code':status['exit_status']}
+           'failure_source':'service-exit','service_exit_code':status['exit_status'],
+           'service_exit':status}
     try:
         progress=json.loads(private_tail(Path(home)/'progress.json',4096))
         if isinstance(progress,dict):value['phase']=progress.get('phase')
@@ -273,6 +402,11 @@ def checkpoint_service_failure(home,directory,environment=None):
     except OSError:
         pass
     value['tracee_exit'] = installer_exit(Path(directory) / 'installer.trace')
+    exit_evidence = read_installer_exit_trace(exit_trace)
+    value['kernel_exit_capture'] = exit_evidence.get('kernel_exit_capture')
+    value['kernel_exit'] = exit_evidence.get('kernel_exit')
+    if exit_evidence.get('operation_phase') == value['phase']:
+        value['last_operation'] = exit_evidence.get('last_operation')
     value['observer_errors']={name:observer_errors(private_tail(Path(directory)/(name+'.stderr')))
                               for name in ('installer','manager')}
     failure=sanitize_failure(value)
@@ -384,6 +518,9 @@ def stopped(returncode, console, emulator_output, host_before=None):
 if __name__ == '__main__':
     if len(sys.argv) == 3 and sys.argv[1] == '--browser-exit':
         write_browser_exit(Path(sys.argv[2]))
+        sys.exit(0)
+    if sys.argv[1:] == ['--start-installer-exit-trace'] and os.geteuid() == 0:
+        start_installer_exit_trace()
         sys.exit(0)
     if sys.argv[1:] != ['--service-exit']:
         raise SystemExit('Unsupported diagnostic operation')

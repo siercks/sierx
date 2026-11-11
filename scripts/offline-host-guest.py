@@ -61,6 +61,8 @@ def phase(name):
     global PHASE
     PHASE = name
     (HOME / 'progress.json').write_text(json.dumps({'phase': name}))
+    if OPTIONS.get('transition_stress'):
+        diagnostics.mark_installer('sierx-phase ' + name)
     print('SIERX_PHASE: ' + name, flush=True)
     diagnostics.emit_resources()
 
@@ -92,13 +94,17 @@ def run(*args, env=None):
 def operation(name, bundle=BUNDLE, expected=None):
     # Only fixed operation names enter the public progress stream. Command
     # output, arguments, environment and private journals stay in diagnostics.
-    require(name in {'import','db-up','migrate-up','bootstrap','plan','apply','smoke'},
+    require(name in diagnostics.INSTALLER_OPERATIONS,
             'Unsupported acceptance operation')
+    if OPTIONS.get('transition_stress'):
+        diagnostics.mark_installer('sierx-operation start ' + name)
     print('SIERX_OPERATION: start ' + name, flush=True)
     diagnostics.emit_resources()
     result = run('python3', '-B', bundle / 'scripts/offline.py', name,
                env={**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
                     'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']})
+    if OPTIONS.get('transition_stress'):
+        diagnostics.mark_installer('sierx-operation complete ' + name)
     print('SIERX_OPERATION: complete ' + name, flush=True)
     return result
 
@@ -144,6 +150,9 @@ def acquisition(lock):
 def main():
     os.umask(0o077)
     require(os.getuid() == 1001, 'Guest fixture requires the unprivileged synthetic account')
+    if OPTIONS.get('transition_stress'):
+        os.set_inheritable(diagnostics.INSTALLER_MARKER_FD, False)
+        diagnostics.mark_installer('sierx-installer-start')
     evidence.validate_node(run('/usr/local/bin/node', '--version'))
     require(Path('/proc/1/comm').read_text().strip() == 'systemd', 'Guest system manager is not real systemd')
     require(any(line in {'0::/', '0::/init.scope'} for line in Path('/proc/1/cgroup').read_text().splitlines()),

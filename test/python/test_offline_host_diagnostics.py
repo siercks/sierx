@@ -13,6 +13,52 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_service_failure_binds_kernel_exit_and_operation_to_the_two_main_tasks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            instance = home / 'tracefs'
+            stats = instance / 'per_cpu' / 'cpu0'
+            stats.mkdir(parents=True)
+            (stats / 'stats').write_text('overrun: 0\ncommit overrun: 0\ndropped events: 0\n')
+            (home / 'progress.json').write_text('{"phase":"two-release-stress-1"}')
+            events = [
+                (40, 'tracing_mark_write: sierx-tracer-start'),
+                (42, 'tracing_mark_write: sierx-installer-start'),
+                (42, 'tracing_mark_write: sierx-phase two-release-stress-1'),
+                (42, 'tracing_mark_write: sierx-operation start apply'),
+                (45, 'sys_exit_group(error_code: 49)'),
+                (40, 'sys_exit_group(error_code: 1)'),
+                (42, 'sched_process_exit: comm=private pid=42 prio=120'),
+                (40, 'sched_process_exit: comm=private pid=40 prio=120'),
+            ]
+            trace = (instance / 'trace')
+            trace.write_text('# entries-in-buffer/entries-written: 8/8   #P:1\n' +
+                             ''.join(f' task-{pid} [000] ..... 101.{i:06d}: {event}\n'
+                                     for i, (pid, event) in enumerate(events)))
+            journal = __import__('subprocess').CompletedProcess([], 0, stdout=b'')
+            with patch.object(diagnostics.subprocess, 'run', return_value=journal), \
+                    patch.object(diagnostics.os, 'sync'), contextlib.redirect_stdout(io.StringIO()) as console:
+                result = diagnostics.checkpoint_service_failure(home, home,
+                    {'SERVICE_RESULT': 'exit-code', 'EXIT_CODE': 'exited', 'EXIT_STATUS': '1'}, instance)
+            self.assertEqual(result['kernel_exit'], {
+                'installer': {'task_exited': True},
+                'tracer': {'task_exited': True, 'requested_exit_code': 1},
+            })
+            self.assertEqual(result['kernel_exit_capture'], 'observed')
+            self.assertEqual(result['last_operation'], 'start apply')
+            self.assertEqual(result['service_exit'], {
+                'service_result': 'exit-code', 'exit_kind': 'exited', 'exit_status': 1,
+            })
+            self.assertNotIn('private', console.getvalue() + json.dumps(result))
+            (stats / 'stats').write_text('overrun: 0\ncommit overrun: 0\ndropped events: 1\n')
+            self.assertEqual(diagnostics.read_installer_exit_trace(instance),
+                             {'kernel_exit_capture': 'lost-events'})
+            incomplete = trace.read_text().replace('8/8', '8/9').splitlines()
+            self.assertEqual(diagnostics.installer_exit_events(incomplete), {})
+            reused = trace.read_text().replace('8/8', '9/9') + (
+                ' task-42 [000] ..... 101.010000: sched_process_exit: comm=other pid=42 prio=120\n')
+            self.assertEqual(diagnostics.installer_exit_events(reused.splitlines()), {})
+
     def test_caught_rollback_error_retains_public_locations_only(self):
         suite_dir = Path(diagnostics.__file__).parent
         outside = compile("raise ValueError('private fixture contents')\n",
