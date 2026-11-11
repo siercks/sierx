@@ -6,6 +6,7 @@ import re
 import signal
 import subprocess
 import sys
+import traceback
 from network_observer import safe_failure_fields
 
 RESOURCE_KEYS = {'disk_available_bytes', 'memory_available_bytes', 'oom_kills',
@@ -145,7 +146,14 @@ def guest_command_failure(args, stderr):
 
 
 def failure_record(error, phase):
+    suite_dir = Path(__file__).parent
+    frames = []
+    for frame, line in traceback.walk_tb(error.__traceback__):
+        source = Path(frame.f_code.co_filename)
+        if source.parent == suite_dir and source.name in FRAME_FILES:
+            frames.append({'file': source.name, 'line': line})
     value = {'result':'failed', 'phase':phase, 'failure_type':type(error).__name__,
+             'guest_frames':frames,
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),

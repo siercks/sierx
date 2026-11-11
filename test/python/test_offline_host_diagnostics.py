@@ -13,6 +13,22 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_caught_rollback_error_retains_public_locations_only(self):
+        suite_dir = Path(diagnostics.__file__).parent
+        outside = compile("raise ValueError('private fixture contents')\n",
+                          '/private/offline-host-scenarios.py', 'exec')
+        scenario = compile('\nexec(outside)\n', str(suite_dir / 'offline-host-scenarios.py'), 'exec')
+        try:
+            exec(scenario, {'outside': outside})
+        except ValueError as error:
+            failure = diagnostics.failure_record(error, 'failed-health-rollback')
+        self.assertEqual(failure, {
+            'result': 'failed',
+            'phase': 'failed-health-rollback',
+            'failure_type': 'ValueError',
+            'guest_frames': [{'file': 'offline-host-scenarios.py', 'line': 2}],
+        })
+
     def test_empty_browser_report_retains_only_fixed_service_status(self):
         error = json.JSONDecodeError('No report', '', 0)
         status = {'service_result': 'success', 'exit_kind': 'killed', 'exit_status': 'TERM'}

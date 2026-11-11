@@ -113,6 +113,9 @@ class RuntimeTests(unittest.TestCase):
                 except RuntimeError as error:
                     result=diagnostics.failure_record(error,phases[-1])
                 else:self.fail('Invalid-delivery setup failure must propagate')
+            frames = result.pop('guest_frames')
+            self.assertEqual([frame['file'] for frame in frames], ['offline-host-scenarios.py'])
+            self.assertGreater(frames[0]['line'], 0)
             self.assertEqual(result,{'result':'failed','phase':'invalid-delivery-empty-store-info',
                                      'failure_type':'RuntimeError','command_exit_code':125})
             self.assertTrue(set(phases)<=diagnostics.FAILURE_PHASES)
