@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import signal
 import subprocess
 import sys
@@ -13,7 +14,11 @@ from network_observer import safe_failure_fields
 INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
 INSTALLER_MARKER_FD = 4
 INSTALLER_OPERATIONS = {'import', 'db-up', 'migrate-up', 'bootstrap', 'plan', 'apply', 'smoke'}
-EXIT_ROLES = {'tracer', 'installer'}
+IMPORT_ROLES = ('app', 'caddy', 'postgres')
+IMPORT_STAGES = ('verify-bundle',) + tuple(
+    stage + '-' + role for role in IMPORT_ROLES for stage in ('load', 'inspect')
+) + ('import-complete',)
+EXIT_ROLES = {'tracer', 'installer', 'import-helper'}
 EXIT_TRACE_RESULTS = {'observed', 'unavailable', 'lost-events', 'invalid-records'}
 EXIT_TRACE_LINE = re.compile(r'^\s*.+-(\d+)\s+\[\d+\]\s+\S+\s+(\d+\.\d+):\s+(.*)$')
 TRACER_ERROR_CALLS = {'ptrace', 'wait4', 'waitid', 'write', 'writev'}
@@ -143,6 +148,10 @@ def sanitize_failure(value):
         stderr_bytes = value.get('installer_tracer_stderr_bytes')
         if type(stderr_bytes) is int and 0 <= stderr_bytes <= 0x7fffffff:
             result['installer_tracer_stderr_bytes'] = stderr_bytes
+        import_stage = value.get('import_stage')
+        if (capture == 'observed' and result['phase'] == 'import'
+                and isinstance(import_stage, str) and import_stage in IMPORT_STAGES):
+            result['import_stage'] = import_stage
     if result.get('failure_source') == 'service-exit' or result.get('host_launch_reason') == 'vm-deadline':
         operation = value.get('last_operation')
         if isinstance(operation, str) and re.fullmatch(r'(?:start|complete) [a-z-]+', operation):
@@ -333,6 +342,46 @@ def mark_installer(message):
     os.write(INSTALLER_MARKER_FD, (message + '\n').encode('ascii'))
 
 
+def observe_import(path, emit=mark_installer):
+    """Run the verified bundle helper unchanged, reporting only fixed stage entries."""
+    next_stage = iter(IMPORT_STAGES)
+
+    def stage(name):
+        if name != next(next_stage, None):
+            raise ValueError('Unexpected historical import stage')
+        emit('sierx-import-stage ' + name)
+
+    def observe(frame, event, _result):
+        if event != 'call' or frame.f_code.co_filename != path:
+            return
+        name = frame.f_code.co_name
+        if name == 'verify':
+            stage('verify-bundle')
+            return
+        parent = frame.f_back
+        if (parent is None or parent.f_code.co_filename != path
+                or parent.f_code.co_name != 'run_operation'):
+            return
+        role = parent.f_locals.get('role')
+        if role not in IMPORT_ROLES:
+            return
+        if name == 'command' and frame.f_locals['args'][:2] == ('podman', 'load'):
+            stage('load-' + role)
+        elif name == 'inspect_image':
+            stage('inspect-' + role)
+
+    argv = sys.argv
+    profile = sys.getprofile()
+    sys.argv = [path, 'import']
+    sys.setprofile(observe)
+    try:
+        runpy.run_path(path, run_name='__main__')
+    finally:
+        sys.setprofile(profile)
+        sys.argv = argv
+    stage('import-complete')
+
+
 def installer_exit_events(lines):
     """Bind events to the two kernel-attributed start markers, without exporting PIDs."""
     entries = None
@@ -340,6 +389,8 @@ def installer_exit_events(lines):
     roles = {}
     observed = {}
     phase = operation = None
+    import_pid = None
+    import_stages = []
     tracer_errors = deque(maxlen=4)
     tracer_errors_ready = False
     tracer_exit_at = None
@@ -358,6 +409,20 @@ def installer_exit_events(lines):
         if entries is None or records > entries:
             return {}
         pid, timestamp, event = match.groups()
+        if event.startswith('tracing_mark_write: sierx-import-stage '):
+            stage = event.removeprefix('tracing_mark_write: sierx-import-stage ')
+            if (phase != 'import' or operation != 'start import'
+                    or any(observed.get(role, {}).get('task_exited', True) for role in ('installer', 'tracer'))
+                    or (import_pid is None and pid in roles)
+                    or (import_pid is not None and (pid != import_pid or observed['import-helper']['task_exited']))
+                    or tuple(import_stages + [stage]) != IMPORT_STAGES[:len(import_stages) + 1]):
+                return {}
+            if import_pid is None:
+                import_pid = pid
+                roles[pid] = 'import-helper'
+                observed['import-helper'] = {'task_exited': False}
+            import_stages.append(stage)
+            continue
         start = re.fullmatch(r'tracing_mark_write: sierx-(tracer|installer)-start', event)
         if start:
             role = start[1]
@@ -402,6 +467,8 @@ def installer_exit_events(lines):
     if records != entries:
         return {}
     result = {'kernel_exit': observed, 'operation_phase': phase, 'last_operation': operation}
+    if import_stages and phase == 'import':
+        result['import_stage'] = import_stages[-1]
     if tracer_errors_ready and tracer_exit_at is not None and observed['tracer']['task_exited']:
         result['tracer_syscall_errors'] = [
             {'call': call, 'errno': number, 'age_ms': round((tracer_exit_at - at) * 1000)}
@@ -476,6 +543,7 @@ def checkpoint_service_failure(home,directory,environment=None,exit_trace=INSTAL
         pass
     if exit_evidence.get('operation_phase') == value['phase']:
         value['last_operation'] = exit_evidence.get('last_operation')
+        value['import_stage'] = exit_evidence.get('import_stage')
     value['observer_errors']={name:observer_errors(private_tail(Path(directory)/(name+'.stderr')))
                               for name in ('installer','manager')}
     failure=sanitize_failure(value)
@@ -585,6 +653,10 @@ def stopped(returncode, console, emulator_output, host_before=None):
 
 
 if __name__ == '__main__':
+    if sys.argv[1:] == ['--observe-import'] and os.geteuid() == 1001:
+        os.set_inheritable(INSTALLER_MARKER_FD, False)
+        observe_import('/opt/sierx-bundle/scripts/offline.py')
+        sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == '--browser-exit':
         write_browser_exit(Path(sys.argv[2]))
         sys.exit(0)

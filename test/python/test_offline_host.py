@@ -132,7 +132,7 @@ class EvidenceTests(unittest.TestCase):
             original.fixture_command_detail='other'
             def fail(): raise original
             namespace={'__name__':'__main__','sys':SimpleNamespace(argv=['guest.py']),
-                'main':fail,'LOG':home/'diagnostics.log','HOME':home,'PHASE':'acquisition-inspect',
+                'main':fail,'LOG':home/'diagnostics.log','HOME':home,'PHASE':'acquisition-inspect','OPTIONS':{},
                 'diagnostics':diagnostics,'subprocess':SimpleNamespace(TimeoutExpired=subprocess.TimeoutExpired,
                     run=lambda *a,**k: (_ for _ in ()).throw(PermissionError('private journal error')))}
             with patch.object(diagnostics.os,'sync'),patch.object(diagnostics,'emit_resources'), \

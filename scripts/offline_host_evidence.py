@@ -249,6 +249,20 @@ def validate_transition_probe(report, bundle, expected, suite, previous, previou
     validate_transition(transition, bundle['release'])
 
 
+def validate_import_probe(report, bundle, expected, suite):
+    fields = {'schema', 'suite', 'release_acceptance', 'result', 'profile', 'arch',
+              'release', 'bundle_sha256', 'suite_sha256', 'virtual_cpus', 'import_complete'}
+    if (set(report) != fields or type(report['schema']) is not int or report['schema'] != 1
+            or report['suite'] != 'offline-import-probe-v1'
+            or report['result'] != 'passed' or report['release_acceptance'] is not False
+            or report['profile'] != 'ubuntu-24.04' or report['arch'] != 'arm64'
+            or bundle['arch'] != report['arch']
+            or type(report['virtual_cpus']) is not int or report['virtual_cpus'] not in {2, 4}
+            or report['release'] != bundle['release'] or report['bundle_sha256'] != expected
+            or report['suite_sha256'] != suite or report['import_complete'] is not True):
+        raise ValueError('Missing exact historical cold-import evidence')
+
+
 def validate_runtime(runtime,emulated=False):
     elapsed=runtime.get('elapsed_seconds')
     if (type(runtime.get('seconds')) is not int or not 120<=runtime['seconds']<=180

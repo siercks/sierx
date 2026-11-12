@@ -13,6 +13,36 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_import_stage_requires_a_single_helper_and_ordered_lossless_markers(self):
+        start = [
+            (40, 'tracing_mark_write: sierx-tracer-start'),
+            (42, 'tracing_mark_write: sierx-installer-start'),
+            (42, 'tracing_mark_write: sierx-phase import'),
+            (42, 'tracing_mark_write: sierx-operation start import'),
+        ]
+        def trace(events):
+            return [f'# entries-in-buffer/entries-written: {len(events)}/{len(events)}'] + [
+                f'task-{pid} [000] ..... 100.{i * 1000:06d}: {event}'
+                for i, (pid, event) in enumerate(events)
+            ]
+
+        first = (46, 'tracing_mark_write: sierx-import-stage verify-bundle')
+        load = (46, 'tracing_mark_write: sierx-import-stage load-app')
+        helper_exit = (46, 'sched_process_exit: comm=private pid=46 prio=120')
+        result = diagnostics.installer_exit_events(trace(start + [first, load, helper_exit]))
+        self.assertEqual(result['import_stage'], 'load-app')
+        self.assertEqual(result['kernel_exit']['import-helper'], {'task_exited': True})
+        for invalid in ([load], [first, first], [first, (47, load[1])], [first, helper_exit, load],
+                        [(42, first[1])], [first, (46, 'tracing_mark_write: sierx-import-stage private')]):
+            self.assertEqual(diagnostics.installer_exit_events(trace(start + invalid)), {})
+
+        failure = {'result': 'failed', 'phase': 'import', 'failure_source': 'service-exit',
+                   'kernel_exit_capture': 'observed', 'import_stage': 'load-app'}
+        self.assertEqual(diagnostics.sanitize_failure(failure)['import_stage'], 'load-app')
+        for change in ({'kernel_exit_capture': 'lost-events'}, {'phase': 'repeat-apply'},
+                       {'import_stage': 'private'}):
+            self.assertNotIn('import_stage', diagnostics.sanitize_failure({**failure, **change}))
+
     def test_service_failure_binds_kernel_exit_and_operation_to_the_two_main_tasks(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

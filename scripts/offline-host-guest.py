@@ -21,7 +21,7 @@ import offline_host_diagnostics as diagnostics
 HOME = Path(os.environ['HOME'])
 BUNDLE = Path('/opt/sierx-bundle')
 OPTIONS = json.loads((HOME / 'options.json').read_text())
-TRACK_INSTALLER_EXIT = OPTIONS.get('transition_stress') or OPTIONS.get('transition_probe')
+TRACK_INSTALLER_EXIT = any(OPTIONS.get(name) for name in ('transition_stress', 'transition_probe', 'import_probe'))
 ENV = dict(os.environ)
 LOG = HOME / 'diagnostics.log'
 PHASE = 'initialization'
@@ -68,13 +68,13 @@ def phase(name):
     diagnostics.emit_resources()
 
 
-def run(*args, env=None):
+def run(*args, env=None, pass_fds=()):
     timeout = (5400 if PHASE=='delivered-browser-workflows' else 1800) if OPTIONS['virtual_cpu']=='tcg' else 600
     with LOG.open('ab') as log:
         stderr_start=log.tell()
         result = subprocess.run(list(map(str, args)), stdout=subprocess.PIPE, stderr=log,
                                 env=env or ENV, cwd=BUNDLE,
-                                timeout=timeout)
+                                timeout=timeout, pass_fds=pass_fds)
         stderr_end=log.tell()
         log.write(result.stdout)
     if result.returncode:
@@ -101,9 +101,13 @@ def operation(name, bundle=BUNDLE, expected=None):
         diagnostics.mark_installer('sierx-operation start ' + name)
     print('SIERX_OPERATION: start ' + name, flush=True)
     diagnostics.emit_resources()
-    result = run('python3', '-B', bundle / 'scripts/offline.py', name,
-               env={**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
-                    'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']})
+    env = {**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
+           'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']}
+    if name == 'import' and OPTIONS.get('import_probe'):
+        result = run('python3', '-B', '/opt/acceptance/tests/offline_host_diagnostics.py',
+                     '--observe-import', env=env, pass_fds=(diagnostics.INSTALLER_MARKER_FD,))
+    else:
+        result = run('python3', '-B', bundle / 'scripts/offline.py', name, env=env)
     if TRACK_INSTALLER_EXIT:
         diagnostics.mark_installer('sierx-operation complete ' + name)
     print('SIERX_OPERATION: complete ' + name, flush=True)
@@ -205,6 +209,15 @@ def main():
                SIERX_BOOTSTRAP_WORKSPACE_SLUG='offline', SIERX_BOOTSTRAP_WORKSPACE_NAME='Offline acceptance',
                SIERX_BOOTSTRAP_PROJECT_PREFIX='SRX', SIERX_BOOTSTRAP_PROJECT_NAME='Backlog')
     operation('import')
+    if OPTIONS.get('import_probe'):
+        require(not OPTIONS['closeout'], 'Import probe cannot produce closeout evidence')
+        lock = json.loads((BUNDLE / 'bundle.lock.json').read_text())
+        return {'schema': 1, 'suite': 'offline-import-probe-v1',
+                'release_acceptance': False, 'result': 'passed',
+                'profile': profile['ID'] + '-' + profile['VERSION_ID'], 'arch': lock['arch'],
+                'release': lock['release'], 'bundle_sha256': OPTIONS['bundle_sha256'],
+                'suite_sha256': OPTIONS['suite_sha256'], 'virtual_cpus': os.cpu_count(),
+                'import_complete': True}
     phase('rootless-database')
     operation('db-up')
     await_database()
@@ -383,6 +396,10 @@ if __name__ == '__main__':
     try:
         result = main()
     except Exception as error:
+        if OPTIONS.get('import_probe'):
+            # Keep the root service-exit checkpoint authoritative for the
+            # bounded trace. Do not race it with a guest completion file.
+            raise
         with LOG.open('a') as log:
             log.write('\nFailed phase: ' + PHASE + '\n' + type(error).__name__ + ': ' + str(error) + '\n')
         result = diagnostics.failure_record(error, PHASE)

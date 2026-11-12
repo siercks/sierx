@@ -24,6 +24,10 @@ on:
         description: Stop the historical replay after the first early transition
         type: boolean
         default: false
+      import_probe:
+        description: Stop after the original historical ARM64 bundle is imported
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -41,7 +45,8 @@ jobs:
       SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
       SIERX_HOST_TRANSITION_STRESS: ${{ inputs.transition_stress }}
       SIERX_HOST_HISTORICAL_REPLAY: ${{ github.event_name == 'push' || inputs.historical_replay }}
-      SIERX_HOST_TRANSITION_PROBE: ${{ github.event_name == 'push' || inputs.transition_probe }}
+      SIERX_HOST_TRANSITION_PROBE: ${{ inputs.transition_probe }}
+      SIERX_HOST_IMPORT_PROBE: ${{ github.event_name == 'push' || inputs.import_probe }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,15 +87,20 @@ jobs:
       - run: make offline-host-prepare
       - name: Run the selected guest diagnostic
         run: |
-          if [[ $SIERX_HOST_TRANSITION_PROBE == true && $SIERX_HOST_HISTORICAL_REPLAY != true ]]; then
-            echo 'The transition probe requires historical replay.' >&2
+          if [[ $SIERX_HOST_HISTORICAL_REPLAY != true &&
+                ( $SIERX_HOST_TRANSITION_PROBE == true || $SIERX_HOST_IMPORT_PROBE == true ) ]]; then
+            echo 'The focused probes require historical replay.' >&2
             exit 1
           fi
           if [[ $SIERX_HOST_HISTORICAL_REPLAY == true ]]; then
             replay_args=()
             if [[ $SIERX_HOST_TRANSITION_PROBE == true ]]; then
               replay_args+=(--transition-probe)
-            elif [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
+            fi
+            if [[ $SIERX_HOST_IMPORT_PROBE == true ]]; then
+              replay_args+=(--import-probe)
+            fi
+            if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
               replay_args+=(--transition-stress)
             fi
             python3 -B scripts/offline-historical-replay.py "${replay_args[@]}"

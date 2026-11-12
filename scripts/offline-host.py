@@ -202,7 +202,8 @@ def setup(root, args):
         # through the observer on every read/write under software emulation.
         # Keep the manager's ordinary ptrace observer: browser service seccomp
         # denials take precedence over RET_TRACE and must remain observable.
-        report_exits = getattr(args, 'transition_stress', False) or getattr(args, 'transition_probe', False)
+        report_exits = any(getattr(args, probe, False)
+                           for probe in ('transition_stress', 'transition_probe', 'import_probe'))
         wrapper.write_text(tracer_wrapper(name,trace_calls,report_exits=report_exits,
             ordinary_installer_trace=getattr(args,'ordinary_installer_trace',False)))
         tracee = root / ('usr/sbin/sierx-observed-'+name)
@@ -281,6 +282,7 @@ After=basic.target
                'transition_stress':getattr(args,'transition_stress',False),
                'transition_before_browser':getattr(args,'transition_before_browser',False),
                'transition_probe':getattr(args,'transition_probe',False),
+               'import_probe':getattr(args,'import_probe',False),
                'acquisition_probe':getattr(args,'acquisition_probe',False)}
     (home / 'options.json').write_text(json.dumps(options))
     os.chown(home / 'options.json', 1001, 1001)
@@ -419,18 +421,21 @@ def recover_disk(disk):
 
 def main(args):
     stage(args,'host-verify-inputs')
-    probes = [getattr(args, name, False) for name in ('runtime_probe', 'acquisition_probe', 'transition_probe')]
+    probes = [getattr(args, name, False)
+              for name in ('runtime_probe', 'acquisition_probe', 'transition_probe', 'import_probe')]
     if any(probes) and not args.development:
         raise ValueError('Diagnostic probes require --development and cannot satisfy promotion')
     if sum(probes) > 1:
         raise ValueError('Select one diagnostic probe')
     transition_probe = getattr(args, 'transition_probe', False)
-    if transition_probe and not getattr(args, 'previous_bundle', None):
-        raise ValueError('Transition probe requires an independently approved retained release')
+    import_probe = getattr(args, 'import_probe', False)
+    if (transition_probe or import_probe) and not getattr(args, 'previous_bundle', None):
+        raise ValueError('Historical probe requires an independently approved retained release')
     if getattr(args,'transition_before_browser',False) and not getattr(args,'transition_stress',False):
         raise ValueError('Early transition requires the complete stress diagnostic')
-    if getattr(args,'ordinary_installer_trace',False) and not (transition_probe or getattr(args,'transition_stress',False)):
-        raise ValueError('Ordinary installer tracing requires a transition diagnostic')
+    if getattr(args,'ordinary_installer_trace',False) and not (
+            transition_probe or import_probe or getattr(args,'transition_stress',False)):
+        raise ValueError('Ordinary installer tracing requires an installer diagnostic')
     if getattr(args,'transition_stress',False) and (args.development or any(probes)):
         raise ValueError('Transition stress requires every normal full guest scenario')
     args.suite_sha256 = suite_digest()
@@ -611,14 +616,18 @@ def main(args):
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             if result.get('virtual_cpus') != (4 if mode=='tcg' else 2):
                 raise ValueError('Guest CPU count differs from its declared emulation profile')
-            if transition_probe:
-                evidence.validate_transition_probe(result, data, args.expected_sha256,
-                                                   args.suite_sha256, old, args.previous_sha256)
+            if transition_probe or import_probe:
+                if import_probe:
+                    evidence.validate_import_probe(result, data, args.expected_sha256, args.suite_sha256)
+                else:
+                    evidence.validate_transition_probe(result, data, args.expected_sha256,
+                                                       args.suite_sha256, old, args.previous_sha256)
                 result.update(virtual_cpu=mode, rootfs_sha256=args.rootfs_sha256,
                               archive_sha256=args.archive_sha256, kernel_sha256=kernel_digest)
                 report.write_text(json.dumps(result, indent=2) + '\n')
                 report.chmod(0o644)
-                print('offline-host: historical transition probe passed; no release acceptance', flush=True)
+                probe = 'cold import' if import_probe else 'transition'
+                print('offline-host: historical ' + probe + ' probe passed; no release acceptance', flush=True)
                 return
             if getattr(args,'acquisition_probe',False):
                 result.update(virtual_cpu=mode,rootfs_sha256=args.rootfs_sha256,
@@ -709,6 +718,8 @@ if __name__ == '__main__':
     parser.add_argument('--acquisition-probe',action='store_true',help='Development-only acquisition diagnosis in the real guest; never release acceptance')
     parser.add_argument('--transition-probe', action='store_true',
                         help='Development-only single early transition using an approved retained release')
+    parser.add_argument('--import-probe', action='store_true',
+                        help='Development-only cold import using the original bundle and approved retained release')
     parser.add_argument('--transition-stress',action='store_true',help='Repeat full transition cycle; diagnostic envelope only, never promotion')
     parser.add_argument('--transition-before-browser', action='store_true',
                         help='Move the first stress cycle before the browser and invalid-delivery checks')

@@ -110,5 +110,24 @@ class TransitionStressTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'approved retained release'):
             host.main(SimpleNamespace(development=True, transition_probe=True))
 
+    def test_cold_import_probe_is_bound_to_the_exact_bundle_and_cannot_be_promoted(self):
+        bundle = {**self.bundle, 'arch': 'arm64'}
+        report = {'schema': 1, 'suite': 'offline-import-probe-v1',
+                  'release_acceptance': False, 'result': 'passed',
+                  'profile': 'ubuntu-24.04', 'arch': 'arm64', 'release': bundle['release'],
+                  'bundle_sha256': 'd'*64, 'suite_sha256': 'c'*64,
+                  'virtual_cpus': 4, 'import_complete': True}
+        evidence.validate_import_probe(report, bundle, 'd'*64, 'c'*64)
+        for change in ({'release_acceptance': True}, {'import_complete': False}, {'arch': 'amd64'},
+                       {'bundle_sha256': 'e'*64}, {'private': 'raw output'}):
+            with self.assertRaises(ValueError):
+                evidence.validate_import_probe({**report, **change}, bundle, 'd'*64, 'c'*64)
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report, bundle, 'd'*64, 'c'*64)
+        with self.assertRaisesRegex(ValueError, 'require --development'):
+            host.main(SimpleNamespace(development=False, import_probe=True))
+        with self.assertRaisesRegex(ValueError, 'approved retained release'):
+            host.main(SimpleNamespace(development=True, import_probe=True))
+
 
 if __name__=='__main__':unittest.main()
