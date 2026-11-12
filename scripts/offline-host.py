@@ -56,6 +56,9 @@ def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),rep
             '--start-installer-exit-trace || exit "$?"\n'
             f'exec {fd}>{diagnostics.INSTALLER_EXIT_TRACE / "trace_marker"}\n'
             f'printf "sierx-tracer-start\\n" >&{fd} || exit "$?"\n'
+            '/usr/bin/python3 /opt/acceptance/tests/offline_host_diagnostics.py '
+            '--enable-tracer-error-events || exit "$?"\n'
+            f'printf "sierx-tracer-errors-ready\\n" >&{fd} || exit "$?"\n'
         )
     return ('#!/bin/sh\n'+stderr+marker_setup+'exec /usr/bin/strace'+quiet+' -f'+filtering+
         ' --decode-pids=comm,pidns -ttt -yy -s 256 -e trace='+trace_calls+

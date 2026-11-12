@@ -23,17 +23,21 @@ class DiagnosticsTests(unittest.TestCase):
             (home / 'progress.json').write_text('{"phase":"two-release-stress-1"}')
             events = [
                 (40, 'tracing_mark_write: sierx-tracer-start'),
+                (40, 'tracing_mark_write: sierx-tracer-errors-ready'),
                 (42, 'tracing_mark_write: sierx-installer-start'),
                 (42, 'tracing_mark_write: sierx-phase two-release-stress-1'),
                 (42, 'tracing_mark_write: sierx-operation start apply'),
                 (45, 'sys_exit_group(error_code: 49)'),
+                (45, 'sys_ptrace -> 0xfffffffffffffffb'),
+                (40, 'sys_ptrace -> 0xfffffffffffffffb'),
                 (40, 'sys_exit_group(error_code: 1)'),
                 (42, 'sched_process_exit: comm=private pid=42 prio=120'),
                 (40, 'sched_process_exit: comm=private pid=40 prio=120'),
             ]
             trace = (instance / 'trace')
-            trace.write_text('# entries-in-buffer/entries-written: 8/8   #P:1\n' +
-                             ''.join(f' task-{pid} [000] ..... 101.{i:06d}: {event}\n'
+            count = len(events)
+            trace.write_text(f'# entries-in-buffer/entries-written: {count}/{count}   #P:1\n' +
+                             ''.join(f' task-{pid} [000] ..... 101.{i * 1000:06d}: {event}\n'
                                      for i, (pid, event) in enumerate(events)))
             journal = __import__('subprocess').CompletedProcess([], 0, stdout=b'')
             with patch.object(diagnostics.subprocess, 'run', return_value=journal), \
@@ -45,6 +49,7 @@ class DiagnosticsTests(unittest.TestCase):
                 'tracer': {'task_exited': True, 'requested_exit_code': 1},
             })
             self.assertEqual(result['kernel_exit_capture'], 'observed')
+            self.assertEqual(result['tracer_syscall_errors'], [{'call': 'ptrace', 'errno': 5, 'age_ms': 1}])
             self.assertEqual(result['last_operation'], 'start apply')
             self.assertEqual(result['service_exit'], {
                 'service_result': 'exit-code', 'exit_kind': 'exited', 'exit_status': 1,
@@ -53,10 +58,10 @@ class DiagnosticsTests(unittest.TestCase):
             (stats / 'stats').write_text('overrun: 0\ncommit overrun: 0\ndropped events: 1\n')
             self.assertEqual(diagnostics.read_installer_exit_trace(instance),
                              {'kernel_exit_capture': 'lost-events'})
-            incomplete = trace.read_text().replace('8/8', '8/9').splitlines()
+            incomplete = trace.read_text().replace(f'{count}/{count}', f'{count}/{count+1}').splitlines()
             self.assertEqual(diagnostics.installer_exit_events(incomplete), {})
-            reused = trace.read_text().replace('8/8', '9/9') + (
-                ' task-42 [000] ..... 101.010000: sched_process_exit: comm=other pid=42 prio=120\n')
+            reused = trace.read_text().replace(f'{count}/{count}', f'{count+1}/{count+1}') + (
+                ' task-42 [000] ..... 101.011000: sched_process_exit: comm=other pid=42 prio=120\n')
             self.assertEqual(diagnostics.installer_exit_events(reused.splitlines()), {})
 
     def test_caught_rollback_error_retains_public_locations_only(self):
