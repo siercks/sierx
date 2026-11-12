@@ -21,6 +21,7 @@ import offline_host_diagnostics as diagnostics
 HOME = Path(os.environ['HOME'])
 BUNDLE = Path('/opt/sierx-bundle')
 OPTIONS = json.loads((HOME / 'options.json').read_text())
+TRACK_INSTALLER_EXIT = OPTIONS.get('transition_stress') or OPTIONS.get('transition_probe')
 ENV = dict(os.environ)
 LOG = HOME / 'diagnostics.log'
 PHASE = 'initialization'
@@ -51,7 +52,7 @@ def manager_proof():
     descriptor = os.open(HOME / 'manager-proof.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
     with os.fdopen(descriptor,'w') as stream:
         json.dump(proof,stream)
-    if OPTIONS['closeout']:
+    if OPTIONS['closeout'] or OPTIONS.get('transition_probe'):
         hashes=offline_host_inputs.invalid_bundles(BUNDLE,Path('/opt/invalid-bundles'))
         descriptor=os.open(HOME/'invalid-inputs.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o644)
         with os.fdopen(descriptor,'w') as stream:json.dump(hashes,stream)
@@ -61,7 +62,7 @@ def phase(name):
     global PHASE
     PHASE = name
     (HOME / 'progress.json').write_text(json.dumps({'phase': name}))
-    if OPTIONS.get('transition_stress'):
+    if TRACK_INSTALLER_EXIT:
         diagnostics.mark_installer('sierx-phase ' + name)
     print('SIERX_PHASE: ' + name, flush=True)
     diagnostics.emit_resources()
@@ -96,14 +97,14 @@ def operation(name, bundle=BUNDLE, expected=None):
     # output, arguments, environment and private journals stay in diagnostics.
     require(name in diagnostics.INSTALLER_OPERATIONS,
             'Unsupported acceptance operation')
-    if OPTIONS.get('transition_stress'):
+    if TRACK_INSTALLER_EXIT:
         diagnostics.mark_installer('sierx-operation start ' + name)
     print('SIERX_OPERATION: start ' + name, flush=True)
     diagnostics.emit_resources()
     result = run('python3', '-B', bundle / 'scripts/offline.py', name,
                env={**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
                     'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']})
-    if OPTIONS.get('transition_stress'):
+    if TRACK_INSTALLER_EXIT:
         diagnostics.mark_installer('sierx-operation complete ' + name)
     print('SIERX_OPERATION: complete ' + name, flush=True)
     return result
@@ -158,7 +159,7 @@ def load_scenarios():
 def main():
     os.umask(0o077)
     require(os.getuid() == 1001, 'Guest fixture requires the unprivileged synthetic account')
-    if OPTIONS.get('transition_stress'):
+    if TRACK_INSTALLER_EXIT:
         os.set_inheritable(diagnostics.INSTALLER_MARKER_FD, False)
         diagnostics.mark_installer('sierx-installer-start')
     evidence.validate_node(run('/usr/local/bin/node', '--version'))
@@ -289,6 +290,16 @@ def main():
     controls.main(ENV,lock,run,phase)
     scenario = None
     first_cycle = None
+    if OPTIONS.get('transition_probe'):
+        require(not OPTIONS['closeout'], 'Transition probe cannot produce closeout evidence')
+        phase('two-release-stress-1')
+        transition = load_scenarios().two_release(BUNDLE, OPTIONS, ENV, operation, run, require)
+        return {'schema': 1, 'suite': 'offline-transition-probe-v1',
+                'release_acceptance': False, 'result': 'passed',
+                'profile': profile['ID'] + '-' + profile['VERSION_ID'], 'arch': lock['arch'],
+                'release': lock['release'], 'bundle_sha256': OPTIONS['bundle_sha256'],
+                'suite_sha256': OPTIONS['suite_sha256'], 'virtual_cpus': os.cpu_count(),
+                'transition': transition}
     if OPTIONS.get('transition_before_browser'):
         require(OPTIONS.get('transition_stress') and OPTIONS['closeout'],
                 'Early transition requires the complete stress diagnostic')

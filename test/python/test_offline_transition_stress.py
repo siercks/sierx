@@ -85,5 +85,30 @@ class TransitionStressTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Ordinary installer tracing requires'):
             host.main(SimpleNamespace(development=False, ordinary_installer_trace=True))
 
+    def test_early_transition_probe_validates_exact_inputs_and_cannot_pass_promotion(self):
+        bundle = {**self.bundle, 'arch': 'arm64'}
+        transition = self.report['scenarios']['two_release']
+        retained = {'release': transition['previous']}
+        report = {'schema': 1, 'suite': 'offline-transition-probe-v1',
+                  'release_acceptance': False, 'result': 'passed',
+                  'profile': 'ubuntu-24.04', 'arch': 'arm64', 'release': bundle['release'],
+                  'bundle_sha256': 'd'*64, 'suite_sha256': 'c'*64,
+                  'virtual_cpus': 4, 'transition': transition}
+        evidence.validate_transition_probe(report, bundle, 'd'*64, 'c'*64, retained, 'e'*64)
+        for invalid in (
+            {**report, 'release_acceptance': True},
+            {**report, 'private': 'raw output'},
+            {**report, 'transition': {**transition, 'previous_bundle_sha256': '0'*64}},
+            {**report, 'transition': {**transition, 'fingerprint_preserved': False}},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                evidence.validate_transition_probe(invalid, bundle, 'd'*64, 'c'*64, retained, 'e'*64)
+        with self.assertRaises(ValueError):
+            evidence.validate_closeout(report, bundle, 'd'*64, 'c'*64)
+        with self.assertRaisesRegex(ValueError, 'require --development'):
+            host.main(SimpleNamespace(development=False, transition_probe=True))
+        with self.assertRaisesRegex(ValueError, 'approved retained release'):
+            host.main(SimpleNamespace(development=True, transition_probe=True))
+
 
 if __name__=='__main__':unittest.main()

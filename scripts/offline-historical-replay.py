@@ -43,7 +43,9 @@ def verify_input(directory,run):
         'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,'bundle_sha256':BUNDLE_SHA256}}},ARCH)
 
 
-def main(transition_stress=False):
+def main(transition_stress=False, transition_probe=False):
+    if transition_probe and transition_stress:
+        raise ValueError('Select a single historical transition diagnostic')
     if offline.native_arch()!=ARCH:
         raise ValueError('Historical replay requires the original native ARM64 host architecture')
     directory=ROOT/'dist'
@@ -52,10 +54,12 @@ def main(transition_stress=False):
         raise ValueError('Replay retained-release approval differs from the original run')
     retained=json.loads(approval.read_text())['architectures'][ARCH]
     bundle=verify_input(directory,json.loads((directory/'historical-run.json').read_text()))
+    early_transition = transition_stress or transition_probe
     proof={'run_id':RUN_ID,'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
-           'transition_stress':transition_stress,'transition_before_browser':transition_stress,
-           'installer_trace_mode':'ordinary-ptrace' if transition_stress else 'seccomp-bpf',
+           'transition_stress':transition_stress,'transition_probe':transition_probe,
+           'transition_before_browser':early_transition,
+           'installer_trace_mode':'ordinary-ptrace' if early_transition else 'seccomp-bpf',
            'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
     receipts=load('replay_host_receipts','offline-host-evidence.py')
@@ -73,12 +77,17 @@ def main(transition_stress=False):
         '--report',str(directory/'historical-replay-ubuntu24-arm64.json')]
     if transition_stress:
         command.extend(('--transition-stress', '--transition-before-browser', '--ordinary-installer-trace'))
+    elif transition_probe:
+        command.extend(('--development', '--transition-probe', '--ordinary-installer-trace'))
     return subprocess.run(command).returncode
 
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--transition-stress', action='store_true')
-    try:sys.exit(main(parser.parse_args().transition_stress))
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--transition-stress', action='store_true')
+    modes.add_argument('--transition-probe', action='store_true')
+    args = parser.parse_args()
+    try:sys.exit(main(args.transition_stress, args.transition_probe))
     except (ValueError,OSError,TypeError,KeyError,IndexError,tarfile.TarError):
         raise SystemExit('offline-historical-replay: missing or mismatched input; no diagnostic pass') from None

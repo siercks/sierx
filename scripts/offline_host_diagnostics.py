@@ -26,7 +26,7 @@ SIGNALS = {entry.name.removeprefix('SIG') for entry in signal.Signals}
 FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionError',
                  'FileNotFoundError', 'JSONDecodeError', 'UnicodeDecodeError',
                  'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError',
-                 'NetworkObservationError', 'HostCommandError', 'IndexError',
+                 'NetworkObservationError', 'HostCommandError', 'HostLaunchError', 'IndexError',
                  'BrokenPipeError', 'ServiceExit'}
 FRAME_FILES = {'offline-host-guest.py','offline-host-scenarios.py','offline-local-registry.py',
                'offline_host_diagnostics.py','offline_host_inputs.py','offline_host_evidence.py',
@@ -35,6 +35,7 @@ OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-c
                   'unexpected-wait','other-error'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
+HOST_LAUNCH_REASONS = {'startup-deadline', 'vm-deadline', 'completion-suite-mismatch'}
 GUEST_COMMANDS = {'podman-info','podman-inspect','podman-pull'}
 GUEST_COMMAND_DETAILS = {'storage-configuration','database-lock','permission-denied',
                          'storage-full','resource-unavailable','namespace-clone',
@@ -81,6 +82,13 @@ def sanitize_failure(value):
     if isinstance(detail,str) and detail in HOST_DETAILS: result['host_detail']=detail
     number=value.get('host_errno')
     if type(number) is int and 1<=number<=4095: result['host_errno']=number
+    if result['phase'] == 'host-launch' and result['failure_type'] == 'HostLaunchError':
+        reason = value.get('host_launch_reason')
+        if isinstance(reason, str) and reason in HOST_LAUNCH_REASONS:
+            result['host_launch_reason'] = reason
+            guest_phase = value.get('guest_phase')
+            if reason == 'vm-deadline' and isinstance(guest_phase, str) and guest_phase in FAILURE_PHASES - HOST_PHASES:
+                result['guest_phase'] = guest_phase
     if result['failure_type'] == 'JSONDecodeError':
         kind = value.get('json_input')
         if isinstance(kind, str) and kind in {'empty', 'object', 'array', 'other'}:
@@ -119,6 +127,7 @@ def sanitize_failure(value):
                     observed[role]['requested_exit_code'] = code
             if observed:
                 result['kernel_exit'] = observed
+    if result.get('failure_source') == 'service-exit' or result.get('host_launch_reason') == 'vm-deadline':
         operation = value.get('last_operation')
         if isinstance(operation, str) and re.fullmatch(r'(?:start|complete) [a-z-]+', operation):
             if operation.split()[1] in INSTALLER_OPERATIONS:
@@ -184,6 +193,9 @@ def failure_record(error, phase):
             frames.append({'file': source.name, 'line': line})
     value = {'result':'failed', 'phase':phase, 'failure_type':type(error).__name__,
              'guest_frames':frames,
+             'host_launch_reason':getattr(error, 'host_launch_reason', None),
+             'guest_phase':getattr(error, 'guest_phase', None),
+             'last_operation':getattr(error, 'last_operation', None),
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),

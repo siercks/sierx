@@ -94,6 +94,14 @@ class HostCommandError(ValueError):
         super().__init__('Host command failed: tool='+self.host_tool+' exit='+str(error.returncode))
 
 
+class HostLaunchError(ValueError):
+    def __init__(self, reason, message, guest_phase=None, last_operation=None):
+        self.host_launch_reason = reason
+        self.guest_phase = guest_phase
+        self.last_operation = last_operation
+        super().__init__(message)
+
+
 def run(*args, **kwargs):
     try:
         return subprocess.check_output(list(map(str, args)), stderr=subprocess.PIPE, **kwargs)
@@ -191,7 +199,8 @@ def setup(root, args):
         # through the observer on every read/write under software emulation.
         # Keep the manager's ordinary ptrace observer: browser service seccomp
         # denials take precedence over RET_TRACE and must remain observable.
-        wrapper.write_text(tracer_wrapper(name,trace_calls,report_exits=getattr(args,'transition_stress',False),
+        report_exits = getattr(args, 'transition_stress', False) or getattr(args, 'transition_probe', False)
+        wrapper.write_text(tracer_wrapper(name,trace_calls,report_exits=report_exits,
             ordinary_installer_trace=getattr(args,'ordinary_installer_trace',False)))
         tracee = root / ('usr/sbin/sierx-observed-'+name)
         tracee.write_text('#!/bin/sh\nexec '+command+' 2>&3 3>&-\n')
@@ -268,6 +277,7 @@ After=basic.target
                'runtime_probe':getattr(args,'runtime_probe',False),
                'transition_stress':getattr(args,'transition_stress',False),
                'transition_before_browser':getattr(args,'transition_before_browser',False),
+               'transition_probe':getattr(args,'transition_probe',False),
                'acquisition_probe':getattr(args,'acquisition_probe',False)}
     (home / 'options.json').write_text(json.dumps(options))
     os.chown(home / 'options.json', 1001, 1001)
@@ -406,16 +416,19 @@ def recover_disk(disk):
 
 def main(args):
     stage(args,'host-verify-inputs')
-    if (getattr(args,'runtime_probe',False) or getattr(args,'acquisition_probe',False)) and not args.development:
+    probes = [getattr(args, name, False) for name in ('runtime_probe', 'acquisition_probe', 'transition_probe')]
+    if any(probes) and not args.development:
         raise ValueError('Diagnostic probes require --development and cannot satisfy promotion')
-    if getattr(args,'runtime_probe',False) and getattr(args,'acquisition_probe',False):
+    if sum(probes) > 1:
         raise ValueError('Select one diagnostic probe')
+    transition_probe = getattr(args, 'transition_probe', False)
+    if transition_probe and not getattr(args, 'previous_bundle', None):
+        raise ValueError('Transition probe requires an independently approved retained release')
     if getattr(args,'transition_before_browser',False) and not getattr(args,'transition_stress',False):
         raise ValueError('Early transition requires the complete stress diagnostic')
-    if getattr(args,'ordinary_installer_trace',False) and not getattr(args,'transition_stress',False):
-        raise ValueError('Ordinary installer tracing requires the complete stress diagnostic')
-    if getattr(args,'transition_stress',False) and (args.development or getattr(args,'runtime_probe',False)
-                                                  or getattr(args,'acquisition_probe',False)):
+    if getattr(args,'ordinary_installer_trace',False) and not (transition_probe or getattr(args,'transition_stress',False)):
+        raise ValueError('Ordinary installer tracing requires a transition diagnostic')
+    if getattr(args,'transition_stress',False) and (args.development or any(probes)):
         raise ValueError('Transition stress requires every normal full guest scenario')
     args.suite_sha256 = suite_digest()
     report = Path(args.report).absolute()
@@ -545,7 +558,8 @@ def main(args):
                         if matches:
                             finished=matches[-1]
                             if finished[0]!=args.suite_sha256:
-                                raise ValueError('Guest completion belongs to a different acceptance snapshot')
+                                raise HostLaunchError('completion-suite-mismatch',
+                                    'Guest completion belongs to a different acceptance snapshot')
                             # Root strace follows persistent Podman helpers.
                             # Stop the entire owned VM after the tracee synced
                             # its result, rather than waiting for those daemons.
@@ -553,10 +567,12 @@ def main(args):
                             process.wait(timeout=30)
                             break
                     if last_phase is None and time.monotonic() > startup_deadline:
-                        raise ValueError('Guest user manager or installer failed to start; inspect private diagnostics')
+                        raise HostLaunchError('startup-deadline',
+                            'Guest user manager or installer failed to start; inspect private diagnostics')
                     time.sleep(1)
                 if process.poll() is None:
-                    raise ValueError('Rootless acceptance exceeded its declared timeout')
+                    raise HostLaunchError('vm-deadline', 'Rootless acceptance exceeded its declared timeout',
+                                          last_phase, last_operation)
             stage(args,'host-read-evidence')
             recover_disk(disk)
             recovered=True
@@ -592,6 +608,15 @@ def main(args):
                 raise ValueError('Real rootless acceptance failed at ' + failed_phase + ' ('+failure_type+')'+suffix+'; inspect private diagnostics')
             if result.get('virtual_cpus') != (4 if mode=='tcg' else 2):
                 raise ValueError('Guest CPU count differs from its declared emulation profile')
+            if transition_probe:
+                evidence.validate_transition_probe(result, data, args.expected_sha256,
+                                                   args.suite_sha256, old, args.previous_sha256)
+                result.update(virtual_cpu=mode, rootfs_sha256=args.rootfs_sha256,
+                              archive_sha256=args.archive_sha256, kernel_sha256=kernel_digest)
+                report.write_text(json.dumps(result, indent=2) + '\n')
+                report.chmod(0o644)
+                print('offline-host: historical transition probe passed; no release acceptance', flush=True)
+                return
             if getattr(args,'acquisition_probe',False):
                 result.update(virtual_cpu=mode,rootfs_sha256=args.rootfs_sha256,
                               archive_sha256=args.archive_sha256,kernel_sha256=kernel_digest)
@@ -679,6 +704,8 @@ if __name__ == '__main__':
     parser.add_argument('--development',action='store_true',help='Limited fixture development; never valid for promotion')
     parser.add_argument('--runtime-probe',action='store_true',help='Development-only runtime/timer diagnosis; omits closeout scenarios')
     parser.add_argument('--acquisition-probe',action='store_true',help='Development-only acquisition diagnosis in the real guest; never release acceptance')
+    parser.add_argument('--transition-probe', action='store_true',
+                        help='Development-only single early transition using an approved retained release')
     parser.add_argument('--transition-stress',action='store_true',help='Repeat full transition cycle; diagnostic envelope only, never promotion')
     parser.add_argument('--transition-before-browser', action='store_true',
                         help='Move the first stress cycle before the browser and invalid-delivery checks')

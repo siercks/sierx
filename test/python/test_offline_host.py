@@ -26,6 +26,26 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_host_deadline_report_preserves_only_fixed_guest_progress(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary) / 'report.json'
+            args = SimpleNamespace(report=report, failure_phase='host-launch')
+            error = host.HostLaunchError('vm-deadline', 'private emulator output',
+                                         'two-release-stress-1', 'start apply')
+            with patch.object(host, 'main', side_effect=error), self.assertRaises(host.HostLaunchError):
+                host.execute(args)
+            self.assertFalse(report.exists())
+            failure = json.loads(report.with_suffix('.failure.json').read_bytes())
+            self.assertEqual(failure['host_launch_reason'], 'vm-deadline')
+            self.assertEqual(failure['guest_phase'], 'two-release-stress-1')
+            self.assertEqual(failure['last_operation'], 'start apply')
+            self.assertNotIn('private', json.dumps(failure))
+            invalid = host.HostLaunchError('vm-deadline', 'private emulator output',
+                                           'private-phase', 'start private')
+            safe = host.diagnostics.failure_record(invalid, 'host-launch')
+            self.assertNotIn('guest_phase', safe)
+            self.assertNotIn('last_operation', safe)
+
     def test_ordinary_installer_diagnostic_retains_selection_and_fail_closed_tracing(self):
         calls = 'socketpair,sendto,execve'
         normal = host.tracer_wrapper('installer', calls, report_exits=True)

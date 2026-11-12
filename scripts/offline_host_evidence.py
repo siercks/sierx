@@ -202,16 +202,7 @@ def validate_closeout(report,bundle,expected,suite_sha256):
         raise ValueError('Missing required real installer scenarios')
     if scenarios['invalid_deliveries']!=INVALID_DELIVERIES:
         raise ValueError('Missing invalid-delivery rejection controls')
-    releases=scenarios['two_release']
-    if (releases.get('candidate')!=bundle['release'] or releases.get('previous',{}).get('revision')==bundle['release']['revision']
-            or not re.fullmatch(r'[a-f0-9]{40}',releases.get('previous',{}).get('revision',''))
-            or not re.fullmatch(r'[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}',releases.get('previous',{}).get('image',''))
-            or not re.fullmatch(r'[a-f0-9]{64}',releases.get('previous_bundle_sha256',''))
-            or type(releases.get('schema_before')) is not int or releases['schema_before']<1
-            or releases.get('schema_after')!=releases['schema_before']
-            or releases.get('data_scope')!=DATA_TABLES
-            or any(releases.get(name) is not True for name in ('fingerprint_preserved','update','compatible_rollback'))):
-        raise ValueError('Two distinct approved releases and compatible schema/data rollback are required')
+    validate_transition(scenarios['two_release'], bundle['release'])
     flags={'rejected','candidate_started','candidate_health_failed','accepted_revision_preserved','configuration_restored','data_preserved'}
     health=scenarios['failed_health']
     if set(health)!=flags or any(health[name] is not True for name in flags):
@@ -222,6 +213,40 @@ def validate_closeout(report,bundle,expected,suite_sha256):
             or any(acquisition.get(name) is not True for name in ('opt_in','https_verified','empty_store','image_identity_verified'))
             or any(type(acquisition.get(name)) is not int or acquisition[name]<1 for name in ('manifest_requests','blob_requests'))):
         raise ValueError('Missing explicit trusted HTTPS acquisition control')
+
+
+def validate_transition(releases, candidate):
+    if (releases.get('candidate')!=candidate or releases.get('previous',{}).get('revision')==candidate['revision']
+            or not re.fullmatch(r'[a-f0-9]{40}',releases.get('previous',{}).get('revision',''))
+            or not re.fullmatch(r'[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}',releases.get('previous',{}).get('image',''))
+            or not re.fullmatch(r'[a-f0-9]{64}',releases.get('previous_bundle_sha256',''))
+            or type(releases.get('schema_before')) is not int or releases['schema_before']<1
+            or releases.get('schema_after')!=releases['schema_before']
+            or releases.get('data_scope')!=DATA_TABLES
+            or any(releases.get(name) is not True for name in ('fingerprint_preserved','update','compatible_rollback'))):
+        raise ValueError('Two distinct approved releases and compatible schema/data rollback are required')
+
+
+def validate_transition_probe(report, bundle, expected, suite, previous, previous_sha256):
+    fields = {'schema', 'suite', 'release_acceptance', 'result', 'profile', 'arch',
+              'release', 'bundle_sha256', 'suite_sha256', 'virtual_cpus', 'transition'}
+    if (set(report) != fields or type(report.get('schema')) is not int or report['schema'] != 1
+            or report.get('suite') != 'offline-transition-probe-v1'
+            or report.get('result') != 'passed' or report.get('release_acceptance') is not False
+            or report.get('profile') != 'ubuntu-24.04' or bundle['arch'] != 'arm64'
+            or type(report.get('virtual_cpus')) is not int or report['virtual_cpus'] not in {2, 4}
+            or report.get('release') != bundle['release'] or report.get('arch') != bundle['arch']
+            or report.get('bundle_sha256') != expected or report.get('suite_sha256') != suite
+            or not isinstance(report.get('transition'), dict)):
+        raise ValueError('Missing exact historical transition probe evidence')
+    transition = report['transition']
+    transition_fields = {'previous', 'previous_bundle_sha256', 'candidate', 'schema_before',
+                         'schema_after', 'fingerprint_preserved', 'update', 'compatible_rollback', 'data_scope'}
+    if (set(transition) != transition_fields or type(transition.get('schema_after')) is not int
+            or transition.get('previous') != previous['release']
+            or transition.get('previous_bundle_sha256') != previous_sha256):
+        raise ValueError('Historical transition probe differs from the retained approval')
+    validate_transition(transition, bundle['release'])
 
 
 def validate_runtime(runtime,emulated=False):
