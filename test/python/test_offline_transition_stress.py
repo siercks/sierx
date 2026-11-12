@@ -82,6 +82,8 @@ class TransitionStressTests(unittest.TestCase):
         progress.assert_called_once_with('two-release-stress-2')
         with self.assertRaisesRegex(ValueError, 'Early transition requires'):
             host.main(SimpleNamespace(development=False, transition_before_browser=True))
+        with self.assertRaisesRegex(ValueError, 'Ordinary installer tracing requires'):
+            host.main(SimpleNamespace(development=False, ordinary_installer_trace=True))
 
 
 if __name__=='__main__':unittest.main()

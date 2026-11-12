@@ -55,6 +55,7 @@ def main(transition_stress=False):
     proof={'run_id':RUN_ID,'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
            'transition_stress':transition_stress,'transition_before_browser':transition_stress,
+           'installer_trace_mode':'ordinary-ptrace' if transition_stress else 'seccomp-bpf',
            'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
     receipts=load('replay_host_receipts','offline-host-evidence.py')
@@ -71,7 +72,7 @@ def main(transition_stress=False):
         '--previous-evidence',str(directory/'previous/offline-acceptance-arm64.json'),
         '--report',str(directory/'historical-replay-ubuntu24-arm64.json')]
     if transition_stress:
-        command.extend(('--transition-stress', '--transition-before-browser'))
+        command.extend(('--transition-stress', '--transition-before-browser', '--ordinary-installer-trace'))
     return subprocess.run(command).returncode
 
 

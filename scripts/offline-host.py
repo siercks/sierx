@@ -33,14 +33,19 @@ SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidenc
                'offline_host_diagnostics.py', 'kernel_network_evidence.py', 'offline-kernel-observer.py')
 
 
-def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False):
+def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False,
+                   *,ordinary_installer_trace=False):
     if name not in {'installer','manager'}:raise ValueError('Unknown root observer')
     # Root opens the private file BEFORE strace drops its tracee identity. An
     # inherited stderr descriptor retains tracebacks even if the journal loses
     # them. The unprivileged tracee cannot open/list the root-only directory.
     stderr=('umask 077\nexec 3>'+str(directory/'installer-guest.stderr')+'\n'
             if name=='installer' else 'exec 3>&2\n')
-    filtering=' --seccomp-bpf' if name=='installer' else ''
+    filtering = ''
+    if name == 'installer':
+        # Ordinary ptrace still stops at each syscall and retains the same
+        # selection and fail-closed tracee lifetime as the filtered mode.
+        filtering = ' --kill-on-exit' if ordinary_installer_trace else ' --seccomp-bpf'
     installer_probe = report_exits and name == 'installer'
     quiet = ' -q' if installer_probe else ' -qq'
     marker_setup = ''
@@ -186,7 +191,8 @@ def setup(root, args):
         # through the observer on every read/write under software emulation.
         # Keep the manager's ordinary ptrace observer: browser service seccomp
         # denials take precedence over RET_TRACE and must remain observable.
-        wrapper.write_text(tracer_wrapper(name,trace_calls,report_exits=getattr(args,'transition_stress',False)))
+        wrapper.write_text(tracer_wrapper(name,trace_calls,report_exits=getattr(args,'transition_stress',False),
+            ordinary_installer_trace=getattr(args,'ordinary_installer_trace',False)))
         tracee = root / ('usr/sbin/sierx-observed-'+name)
         tracee.write_text('#!/bin/sh\nexec '+command+' 2>&3 3>&-\n')
         wrapper.chmod(0o755)
@@ -406,6 +412,8 @@ def main(args):
         raise ValueError('Select one diagnostic probe')
     if getattr(args,'transition_before_browser',False) and not getattr(args,'transition_stress',False):
         raise ValueError('Early transition requires the complete stress diagnostic')
+    if getattr(args,'ordinary_installer_trace',False) and not getattr(args,'transition_stress',False):
+        raise ValueError('Ordinary installer tracing requires the complete stress diagnostic')
     if getattr(args,'transition_stress',False) and (args.development or getattr(args,'runtime_probe',False)
                                                   or getattr(args,'acquisition_probe',False)):
         raise ValueError('Transition stress requires every normal full guest scenario')
@@ -674,6 +682,8 @@ if __name__ == '__main__':
     parser.add_argument('--transition-stress',action='store_true',help='Repeat full transition cycle; diagnostic envelope only, never promotion')
     parser.add_argument('--transition-before-browser', action='store_true',
                         help='Move the first stress cycle before the browser and invalid-delivery checks')
+    parser.add_argument('--ordinary-installer-trace', action='store_true',
+                        help='Use ordinary fail-closed ptrace for the installer in a stress diagnostic')
     parser.add_argument('--soak-seconds', type=int, default=120)
     parser.add_argument('--acceleration', choices=('auto', 'kvm', 'tcg'), default='auto')
     args=parser.parse_args()

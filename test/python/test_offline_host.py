@@ -26,6 +26,16 @@ spec.loader.exec_module(host)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_ordinary_installer_diagnostic_retains_selection_and_fail_closed_tracing(self):
+        calls = 'socketpair,sendto,execve'
+        normal = host.tracer_wrapper('installer', calls, report_exits=True)
+        ordinary = host.tracer_wrapper('installer', calls, report_exits=True,
+                                       ordinary_installer_trace=True)
+        self.assertIn(' --seccomp-bpf ', normal)
+        self.assertEqual(ordinary, normal.replace(' --seccomp-bpf ', ' --kill-on-exit '))
+        self.assertEqual(host.tracer_wrapper('manager', calls, ordinary_installer_trace=True),
+                         host.tracer_wrapper('manager', calls))
+
     def test_installer_stderr_is_opened_by_root_and_never_added_to_host_recovery_paths(self):
         wrapper=host.tracer_wrapper('installer','socket,execve')
         self.assertIn('umask 077\nexec 3>/var/log/sierx-network/installer-guest.stderr\n',wrapper)
