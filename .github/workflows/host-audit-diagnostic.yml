@@ -28,6 +28,10 @@ on:
         description: Stop after the original historical ARM64 bundle is imported
         type: boolean
         default: false
+      native_import:
+        description: Compare the exact historical cold import directly on native ARM64
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -37,7 +41,8 @@ concurrency:
 jobs:
   diagnose:
     name: Ubuntu ${{ inputs.arch || 'arm64' }} guest diagnostic (no release acceptance)
-    runs-on: ${{ inputs.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-26.04-arm' }}
+    runs-on: ${{ inputs.arch == 'amd64' && 'ubuntu-24.04' ||
+      (github.event_name == 'push' || inputs.native_import) && 'ubuntu-24.04-arm' || 'ubuntu-26.04-arm' }}
     timeout-minutes: 210
     env:
       ARCH: ${{ inputs.arch || 'arm64' }}
@@ -46,7 +51,8 @@ jobs:
       SIERX_HOST_TRANSITION_STRESS: ${{ inputs.transition_stress }}
       SIERX_HOST_HISTORICAL_REPLAY: ${{ github.event_name == 'push' || inputs.historical_replay }}
       SIERX_HOST_TRANSITION_PROBE: ${{ inputs.transition_probe }}
-      SIERX_HOST_IMPORT_PROBE: ${{ github.event_name == 'push' || inputs.import_probe }}
+      SIERX_HOST_IMPORT_PROBE: ${{ inputs.import_probe }}
+      SIERX_HOST_NATIVE_IMPORT: ${{ github.event_name == 'push' || inputs.native_import }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,12 +67,18 @@ jobs:
         with:
           node-version-file: .nvmrc
       - name: Install disposable VM prerequisites
+        if: env.SIERX_HOST_NATIVE_IMPORT != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq podman python3 curl qemu-system-x86 qemu-system-arm e2fsprogs
           if ! sudo modprobe kvm; then
             echo 'KVM unavailable; diagnostic will use bounded native emulation.'
           fi
+      - name: Install native import prerequisites
+        if: env.SIERX_HOST_NATIVE_IMPORT == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman uidmap strace iproute2
       - run: make release-binaries release-image sbom offline-candidate-prepare
         if: env.SIERX_HOST_HISTORICAL_REPLAY != 'true'
         env:
@@ -85,10 +97,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - run: make offline-host-prepare
+        if: env.SIERX_HOST_NATIVE_IMPORT != 'true'
       - name: Run the selected guest diagnostic
         run: |
           if [[ $SIERX_HOST_HISTORICAL_REPLAY != true &&
-                ( $SIERX_HOST_TRANSITION_PROBE == true || $SIERX_HOST_IMPORT_PROBE == true ) ]]; then
+                ( $SIERX_HOST_TRANSITION_PROBE == true || $SIERX_HOST_IMPORT_PROBE == true ||
+                  $SIERX_HOST_NATIVE_IMPORT == true ) ]]; then
             echo 'The focused probes require historical replay.' >&2
             exit 1
           fi
@@ -99,6 +113,9 @@ jobs:
             fi
             if [[ $SIERX_HOST_IMPORT_PROBE == true ]]; then
               replay_args+=(--import-probe)
+            fi
+            if [[ $SIERX_HOST_NATIVE_IMPORT == true ]]; then
+              replay_args+=(--native-import)
             fi
             if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
               replay_args+=(--transition-stress)
@@ -126,6 +143,7 @@ jobs:
                   'revision':os.environ['GITHUB_SHA']}
           for key,name in (
               ('replay_input','historical-replay-input.json'),
+              ('native_import','historical-native-import-arm64.json'),
               ('input_receipt',f'host-input-ubuntu24-{arch}.json'),
               ('host_report',f'{prefix}-ubuntu24-{arch}.json'),
               ('failure',f'{prefix}-ubuntu24-{arch}.failure.json')):

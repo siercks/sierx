@@ -43,8 +43,8 @@ def verify_input(directory,run):
         'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,'bundle_sha256':BUNDLE_SHA256}}},ARCH)
 
 
-def main(transition_stress=False, transition_probe=False, import_probe=False):
-    if sum((transition_stress, transition_probe, import_probe)) > 1:
+def main(transition_stress=False, transition_probe=False, import_probe=False, native_import=False):
+    if sum((transition_stress, transition_probe, import_probe, native_import)) > 1:
         raise ValueError('Select a single historical diagnostic')
     if offline.native_arch()!=ARCH:
         raise ValueError('Historical replay requires the original native ARM64 host architecture')
@@ -59,10 +59,18 @@ def main(transition_stress=False, transition_probe=False, import_probe=False):
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
            'transition_stress':transition_stress,'transition_probe':transition_probe,
            'import_probe':import_probe,
+           'native_import':native_import,
            'transition_before_browser':early_transition,
-           'installer_trace_mode':'ordinary-ptrace' if early_transition or import_probe else 'seccomp-bpf',
+           'installer_trace_mode':'ordinary-ptrace' if early_transition or import_probe or native_import else 'seccomp-bpf',
            'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
+    if native_import:
+        return subprocess.run(('sudo', 'unshare', '--mount', '--net', '--pid', '--fork', '--kill-child',
+            '--mount-proc', '--propagation', 'private', 'sh', '-eu', '-c',
+            'mountpoint -q /sys/kernel/tracing || mount -t tracefs tracefs /sys/kernel/tracing\nexec "$@"',
+            'native-import', '/usr/bin/python3', '-B', str(ROOT/'scripts/offline-native-import.py'),
+            '--probe', str(bundle), BUNDLE_SHA256, str(os.getuid()),
+            str(directory/'historical-native-import-arm64.json'))).returncode
     receipts=load('replay_host_receipts','offline-host-evidence.py')
     receipts.receipt(directory,PROFILE,'ghcr.io/siercks/sierx',REVISION)
     rootfs=directory/'host-fixture-ubuntu24-arm64.tar'
@@ -91,7 +99,8 @@ if __name__=='__main__':
     modes.add_argument('--transition-stress', action='store_true')
     modes.add_argument('--transition-probe', action='store_true')
     modes.add_argument('--import-probe', action='store_true')
+    modes.add_argument('--native-import', action='store_true')
     args = parser.parse_args()
-    try:sys.exit(main(args.transition_stress, args.transition_probe, args.import_probe))
+    try:sys.exit(main(args.transition_stress, args.transition_probe, args.import_probe, args.native_import))
     except (ValueError,OSError,TypeError,KeyError,IndexError,tarfile.TarError):
         raise SystemExit('offline-historical-replay: missing or mismatched input; no diagnostic pass') from None

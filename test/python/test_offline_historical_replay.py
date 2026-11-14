@@ -1,5 +1,6 @@
 """Historical diagnosis cannot substitute inputs or become release acceptance."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -77,6 +78,34 @@ class HistoricalReplayTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'retained-release approval differs'):
                 replay.main()
             verify.assert_not_called()
+
+    def test_native_probe_keeps_historical_verification_and_uses_disposable_namespaces(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            approval = root/'deploy/ci/previous-offline-release.json'
+            approval.parent.mkdir(parents=True)
+            approval.write_text('{"architectures":{"arm64":{}}}')
+            dist = root/'dist'
+            dist.mkdir()
+            (dist/'historical-run.json').write_text(json.dumps(metadata()))
+            bundle = dist/'sierx-offline-arm64'
+            with patch.object(replay, 'ROOT', root), \
+                    patch.object(replay.offline, 'native_arch', return_value='arm64'), \
+                    patch.object(replay.offline, 'digest', return_value=replay.RETAINED_APPROVAL_SHA256), \
+                    patch.object(replay, 'verify_input', return_value=bundle) as verify, \
+                    patch.object(replay.subprocess, 'run', return_value=Mock(returncode=1)) as run:
+                self.assertEqual(replay.main(native_import=True), 1)
+            verify.assert_called_once_with(dist, metadata())
+            args = run.call_args.args[0]
+            self.assertTrue({'--mount', '--net', '--pid', '--kill-child'}.issubset(args))
+            self.assertIn(str(bundle), args)
+            self.assertIn(replay.BUNDLE_SHA256, args)
+            receipt = json.loads((dist/'historical-replay-input.json').read_text())
+            self.assertIs(receipt['release_acceptance'], False)
+            self.assertIs(receipt['native_import'], True)
+            self.assertIs(receipt['import_probe'], False)
+            self.assertEqual(receipt['installer_trace_mode'], 'ordinary-ptrace')
+            self.assertEqual(receipt['archive_sha256'], replay.ARCHIVE_SHA256)
 
 
 if __name__=='__main__':unittest.main()
