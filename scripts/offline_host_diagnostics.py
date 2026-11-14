@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import traceback
+from kernel_network_evidence import SCHED_PROCESS_EXIT
 from network_observer import safe_failure_fields
 
 INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
@@ -436,15 +437,15 @@ def installer_exit_events(lines):
             continue
         task = observed[role]
         exit_request = re.fullmatch(r'sys_exit_group\(error_code: ((?:0x)?[0-9a-f]+)\)', event)
-        exit_event = re.fullmatch(r'sched_process_exit: comm=.* pid=(\d+) prio=\d+', event)
         if exit_request:
             if task['task_exited'] or 'requested_exit_code' in task:
                 return {}
             task['requested_exit_code'] = int(exit_request[1], 16) & 255
             if role == 'tracer':
                 tracer_exit_at = float(timestamp)
-        elif exit_event:
-            if task['task_exited'] or exit_event[1] != pid:
+        elif event.startswith('sched_process_exit:'):
+            exit_event = SCHED_PROCESS_EXIT.fullmatch(event)
+            if not exit_event or task['task_exited'] or exit_event[1] != pid:
                 return {}
             task['task_exited'] = True
             if role == 'tracer' and tracer_exit_at is None:

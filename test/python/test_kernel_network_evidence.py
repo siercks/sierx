@@ -42,6 +42,16 @@ def proof(metadata=None, lines=None):
 
 
 class KernelEvidenceTests(unittest.TestCase):
+    def test_process_exit_supports_linux_7_group_dead_field_without_weakening_identity(self):
+        metadata, lines = fixture()
+        extended = [line + ' group_dead=true' if 'sched_process_exit:' in line else line for line in lines]
+        extended[6] = extended[6].replace('group_dead=true', 'group_dead=false')
+        self.assertEqual(proof(metadata, extended).exits, proof(metadata, lines).exits)
+        for malformed in (extended[6].replace('group_dead=false', 'group_dead=1'),
+                          extended[6].replace('pid=10', 'pid=11'), extended[6] + ' extra=1'):
+            with self.assertRaisesRegex(ValueError, 'identity is ambiguous'):
+                proof(metadata, extended[:6] + [malformed] + extended[7:])
+
     def test_opaque_terminal_send_is_still_rejected_with_payload_free_kernel_reason(self):
         metadata,lines=fixture()
         lines.append('task-10 [000] .... 100.900000: sys_sendto(fd: 0x5, buff: 0x9999, len: 5)')

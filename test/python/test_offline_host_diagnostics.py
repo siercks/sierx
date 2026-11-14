@@ -32,6 +32,12 @@ class DiagnosticsTests(unittest.TestCase):
         result = diagnostics.installer_exit_events(trace(start + [first, load, helper_exit]))
         self.assertEqual(result['import_stage'], 'load-app')
         self.assertEqual(result['kernel_exit']['import-helper'], {'task_exited': True})
+        for group_dead in ('true', 'false'):
+            extended = (helper_exit[0], helper_exit[1] + ' group_dead=' + group_dead)
+            self.assertEqual(diagnostics.installer_exit_events(trace(start + [first, load, extended])), result)
+        for extra in (' group_dead=1', ' group_dead=true unknown=1'):
+            malformed = (helper_exit[0], helper_exit[1] + extra)
+            self.assertEqual(diagnostics.installer_exit_events(trace(start + [first, load, malformed])), {})
         for invalid in ([load], [first, first], [first, (47, load[1])], [first, helper_exit, load],
                         [(42, first[1])], [first, (46, 'tracing_mark_write: sierx-import-stage private')]):
             self.assertEqual(diagnostics.installer_exit_events(trace(start + invalid)), {})

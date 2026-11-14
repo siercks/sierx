@@ -9,6 +9,10 @@ CALLS = {'connect', 'sendto', 'sendmsg', 'sendmmsg'}
 LOSS_KEYS = {'overrun', 'commit overrun', 'dropped events'}
 EVENTS = sorted(['syscalls/sys_'+direction+'_'+call for call in CALLS for direction in ('enter','exit')]
                 + ['sched/sched_process_exit'])
+# Newer kernels append a boolean thread-group state to the task exit event.
+SCHED_PROCESS_EXIT = re.compile(
+    r'sched_process_exit: comm=.* pid=([0-9]+) prio=[0-9]+(?: group_dead=(?:true|false))?'
+)
 
 
 def integer(value, minimum=0, maximum=2**63-1):
@@ -96,7 +100,7 @@ class KernelEvidence:
                 self.return_events[int(pid)].append(timestamp)
                 self.returned_calls[int(pid)].append((timestamp, returned[1], value))
             elif body.startswith('sched_process_exit:'):
-                identity = re.search(r' pid=([0-9]+) prio=[0-9]+$', body)
+                identity = SCHED_PROCESS_EXIT.fullmatch(body)
                 if not identity or identity[1] != pid:
                     raise ValueError('Kernel process-exit identity is ambiguous')
                 self.exits[int(pid)].append(timestamp)
