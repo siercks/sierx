@@ -302,7 +302,9 @@ def acceleration(requested):
     return 'kvm' if available and requested != 'tcg' else 'tcg'
 
 
-def qemu_command(arch, mode, disk, kernel, initrd, serial):
+def qemu_command(arch, mode, disk, kernel, initrd, serial, *, single_tcg=False):
+    if single_tcg and mode != 'tcg':
+        raise ValueError('Single-threaded emulation requires TCG')
     emulator = 'qemu-system-x86_64' if arch == 'amd64' else 'qemu-system-aarch64'
     # This is functional native-architecture coverage, not a legacy CPU or
     # performance fixture. Expose TCG's available instructions (including Arm
@@ -313,7 +315,8 @@ def qemu_command(arch, mode, disk, kernel, initrd, serial):
     cpus = '4' if mode == 'tcg' else '2'
     console = 'ttyS0' if arch == 'amd64' else 'ttyAMA0'
     board = 'q35' if arch == 'amd64' else 'virt'
-    return [emulator, '-machine', board, '-accel', mode, '-cpu', cpu, '-m', '4096', '-smp', cpus,
+    accelerator = 'tcg,thread=single' if single_tcg else mode
+    return [emulator, '-machine', board, '-accel', accelerator, '-cpu', cpu, '-m', '4096', '-smp', cpus,
             '-nodefaults', '-nic', 'none', '-display', 'none', '-monitor', 'none',
             '-serial', 'file:' + str(serial), '-no-reboot',
             '-drive', 'file=' + str(disk) + ',format=raw,if=none,id=acceptance',
@@ -429,6 +432,10 @@ def main(args):
         raise ValueError('Select one diagnostic probe')
     transition_probe = getattr(args, 'transition_probe', False)
     import_probe = getattr(args, 'import_probe', False)
+    single_tcg = getattr(args, 'single_tcg', False)
+    if single_tcg and not (import_probe and getattr(args, 'ordinary_installer_trace', False)
+                           and getattr(args, 'acceleration', None) == 'tcg'):
+        raise ValueError('Single-threaded TCG requires a focused ordinary-trace import probe')
     if (transition_probe or import_probe) and not getattr(args, 'previous_bundle', None):
         raise ValueError('Historical probe requires an independently approved retained release')
     if getattr(args,'transition_before_browser',False) and not getattr(args,'transition_stress',False):
@@ -526,7 +533,7 @@ def main(args):
             raise ValueError('Disposable OS cleanup path escaped its owned temporary directory')
         shutil.rmtree(root)
         serial = Path(temporary) / 'serial.log'
-        command = qemu_command(arch, mode, disk, boot_kernel, boot_initrd, serial)
+        command = qemu_command(arch, mode, disk, boot_kernel, boot_initrd, serial, single_tcg=single_tcg)
         stage(args,'host-launch')
         process = None
         recovered = False
@@ -624,6 +631,8 @@ def main(args):
                                                        args.suite_sha256, old, args.previous_sha256)
                 result.update(virtual_cpu=mode, rootfs_sha256=args.rootfs_sha256,
                               archive_sha256=args.archive_sha256, kernel_sha256=kernel_digest)
+                if single_tcg:
+                    result['tcg_thread_mode'] = 'single'
                 report.write_text(json.dumps(result, indent=2) + '\n')
                 report.chmod(0o644)
                 probe = 'cold import' if import_probe else 'transition'
@@ -720,6 +729,8 @@ if __name__ == '__main__':
                         help='Development-only single early transition using an approved retained release')
     parser.add_argument('--import-probe', action='store_true',
                         help='Development-only cold import using the original bundle and approved retained release')
+    parser.add_argument('--single-tcg', action='store_true',
+                        help='Run the focused import on one emulation thread with the same guest CPUs')
     parser.add_argument('--transition-stress',action='store_true',help='Repeat full transition cycle; diagnostic envelope only, never promotion')
     parser.add_argument('--transition-before-browser', action='store_true',
                         help='Move the first stress cycle before the browser and invalid-delivery checks')

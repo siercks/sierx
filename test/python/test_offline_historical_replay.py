@@ -107,5 +107,12 @@ class HistoricalReplayTests(unittest.TestCase):
             self.assertEqual(receipt['installer_trace_mode'], 'ordinary-ptrace')
             self.assertEqual(receipt['archive_sha256'], replay.ARCHIVE_SHA256)
 
+    def test_single_tcg_is_only_available_for_the_historical_guest_import(self):
+        with patch.object(replay, 'verify_input') as verify:
+            for mode in ({}, {'native_import': True}, {'transition_probe': True}):
+                with self.assertRaisesRegex(ValueError, 'requires the historical guest import probe'):
+                    replay.main(single_tcg=True, **mode)
+            verify.assert_not_called()
+
 
 if __name__=='__main__':unittest.main()

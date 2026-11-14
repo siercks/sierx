@@ -32,6 +32,10 @@ on:
         description: Compare the exact historical cold import directly on native ARM64
         type: boolean
         default: false
+      single_tcg:
+        description: Use one emulation thread for the four-CPU historical guest import
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -42,7 +46,7 @@ jobs:
   diagnose:
     name: Ubuntu ${{ inputs.arch || 'arm64' }} guest diagnostic (no release acceptance)
     runs-on: ${{ inputs.arch == 'amd64' && 'ubuntu-24.04' ||
-      (github.event_name == 'push' || inputs.native_import) && 'ubuntu-24.04-arm' || 'ubuntu-26.04-arm' }}
+      inputs.native_import && 'ubuntu-24.04-arm' || 'ubuntu-26.04-arm' }}
     timeout-minutes: 210
     env:
       ARCH: ${{ inputs.arch || 'arm64' }}
@@ -51,8 +55,9 @@ jobs:
       SIERX_HOST_TRANSITION_STRESS: ${{ inputs.transition_stress }}
       SIERX_HOST_HISTORICAL_REPLAY: ${{ github.event_name == 'push' || inputs.historical_replay }}
       SIERX_HOST_TRANSITION_PROBE: ${{ inputs.transition_probe }}
-      SIERX_HOST_IMPORT_PROBE: ${{ inputs.import_probe }}
-      SIERX_HOST_NATIVE_IMPORT: ${{ github.event_name == 'push' || inputs.native_import }}
+      SIERX_HOST_IMPORT_PROBE: ${{ github.event_name == 'push' || inputs.import_probe }}
+      SIERX_HOST_NATIVE_IMPORT: ${{ inputs.native_import }}
+      SIERX_HOST_SINGLE_TCG: ${{ github.event_name == 'push' || inputs.single_tcg }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,7 +107,7 @@ jobs:
         run: |
           if [[ $SIERX_HOST_HISTORICAL_REPLAY != true &&
                 ( $SIERX_HOST_TRANSITION_PROBE == true || $SIERX_HOST_IMPORT_PROBE == true ||
-                  $SIERX_HOST_NATIVE_IMPORT == true ) ]]; then
+                  $SIERX_HOST_NATIVE_IMPORT == true || $SIERX_HOST_SINGLE_TCG == true ) ]]; then
             echo 'The focused probes require historical replay.' >&2
             exit 1
           fi
@@ -116,6 +121,9 @@ jobs:
             fi
             if [[ $SIERX_HOST_NATIVE_IMPORT == true ]]; then
               replay_args+=(--native-import)
+            fi
+            if [[ $SIERX_HOST_SINGLE_TCG == true ]]; then
+              replay_args+=(--single-tcg)
             fi
             if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
               replay_args+=(--transition-stress)

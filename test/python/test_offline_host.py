@@ -546,6 +546,21 @@ class EvidenceTests(unittest.TestCase):
 
 
 class PreparedOSTests(unittest.TestCase):
+    def test_single_tcg_changes_only_the_accelerator_and_is_confined_to_import_probe(self):
+        paths = tuple(Path('/fixture') / name for name in ('disk', 'kernel', 'initrd', 'serial'))
+        normal = host.qemu_command('arm64', 'tcg', *paths)
+        changed = host.qemu_command('arm64', 'tcg', *paths, single_tcg=True)
+        normal[normal.index('-accel') + 1] = 'tcg,thread=single'
+        self.assertEqual(changed, normal)
+        with self.assertRaisesRegex(ValueError, 'requires TCG'):
+            host.qemu_command('arm64', 'kvm', *paths, single_tcg=True)
+        with self.assertRaisesRegex(ValueError, 'require --development'):
+            host.main(SimpleNamespace(development=False, import_probe=True, single_tcg=True))
+        for flags in ({}, {'import_probe': True, 'ordinary_installer_trace': True, 'acceleration': 'auto'},
+                      {'import_probe': True, 'acceleration': 'tcg'}):
+            with self.assertRaisesRegex(ValueError, 'requires a focused ordinary-trace import probe'):
+                host.main(SimpleNamespace(development=True, single_tcg=True, **flags))
+
     def test_vm_has_no_network_device_forwarding_or_operator_bus(self):
         for arch in ('amd64','arm64'):
             command=host.qemu_command(arch,'tcg',Path('/fixture/disk'),Path('/fixture/kernel'),Path('/fixture/initrd'),Path('/fixture/serial'))
