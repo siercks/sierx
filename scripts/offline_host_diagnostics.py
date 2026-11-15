@@ -1,14 +1,17 @@
 """Allowlisted VM failure metadata; never a passing acceptance report."""
 from collections import deque
+import http.client
 import json
 import os
 from pathlib import Path
 import re
 import runpy
 import signal
+import ssl
 import subprocess
 import sys
 import traceback
+import urllib.error
 from kernel_network_evidence import SCHED_PROCESS_EXIT
 from network_observer import safe_failure_fields
 import offline_apply_trace
@@ -46,6 +49,14 @@ OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-c
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
 HOST_LAUNCH_REASONS = {'startup-deadline', 'vm-deadline', 'completion-suite-mismatch'}
+HTTPS_STEPS = {'login', 'create-item'}
+HTTPS_TRANSPORT_ERRORS = (
+    (TimeoutError, 'timeout'), (ssl.SSLCertVerificationError, 'certificate'),
+    (ssl.SSLError, 'tls'), (http.client.RemoteDisconnected, 'disconnected'),
+    (ConnectionError, 'connection'), (http.client.HTTPException, 'http-protocol'),
+    (OSError, 'transport'),
+)
+HTTPS_FAILURE_KINDS = {'http-status', 'url-error'} | {label for _, label in HTTPS_TRANSPORT_ERRORS}
 GUEST_COMMANDS = {'podman-info','podman-inspect','podman-pull'}
 GUEST_COMMAND_DETAILS = {'storage-configuration','database-lock','permission-denied',
                          'storage-full','resource-unavailable','namespace-clone',
@@ -88,6 +99,10 @@ def sanitize_failure(value):
         deploy = sanitize_deploy_failure(value.get('deploy_failure'))
         if deploy is not None:
             result['deploy_failure'] = deploy
+    if result['phase'] == 'https-data-check':
+        https = sanitize_https_failure(value.get('https_failure'))
+        if https is not None:
+            result['https_failure'] = https
     command=value.get('guest_command')
     if isinstance(command,str) and command in GUEST_COMMANDS:
         result['guest_command']=command
@@ -245,6 +260,37 @@ def deploy_stderr_failure(stderr):
         return None
 
 
+def sanitize_https_failure(value):
+    if not isinstance(value, dict):
+        return None
+    step, kind = value.get('step'), value.get('kind')
+    if not isinstance(step, str) or step not in HTTPS_STEPS:
+        return None
+    if not isinstance(kind, str) or kind not in HTTPS_FAILURE_KINDS:
+        return None
+    result = {'step': step, 'kind': kind}
+    if kind == 'http-status':
+        status = value.get('http_status')
+        if type(status) is not int or not 100 <= status <= 599:
+            return None
+        result['http_status'] = status
+    else:
+        number = value.get('errno')
+        if type(number) is int and 1 <= number <= 4095:
+            result['errno'] = number
+    return result
+
+
+def classify_https_failure(error, step):
+    if isinstance(error, urllib.error.HTTPError):
+        return sanitize_https_failure({'step': step, 'kind': 'http-status', 'http_status': error.code})
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    kind = next((label for subtype, label in HTTPS_TRANSPORT_ERRORS if isinstance(reason, subtype)), None)
+    if kind is None and isinstance(error, urllib.error.URLError):
+        kind = 'url-error'
+    return sanitize_https_failure({'step': step, 'kind': kind, 'errno': getattr(reason, 'errno', None)})
+
+
 def failure_record(error, phase):
     suite_dir = Path(__file__).parent
     frames = []
@@ -260,6 +306,7 @@ def failure_record(error, phase):
              'reported_import_stage':getattr(error, 'reported_import_stage', None),
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'deploy_failure':getattr(error, 'deploy_failure', None),
+             'https_failure':getattr(error, 'https_failure', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
              'host_detail':getattr(error,'host_detail',None),

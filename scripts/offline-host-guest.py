@@ -263,14 +263,20 @@ def main():
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),
         urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ENV['SSL_CERT_FILE'])))
-    def request(path, body=None):
+    def request(path, body=None, *, diagnostic_step=None):
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(ENV['SIERX_BASE_URL'] + path, data=data,
               headers={'Content-Type':'application/json','Origin':ENV['SIERX_BASE_URL']})
-        with opener.open(req, timeout=20) as response:
-            return response.read()
-    request('/api/v1/auth/login', {'email':'offline@example.test','password':password})
-    item = json.loads(request('/api/v1/items', {'project':'SRX','type':'story','title':'Rootless delivered item'}))
+        try:
+            with opener.open(req, timeout=20) as response:
+                return response.read()
+        except Exception as error:
+            if OPTIONS.get('transition_probe') and diagnostic_step is not None:
+                error.https_failure = diagnostics.classify_https_failure(error, diagnostic_step)
+            raise
+    request('/api/v1/auth/login', {'email':'offline@example.test','password':password}, diagnostic_step='login')
+    item = json.loads(request('/api/v1/items', {'project':'SRX','type':'story','title':'Rootless delivered item'},
+                              diagnostic_step='create-item'))
     ENV.update(SIERX_SMOKE_URL=ENV['SIERX_BASE_URL'], SIERX_SMOKE_ITEM=item['key'],
                SIERX_SMOKE_EMAIL='offline@example.test', SIERX_SMOKE_PASSWORD=password)
     before = operation('smoke')

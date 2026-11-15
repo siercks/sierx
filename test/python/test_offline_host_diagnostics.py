@@ -1,14 +1,17 @@
 """Failure metadata must expose no untrusted console or environment content."""
 import json
 import contextlib
+import http.client
 import io
 import os
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'scripts'))
 import offline_host_diagnostics as diagnostics
@@ -16,6 +19,29 @@ import offline_apply_trace
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_initial_https_failure_preserves_status_or_transport_without_private_data(self):
+        for error, expected in (
+            (urllib.error.HTTPError('https://private', 503, 'private', {}, None),
+             {'kind': 'http-status', 'http_status': 503}),
+            (urllib.error.URLError(ConnectionRefusedError(111, 'private')),
+             {'kind': 'connection', 'errno': 111}),
+            (urllib.error.URLError(ssl.SSLCertVerificationError(1, 'private')),
+             {'kind': 'certificate', 'errno': 1}),
+            (TimeoutError('private'), {'kind': 'timeout'}),
+            (http.client.RemoteDisconnected('private'), {'kind': 'disconnected'}),
+            (urllib.error.URLError('private'), {'kind': 'url-error'}),
+        ):
+            with self.subTest(kind=expected['kind']):
+                error.https_failure = diagnostics.classify_https_failure(error, 'login')
+                self.assertEqual(error.https_failure, {'step': 'login', **expected})
+                result = diagnostics.failure_record(error, 'https-data-check')
+                self.assertEqual(result['https_failure'], error.https_failure)
+                self.assertNotIn('private', json.dumps(result))
+                self.assertNotIn('https_failure', diagnostics.failure_record(error, 'import'))
+        for planted in ({'step':'private','kind':'timeout'}, {'step':'login','kind':'private'},
+                        {'step':'login','kind':'http-status','http_status':True}):
+            self.assertIsNone(diagnostics.sanitize_https_failure(planted))
+
     def test_apply_subprocess_capture_retains_failure_and_context_without_private_data(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
