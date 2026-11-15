@@ -49,6 +49,10 @@ OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-c
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
 HOST_LAUNCH_REASONS = {'startup-deadline', 'vm-deadline', 'completion-suite-mismatch'}
+PREPARATION_STAGES = {'identify-fixture', 'pull-os', 'pull-node', 'inspect-images', 'build-inputs',
+                      'build-os', 'create-export-container', 'export-os', 'hash-os', 'cleanup'}
+BUILD_STAGES = {'os-packages', 'postgres-client', 'npm-dependencies', 'browser-install',
+                'certificate-tools', 'guest-kernel', 'uid-mapping'}
 HTTPS_STEPS = {'login', 'create-item'}
 HTTPS_TRANSPORT_ERRORS = (
     (TimeoutError, 'timeout'), (ssl.SSLCertVerificationError, 'certificate'),
@@ -279,6 +283,32 @@ def sanitize_https_failure(value):
         if type(number) is int and 1 <= number <= 4095:
             result['errno'] = number
     return result
+
+
+def sanitize_preparation_failure(value):
+    if not isinstance(value, dict):
+        return None
+    stage, status = value.get('stage'), value.get('exit_code')
+    if (not isinstance(stage, str) or stage not in PREPARATION_STAGES
+            or type(status) is not int or not 1 <= status <= 255):
+        return None
+    result = {'stage': stage, 'exit_code': status}
+    build = value.get('last_build_stage')
+    if stage == 'build-os' and isinstance(build, str) and build in BUILD_STAGES:
+        result['last_build_stage'] = build
+    return result
+
+
+def preparation_failure(stage, status, build_log):
+    value = {'stage': stage, 'exit_code': status}
+    if stage == 'build-os' and build_log is not None:
+        prefix = 'SIERX_HOST_BUILD_STAGE: '
+        for line in build_log:
+            if line.startswith(prefix):
+                label = line.removeprefix(prefix).rstrip('\r\n')
+                if label in BUILD_STAGES:
+                    value['last_build_stage'] = label
+    return sanitize_preparation_failure(value)
 
 
 def classify_https_failure(error, step):

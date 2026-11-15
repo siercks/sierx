@@ -19,6 +19,17 @@ import offline_apply_trace
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_preparation_failure_keeps_only_fixed_stage_status_and_last_build_label(self):
+        lines = ['RUN printf private command\n', 'SIERX_HOST_BUILD_STAGE: os-packages\n',
+                 'SIERX_HOST_BUILD_STAGE: browser-install\r\n',
+                 'SIERX_HOST_BUILD_STAGE: private detail\n', 'Error: private vendor output\n']
+        expected = {'stage': 'build-os', 'exit_code': 125, 'last_build_stage': 'browser-install'}
+        self.assertEqual(diagnostics.preparation_failure('build-os', 125, lines), expected)
+        self.assertEqual(diagnostics.preparation_failure('pull-os', 1, lines), {'stage':'pull-os','exit_code':1})
+        self.assertEqual(diagnostics.sanitize_preparation_failure({**expected, 'raw':'private'}), expected)
+        self.assertIsNone(diagnostics.sanitize_preparation_failure({**expected, 'exit_code':True}))
+        self.assertIsNone(diagnostics.sanitize_preparation_failure({**expected, 'stage':'private'}))
+
     def test_initial_https_failure_preserves_status_or_transport_without_private_data(self):
         for error, expected in (
             (urllib.error.HTTPError('https://private', 503, 'private', {}, None),

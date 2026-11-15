@@ -113,6 +113,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - run: make offline-host-prepare
         if: env.SIERX_HOST_NATIVE_IMPORT != 'true'
+        env:
+          SIERX_HOST_PREPARE_DIAGNOSTIC: '1'
       - name: Run the selected guest diagnostic
         run: |
           if [[ $SIERX_HOST_HISTORICAL_REPLAY != true &&
@@ -167,6 +169,7 @@ jobs:
           result={'suite':'host-audit-diagnostic-v1','release_acceptance':False,
                   'revision':os.environ['GITHUB_SHA']}
           for key,name in (
+              ('preparation_failure','host-preparation-failure.json'),
               ('replay_input','historical-replay-input.json'),
               ('native_import','historical-native-import-arm64.json'),
               ('input_receipt',f'host-input-ubuntu24-{arch}.json'),
@@ -175,6 +178,9 @@ jobs:
               path=root/name
               if path.is_file():
                   value=json.loads(path.read_text())
+                  if key=='preparation_failure':
+                      value=diagnostics.sanitize_preparation_failure(value)
+                      if value is None:continue
                   if replay and key=='host_report':value['release_acceptance']=False
                   result[key]=diagnostics.sanitize_failure(value) if key=='failure' else value
           (root/f'host-audit-diagnostic-{arch}.json').write_text(json.dumps(result,indent=2)+'\n')
