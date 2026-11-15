@@ -107,17 +107,18 @@ class HistoricalReplayTests(unittest.TestCase):
             self.assertEqual(receipt['installer_trace_mode'], 'ordinary-ptrace')
             self.assertEqual(receipt['archive_sha256'], replay.ARCHIVE_SHA256)
 
-    def test_single_tcg_is_only_available_for_the_historical_guest_import(self):
+    def test_single_tcg_is_only_available_for_focused_historical_guest_probes(self):
         with patch.object(replay, 'verify_input') as verify:
-            for mode in ({}, {'native_import': True}, {'transition_probe': True}):
-                with self.assertRaisesRegex(ValueError, 'requires the historical guest import probe'):
+            for mode in ({}, {'native_import': True}, {'transition_stress': True}):
+                with self.assertRaisesRegex(ValueError, 'requires a historical guest probe'):
                     replay.main(single_tcg=True, **mode)
-            verify.assert_not_called()
             with self.assertRaisesRegex(ValueError, 'requires the single-threaded historical guest import'):
                 replay.main(import_probe=True, filtered_import_trace=True)
+            with self.assertRaisesRegex(ValueError, 'requires the single-threaded historical transition'):
+                replay.main(transition_probe=True, filtered_transition_trace=True)
             verify.assert_not_called()
 
-    def test_filtered_import_trace_uses_the_release_observer_in_single_threaded_guest(self):
+    def test_filtered_probes_use_the_release_observer_in_single_threaded_guest(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             store = root/'dist'
@@ -133,13 +134,18 @@ class HistoricalReplayTests(unittest.TestCase):
                     patch.object(replay, 'verify_input', return_value=store/'sierx-offline-arm64'), \
                     patch.object(replay, 'load'), \
                     patch.object(replay.subprocess, 'run', return_value=Mock(returncode=0)) as run:
-                self.assertEqual(replay.main(import_probe=True, single_tcg=True, filtered_import_trace=True), 0)
-            args = run.call_args.args[0]
-            self.assertTrue({'--development', '--import-probe', '--single-tcg', 'tcg'}.issubset(args))
-            self.assertNotIn('--ordinary-installer-trace', args)
-            receipt = json.loads((store/'historical-replay-input.json').read_text())
-            self.assertEqual(receipt['installer_trace_mode'], 'seccomp-bpf')
-            self.assertIs(receipt['release_acceptance'], False)
+                for step in ('import', 'transition'):
+                    with self.subTest(step=step):
+                        mode = {step+'_probe': True, 'filtered_'+step+'_trace': True}
+                        self.assertEqual(replay.main(single_tcg=True, **mode), 0)
+                        args = run.call_args.args[0]
+                        self.assertTrue({'--development', '--'+step+'-probe', '--single-tcg', 'tcg'}.issubset(args))
+                        self.assertNotIn('--ordinary-installer-trace', args)
+                        receipt = json.loads((store/'historical-replay-input.json').read_text())
+                        self.assertEqual(receipt['installer_trace_mode'], 'seccomp-bpf')
+                        self.assertIs(receipt['release_acceptance'], False)
+                        for flag in mode:
+                            self.assertIs(receipt[flag], True)
 
 
 if __name__=='__main__':unittest.main()

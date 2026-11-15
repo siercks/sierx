@@ -308,7 +308,7 @@ def main():
     if OPTIONS.get('transition_probe'):
         require(not OPTIONS['closeout'], 'Transition probe cannot produce closeout evidence')
         phase('two-release-stress-1')
-        transition = load_scenarios().two_release(BUNDLE, OPTIONS, ENV, operation, run, require)
+        transition = load_scenarios().two_release(BUNDLE, OPTIONS, ENV, operation, run, require, progress=phase)
         return {'schema': 1, 'suite': 'offline-transition-probe-v1',
                 'release_acceptance': False, 'result': 'passed',
                 'profile': profile['ID'] + '-' + profile['VERSION_ID'], 'arch': lock['arch'],

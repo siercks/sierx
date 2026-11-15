@@ -58,7 +58,9 @@ FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bo
                   'negative-database', 'negative-installer', 'negative-dns-ipv-six',
                   'delivered-browser-workflows', 'invalid-deliveries', 'two-approved-releases',
                   'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete',
-                  'network-audit','two-release-stress-1','two-release-stress-2'} | HOST_PHASES | {
+                  'network-audit','two-release-stress-1','two-release-stress-2',
+                  'two-release-apply-previous','two-release-update-candidate',
+                  'two-release-rollback','two-release-reapply-candidate'} | HOST_PHASES | {
     'invalid-delivery-'+name for name in ('snapshot-before','missing-image','altered-archive',
         'wrong-architecture','wrong-digest','missing-certificate','empty-store-config',
         'empty-store-info','empty-store-plan','snapshot-after')} | {

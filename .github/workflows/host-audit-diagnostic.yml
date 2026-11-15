@@ -40,6 +40,10 @@ on:
         description: Use the release syscall filter for the single-threaded historical import
         type: boolean
         default: false
+      filtered_transition_trace:
+        description: Use the release syscall filter for the single-threaded historical transition
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -58,11 +62,12 @@ jobs:
       SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
       SIERX_HOST_TRANSITION_STRESS: ${{ inputs.transition_stress }}
       SIERX_HOST_HISTORICAL_REPLAY: ${{ github.event_name == 'push' || inputs.historical_replay }}
-      SIERX_HOST_TRANSITION_PROBE: ${{ inputs.transition_probe }}
-      SIERX_HOST_IMPORT_PROBE: ${{ github.event_name == 'push' || inputs.import_probe }}
+      SIERX_HOST_TRANSITION_PROBE: ${{ github.event_name == 'push' || inputs.transition_probe }}
+      SIERX_HOST_IMPORT_PROBE: ${{ inputs.import_probe }}
       SIERX_HOST_NATIVE_IMPORT: ${{ inputs.native_import }}
       SIERX_HOST_SINGLE_TCG: ${{ github.event_name == 'push' || inputs.single_tcg }}
-      SIERX_HOST_FILTERED_IMPORT_TRACE: ${{ github.event_name == 'push' || inputs.filtered_import_trace }}
+      SIERX_HOST_FILTERED_IMPORT_TRACE: ${{ inputs.filtered_import_trace }}
+      SIERX_HOST_FILTERED_TRANSITION_TRACE: ${{ github.event_name == 'push' || inputs.filtered_transition_trace }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -113,7 +118,7 @@ jobs:
           if [[ $SIERX_HOST_HISTORICAL_REPLAY != true &&
                 ( $SIERX_HOST_TRANSITION_PROBE == true || $SIERX_HOST_IMPORT_PROBE == true ||
                   $SIERX_HOST_NATIVE_IMPORT == true || $SIERX_HOST_SINGLE_TCG == true ||
-                  $SIERX_HOST_FILTERED_IMPORT_TRACE == true ) ]]; then
+                  $SIERX_HOST_FILTERED_IMPORT_TRACE == true || $SIERX_HOST_FILTERED_TRANSITION_TRACE == true ) ]]; then
             echo 'The focused probes require historical replay.' >&2
             exit 1
           fi
@@ -133,6 +138,9 @@ jobs:
             fi
             if [[ $SIERX_HOST_FILTERED_IMPORT_TRACE == true ]]; then
               replay_args+=(--filtered-import-trace)
+            fi
+            if [[ $SIERX_HOST_FILTERED_TRANSITION_TRACE == true ]]; then
+              replay_args+=(--filtered-transition-trace)
             fi
             if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
               replay_args+=(--transition-stress)

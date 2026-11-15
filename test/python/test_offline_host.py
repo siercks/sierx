@@ -557,7 +557,7 @@ class PreparedOSTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'require --development'):
             host.main(SimpleNamespace(development=False, import_probe=True, single_tcg=True))
         for flags in ({}, {'import_probe': True, 'acceleration': 'auto'}, {'acceleration': 'tcg'}):
-            with self.assertRaisesRegex(ValueError, 'requires a focused import probe and TCG acceleration'):
+            with self.assertRaisesRegex(ValueError, 'requires a focused guest probe and TCG acceleration'):
                 host.main(SimpleNamespace(development=True, single_tcg=True, **flags))
 
     def test_vm_has_no_network_device_forwarding_or_operator_bus(self):

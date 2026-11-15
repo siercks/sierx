@@ -1,8 +1,10 @@
 """A bounded transition reproduction must never approve a release or retry failure."""
 import copy
 import importlib.util
+import json
 from pathlib import Path
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -60,6 +62,37 @@ class TransitionStressTests(unittest.TestCase):
             self.assertEqual(operation.call_count,failed_cycle)
             self.assertEqual([c.args[0] for c in progress.call_args_list],
                              ['two-release-stress-'+str(i) for i in range(1,failed_cycle+1)])
+
+    def test_focused_checkpoint_distinguishes_each_apply_without_changing_the_cycle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, previous = root/'candidate', root/'previous'
+            transition = self.report['scenarios']['two_release']
+            for path, release in ((candidate, transition['candidate']), (previous, transition['previous'])):
+                path.mkdir()
+                (path/'bundle.lock.json').write_text(json.dumps({'release': release}))
+            events = Mock()
+            events.operation.return_value = 'same'
+            opts = {'previous_sha256': 'e'*64, 'bundle_sha256': 'd'*64}
+            def require(condition, message):
+                self.assertTrue(condition, message)
+            with patch.object(scenarios, 'Path', return_value=previous), \
+                    patch.object(scenarios, 'smoke_fingerprint', return_value='same'), \
+                    patch.object(scenarios, 'backlog_fingerprint', return_value='same'):
+                actual = scenarios.two_release(candidate, opts, {'DATABASE_URL': 'fixture'},
+                    events.operation, Mock(return_value=str(transition['schema_before'])),
+                    require, progress=events.progress)
+            self.assertEqual(actual, transition)
+        phase = None
+        applies = []
+        for name, args, _ in events.mock_calls:
+            if name == 'progress':
+                phase = args[0]
+            elif name == 'operation' and args[0] == 'apply':
+                applies.append((phase, args[1]))
+        self.assertEqual(applies, [('two-release-apply-previous', previous),
+            ('two-release-update-candidate', candidate), ('two-release-rollback', previous),
+            ('two-release-reapply-candidate', candidate)])
 
     def test_stress_requires_full_normal_scenarios_and_retained_approval(self):
         for flags in ({'development':True},{'runtime_probe':True},{'acquisition_probe':True}):

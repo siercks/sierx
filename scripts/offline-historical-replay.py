@@ -44,13 +44,15 @@ def verify_input(directory,run):
 
 
 def main(transition_stress=False, transition_probe=False, import_probe=False, native_import=False,
-         single_tcg=False, filtered_import_trace=False):
+         single_tcg=False, filtered_import_trace=False, filtered_transition_trace=False):
     if sum((transition_stress, transition_probe, import_probe, native_import)) > 1:
         raise ValueError('Select a single historical diagnostic')
-    if single_tcg and not import_probe:
-        raise ValueError('Single-threaded TCG requires the historical guest import probe')
+    if single_tcg and not (import_probe or transition_probe):
+        raise ValueError('Single-threaded TCG requires a historical guest probe')
     if filtered_import_trace and not (import_probe and single_tcg):
         raise ValueError('Filtered import tracing requires the single-threaded historical guest import')
+    if filtered_transition_trace and not (transition_probe and single_tcg):
+        raise ValueError('Filtered transition tracing requires the single-threaded historical transition')
     if offline.native_arch()!=ARCH:
         raise ValueError('Historical replay requires the original native ARM64 host architecture')
     directory=ROOT/'dist'
@@ -60,7 +62,8 @@ def main(transition_stress=False, transition_probe=False, import_probe=False, na
     retained=json.loads(approval.read_text())['architectures'][ARCH]
     bundle=verify_input(directory,json.loads((directory/'historical-run.json').read_text()))
     early_transition = transition_stress or transition_probe
-    ordinary_trace = (early_transition or import_probe or native_import) and not filtered_import_trace
+    ordinary_trace = ((early_transition or import_probe or native_import)
+                      and not (filtered_import_trace or filtered_transition_trace))
     proof={'run_id':RUN_ID,'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
            'transition_stress':transition_stress,'transition_probe':transition_probe,
@@ -68,6 +71,7 @@ def main(transition_stress=False, transition_probe=False, import_probe=False, na
            'native_import':native_import,
            'single_tcg':single_tcg,
            'filtered_import_trace':filtered_import_trace,
+           'filtered_transition_trace':filtered_transition_trace,
            'transition_before_browser':early_transition,
            'installer_trace_mode':'ordinary-ptrace' if ordinary_trace else 'seccomp-bpf',
            'release_acceptance':False}
@@ -94,10 +98,8 @@ def main(transition_stress=False, transition_probe=False, import_probe=False, na
         '--report',str(directory/'historical-replay-ubuntu24-arm64.json')]
     if transition_stress:
         command.extend(('--transition-stress', '--transition-before-browser', '--ordinary-installer-trace'))
-    elif transition_probe:
-        command.extend(('--development', '--transition-probe', '--ordinary-installer-trace'))
-    elif import_probe:
-        command.extend(('--development', '--import-probe'))
+    elif transition_probe or import_probe:
+        command.extend(('--development', '--transition-probe' if transition_probe else '--import-probe'))
         if ordinary_trace:
             command.append('--ordinary-installer-trace')
         if single_tcg:
@@ -114,8 +116,10 @@ if __name__=='__main__':
     modes.add_argument('--native-import', action='store_true')
     parser.add_argument('--single-tcg', action='store_true')
     parser.add_argument('--filtered-import-trace', action='store_true')
+    parser.add_argument('--filtered-transition-trace', action='store_true')
     args = parser.parse_args()
     try:sys.exit(main(args.transition_stress, args.transition_probe, args.import_probe,
-                      args.native_import, args.single_tcg, args.filtered_import_trace))
+                      args.native_import, args.single_tcg, args.filtered_import_trace,
+                      args.filtered_transition_trace))
     except (ValueError,OSError,TypeError,KeyError,IndexError,tarfile.TarError):
         raise SystemExit('offline-historical-replay: missing or mismatched input; no diagnostic pass') from None

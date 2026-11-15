@@ -434,8 +434,8 @@ def main(args):
     transition_probe = getattr(args, 'transition_probe', False)
     import_probe = getattr(args, 'import_probe', False)
     single_tcg = getattr(args, 'single_tcg', False)
-    if single_tcg and not (import_probe and getattr(args, 'acceleration', None) == 'tcg'):
-        raise ValueError('Single-threaded TCG requires a focused import probe and TCG acceleration')
+    if single_tcg and not ((import_probe or transition_probe) and getattr(args, 'acceleration', None) == 'tcg'):
+        raise ValueError('Single-threaded TCG requires a focused guest probe and TCG acceleration')
     if (transition_probe or import_probe) and not getattr(args, 'previous_bundle', None):
         raise ValueError('Historical probe requires an independently approved retained release')
     if getattr(args,'transition_before_browser',False) and not getattr(args,'transition_stress',False):
@@ -733,7 +733,7 @@ if __name__ == '__main__':
     parser.add_argument('--import-probe', action='store_true',
                         help='Development-only cold import using the original bundle and approved retained release')
     parser.add_argument('--single-tcg', action='store_true',
-                        help='Run the focused import on one emulation thread with the same guest CPUs')
+                        help='Run a focused guest probe on one emulation thread with the same guest CPUs')
     parser.add_argument('--transition-stress',action='store_true',help='Repeat full transition cycle; diagnostic envelope only, never promotion')
     parser.add_argument('--transition-before-browser', action='store_true',
                         help='Move the first stress cycle before the browser and invalid-delivery checks')

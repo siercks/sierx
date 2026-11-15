@@ -97,7 +97,7 @@ def delivery_failures(bundle, options, env, run, log, progress=None):
     return ['missing-image','altered-archive','wrong-architecture','wrong-digest','missing-certificate','empty-image-store']
 
 
-def two_release(bundle, options, env, operation, run, require):
+def two_release(bundle, options, env, operation, run, require, *, progress=None):
     previous = Path('/opt/previous-bundle')
     old = json.loads((previous/'bundle.lock.json').read_text())
     new = json.loads((bundle/'bundle.lock.json').read_text())
@@ -108,14 +108,22 @@ def two_release(bundle, options, env, operation, run, require):
     fingerprint = smoke_fingerprint(operation('smoke'))
     rows=backlog_fingerprint(env,run)
     schema = database()
+    if progress is not None:
+        progress('two-release-apply-previous')
     operation('import',previous,options['previous_sha256'])
     operation('apply',previous,options['previous_sha256'])
     require(smoke_fingerprint(operation('smoke',previous,options['previous_sha256'])) == fingerprint, 'Previous approved release cannot read current schema/data')
+    if progress is not None:
+        progress('two-release-update-candidate')
     operation('apply',bundle,options['bundle_sha256'])
     operation('migrate-up',bundle,options['bundle_sha256'])
     require(smoke_fingerprint(operation('smoke')) == fingerprint and database() == schema and backlog_fingerprint(env,run)==rows,'Offline update changed existing data or schema unexpectedly')
+    if progress is not None:
+        progress('two-release-rollback')
     operation('apply',previous,options['previous_sha256'])
     require(smoke_fingerprint(operation('smoke',previous,options['previous_sha256'])) == fingerprint and database() == schema and backlog_fingerprint(env,run)==rows,'Compatible rollback failed')
+    if progress is not None:
+        progress('two-release-reapply-candidate')
     operation('apply',bundle,options['bundle_sha256'])
     require(smoke_fingerprint(operation('smoke')) == fingerprint and backlog_fingerprint(env,run)==rows,'Candidate did not recover after rollback')
     return {'previous':old['release'], 'previous_bundle_sha256':options['previous_sha256'], 'candidate':new['release'], 'schema_before':int(schema),
