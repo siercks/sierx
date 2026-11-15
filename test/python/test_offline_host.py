@@ -556,9 +556,8 @@ class PreparedOSTests(unittest.TestCase):
             host.qemu_command('arm64', 'kvm', *paths, single_tcg=True)
         with self.assertRaisesRegex(ValueError, 'require --development'):
             host.main(SimpleNamespace(development=False, import_probe=True, single_tcg=True))
-        for flags in ({}, {'import_probe': True, 'ordinary_installer_trace': True, 'acceleration': 'auto'},
-                      {'import_probe': True, 'acceleration': 'tcg'}):
-            with self.assertRaisesRegex(ValueError, 'requires a focused ordinary-trace import probe'):
+        for flags in ({}, {'import_probe': True, 'acceleration': 'auto'}, {'acceleration': 'tcg'}):
+            with self.assertRaisesRegex(ValueError, 'requires a focused import probe and TCG acceleration'):
                 host.main(SimpleNamespace(development=True, single_tcg=True, **flags))
 
     def test_vm_has_no_network_device_forwarding_or_operator_bus(self):

@@ -113,6 +113,33 @@ class HistoricalReplayTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'requires the historical guest import probe'):
                     replay.main(single_tcg=True, **mode)
             verify.assert_not_called()
+            with self.assertRaisesRegex(ValueError, 'requires the single-threaded historical guest import'):
+                replay.main(import_probe=True, filtered_import_trace=True)
+            verify.assert_not_called()
+
+    def test_filtered_import_trace_uses_the_release_observer_in_single_threaded_guest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            store = root/'dist'
+            store.mkdir()
+            (store/'historical-run.json').write_text(json.dumps(metadata()))
+            (store/'host-fixture-ubuntu24-arm64.tar.sha256').write_text('0'*64)
+            approval = root/'deploy/ci/previous-offline-release.json'
+            approval.parent.mkdir(parents=True)
+            approval.write_text('{"architectures":{"arm64":{"bundle_sha256":"fixture"}}}')
+            with patch.object(replay, 'ROOT', root), \
+                    patch.object(replay.offline, 'native_arch', return_value='arm64'), \
+                    patch.object(replay.offline, 'digest', return_value=replay.RETAINED_APPROVAL_SHA256), \
+                    patch.object(replay, 'verify_input', return_value=store/'sierx-offline-arm64'), \
+                    patch.object(replay, 'load'), \
+                    patch.object(replay.subprocess, 'run', return_value=Mock(returncode=0)) as run:
+                self.assertEqual(replay.main(import_probe=True, single_tcg=True, filtered_import_trace=True), 0)
+            args = run.call_args.args[0]
+            self.assertTrue({'--development', '--import-probe', '--single-tcg', 'tcg'}.issubset(args))
+            self.assertNotIn('--ordinary-installer-trace', args)
+            receipt = json.loads((store/'historical-replay-input.json').read_text())
+            self.assertEqual(receipt['installer_trace_mode'], 'seccomp-bpf')
+            self.assertIs(receipt['release_acceptance'], False)
 
 
 if __name__=='__main__':unittest.main()

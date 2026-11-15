@@ -13,6 +13,22 @@ import offline_host_diagnostics as diagnostics
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_import_console_progress_is_ordered_and_only_reported_at_the_import_deadline(self):
+        first = 'sierx-trace-installer[42]: SIERX_IMPORT_STAGE: verify-bundle\r\n'
+        second = 'SIERX_IMPORT_STAGE: load-app\n'
+        self.assertEqual(diagnostics.reported_import_stage(first + second), 'load-app')
+        for text in (second, first + 'SIERX_IMPORT_STAGE: private\n', first + first):
+            self.assertIsNone(diagnostics.reported_import_stage(text))
+        failure = {'result':'failed', 'phase':'host-launch', 'failure_type':'HostLaunchError',
+                   'guest_phase':'import', 'host_launch_reason':'vm-deadline',
+                   'reported_import_stage':'load-app'}
+        safe = diagnostics.sanitize_failure(failure)
+        self.assertEqual(safe['reported_import_stage'], 'load-app')
+        self.assertNotIn('import_stage', safe)
+        for change in ({'reported_import_stage':'private'}, {'guest_phase':'restart'},
+                       {'host_launch_reason':'startup-deadline'}):
+            self.assertNotIn('reported_import_stage', diagnostics.sanitize_failure({**failure, **change}))
+
     def test_import_stage_requires_a_single_helper_and_ordered_lossless_markers(self):
         start = [
             (40, 'tracing_mark_write: sierx-tracer-start'),

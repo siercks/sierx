@@ -44,11 +44,13 @@ def verify_input(directory,run):
 
 
 def main(transition_stress=False, transition_probe=False, import_probe=False, native_import=False,
-         single_tcg=False):
+         single_tcg=False, filtered_import_trace=False):
     if sum((transition_stress, transition_probe, import_probe, native_import)) > 1:
         raise ValueError('Select a single historical diagnostic')
     if single_tcg and not import_probe:
         raise ValueError('Single-threaded TCG requires the historical guest import probe')
+    if filtered_import_trace and not (import_probe and single_tcg):
+        raise ValueError('Filtered import tracing requires the single-threaded historical guest import')
     if offline.native_arch()!=ARCH:
         raise ValueError('Historical replay requires the original native ARM64 host architecture')
     directory=ROOT/'dist'
@@ -58,14 +60,16 @@ def main(transition_stress=False, transition_probe=False, import_probe=False, na
     retained=json.loads(approval.read_text())['architectures'][ARCH]
     bundle=verify_input(directory,json.loads((directory/'historical-run.json').read_text()))
     early_transition = transition_stress or transition_probe
+    ordinary_trace = (early_transition or import_probe or native_import) and not filtered_import_trace
     proof={'run_id':RUN_ID,'release':RELEASE,'archive_sha256':ARCHIVE_SHA256,
            'bundle_sha256':BUNDLE_SHA256,'retained_approval_sha256':RETAINED_APPROVAL_SHA256,
            'transition_stress':transition_stress,'transition_probe':transition_probe,
            'import_probe':import_probe,
            'native_import':native_import,
            'single_tcg':single_tcg,
+           'filtered_import_trace':filtered_import_trace,
            'transition_before_browser':early_transition,
-           'installer_trace_mode':'ordinary-ptrace' if early_transition or import_probe or native_import else 'seccomp-bpf',
+           'installer_trace_mode':'ordinary-ptrace' if ordinary_trace else 'seccomp-bpf',
            'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
     if native_import:
@@ -93,7 +97,9 @@ def main(transition_stress=False, transition_probe=False, import_probe=False, na
     elif transition_probe:
         command.extend(('--development', '--transition-probe', '--ordinary-installer-trace'))
     elif import_probe:
-        command.extend(('--development', '--import-probe', '--ordinary-installer-trace'))
+        command.extend(('--development', '--import-probe'))
+        if ordinary_trace:
+            command.append('--ordinary-installer-trace')
         if single_tcg:
             command.extend(('--acceleration', 'tcg', '--single-tcg'))
     return subprocess.run(command).returncode
@@ -107,8 +113,9 @@ if __name__=='__main__':
     modes.add_argument('--import-probe', action='store_true')
     modes.add_argument('--native-import', action='store_true')
     parser.add_argument('--single-tcg', action='store_true')
+    parser.add_argument('--filtered-import-trace', action='store_true')
     args = parser.parse_args()
     try:sys.exit(main(args.transition_stress, args.transition_probe, args.import_probe,
-                      args.native_import, args.single_tcg))
+                      args.native_import, args.single_tcg, args.filtered_import_trace))
     except (ValueError,OSError,TypeError,KeyError,IndexError,tarfile.TarError):
         raise SystemExit('offline-historical-replay: missing or mismatched input; no diagnostic pass') from None

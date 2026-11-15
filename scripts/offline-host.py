@@ -98,10 +98,11 @@ class HostCommandError(ValueError):
 
 
 class HostLaunchError(ValueError):
-    def __init__(self, reason, message, guest_phase=None, last_operation=None):
+    def __init__(self, reason, message, guest_phase=None, last_operation=None, reported_import_stage=None):
         self.host_launch_reason = reason
         self.guest_phase = guest_phase
         self.last_operation = last_operation
+        self.reported_import_stage = reported_import_stage
         super().__init__(message)
 
 
@@ -433,9 +434,8 @@ def main(args):
     transition_probe = getattr(args, 'transition_probe', False)
     import_probe = getattr(args, 'import_probe', False)
     single_tcg = getattr(args, 'single_tcg', False)
-    if single_tcg and not (import_probe and getattr(args, 'ordinary_installer_trace', False)
-                           and getattr(args, 'acceleration', None) == 'tcg'):
-        raise ValueError('Single-threaded TCG requires a focused ordinary-trace import probe')
+    if single_tcg and not (import_probe and getattr(args, 'acceleration', None) == 'tcg'):
+        raise ValueError('Single-threaded TCG requires a focused import probe and TCG acceleration')
     if (transition_probe or import_probe) and not getattr(args, 'previous_bundle', None):
         raise ValueError('Historical probe requires an independently approved retained release')
     if getattr(args,'transition_before_browser',False) and not getattr(args,'transition_stress',False):
@@ -547,6 +547,7 @@ def main(args):
                 startup_deadline = time.monotonic() + (180 if mode == 'kvm' else 600)
                 last_phase = None
                 last_operation = None
+                reported_import_stage = None
                 last_resources = None
                 last_failure = None
                 finished = None
@@ -569,6 +570,8 @@ def main(args):
                         if operations and operations[-1] != last_operation:
                             last_operation = operations[-1]
                             print('offline-host: operation ' + last_operation, flush=True)
+                        if import_probe and last_phase == 'import':
+                            reported_import_stage = diagnostics.reported_import_stage(console_text)
                         matches=re.findall(r'SIERX_FINISHED: ([a-f0-9]{64}) (passed|failed)',console_text)
                         if matches:
                             finished=matches[-1]
@@ -587,7 +590,7 @@ def main(args):
                     time.sleep(1)
                 if process.poll() is None:
                     raise HostLaunchError('vm-deadline', 'Rootless acceptance exceeded its declared timeout',
-                                          last_phase, last_operation)
+                                          last_phase, last_operation, reported_import_stage)
             stage(args,'host-read-evidence')
             recover_disk(disk)
             recovered=True

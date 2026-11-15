@@ -36,6 +36,10 @@ on:
         description: Use one emulation thread for the four-CPU historical guest import
         type: boolean
         default: false
+      filtered_import_trace:
+        description: Use the release syscall filter for the single-threaded historical import
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -58,6 +62,7 @@ jobs:
       SIERX_HOST_IMPORT_PROBE: ${{ github.event_name == 'push' || inputs.import_probe }}
       SIERX_HOST_NATIVE_IMPORT: ${{ inputs.native_import }}
       SIERX_HOST_SINGLE_TCG: ${{ github.event_name == 'push' || inputs.single_tcg }}
+      SIERX_HOST_FILTERED_IMPORT_TRACE: ${{ github.event_name == 'push' || inputs.filtered_import_trace }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,7 +112,8 @@ jobs:
         run: |
           if [[ $SIERX_HOST_HISTORICAL_REPLAY != true &&
                 ( $SIERX_HOST_TRANSITION_PROBE == true || $SIERX_HOST_IMPORT_PROBE == true ||
-                  $SIERX_HOST_NATIVE_IMPORT == true || $SIERX_HOST_SINGLE_TCG == true ) ]]; then
+                  $SIERX_HOST_NATIVE_IMPORT == true || $SIERX_HOST_SINGLE_TCG == true ||
+                  $SIERX_HOST_FILTERED_IMPORT_TRACE == true ) ]]; then
             echo 'The focused probes require historical replay.' >&2
             exit 1
           fi
@@ -124,6 +130,9 @@ jobs:
             fi
             if [[ $SIERX_HOST_SINGLE_TCG == true ]]; then
               replay_args+=(--single-tcg)
+            fi
+            if [[ $SIERX_HOST_FILTERED_IMPORT_TRACE == true ]]; then
+              replay_args+=(--filtered-import-trace)
             fi
             if [[ $SIERX_HOST_TRANSITION_STRESS == true ]]; then
               replay_args+=(--transition-stress)

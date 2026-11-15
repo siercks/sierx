@@ -98,6 +98,9 @@ def sanitize_failure(value):
             guest_phase = value.get('guest_phase')
             if reason == 'vm-deadline' and isinstance(guest_phase, str) and guest_phase in FAILURE_PHASES - HOST_PHASES:
                 result['guest_phase'] = guest_phase
+                progress = value.get('reported_import_stage')
+                if guest_phase == 'import' and isinstance(progress, str) and progress in IMPORT_STAGES:
+                    result['reported_import_stage'] = progress
     if result['failure_type'] == 'JSONDecodeError':
         kind = value.get('json_input')
         if isinstance(kind, str) and kind in {'empty', 'object', 'array', 'other'}:
@@ -222,6 +225,7 @@ def failure_record(error, phase):
              'host_launch_reason':getattr(error, 'host_launch_reason', None),
              'guest_phase':getattr(error, 'guest_phase', None),
              'last_operation':getattr(error, 'last_operation', None),
+             'reported_import_stage':getattr(error, 'reported_import_stage', None),
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
@@ -653,10 +657,26 @@ def stopped(returncode, console, emulator_output, host_before=None):
             'emulator_assertion_observed': bool(re.search(r'assertion .*failed|Assertion .*failed', emulator_output))}
 
 
+def reported_import_stage(console):
+    """Only a complete ordered console prefix identifies the last reported entry."""
+    stages = tuple(re.findall(r'(?:^| )SIERX_IMPORT_STAGE: ([^\r\n]*)\r?\n', console, re.MULTILINE))
+    if stages and stages == IMPORT_STAGES[:len(stages)]:
+        return stages[-1]
+    return None
+
+
 if __name__ == '__main__':
-    if sys.argv[1:] == ['--observe-import'] and os.geteuid() == 1001:
+    if len(sys.argv) == 3 and sys.argv[1] == '--observe-import' and os.geteuid() == 1001:
+        progress = int(sys.argv[2])
         os.set_inheritable(INSTALLER_MARKER_FD, False)
-        observe_import('/opt/sierx-bundle/scripts/offline.py')
+        os.set_inheritable(progress, False)
+
+        def emit_import_progress(marker):
+            mark_installer(marker)
+            stage = marker.removeprefix('sierx-import-stage ')
+            os.write(progress, ('SIERX_IMPORT_STAGE: ' + stage + '\n').encode('ascii'))
+
+        observe_import('/opt/sierx-bundle/scripts/offline.py', emit_import_progress)
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == '--browser-exit':
         write_browser_exit(Path(sys.argv[2]))

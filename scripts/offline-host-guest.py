@@ -104,8 +104,10 @@ def operation(name, bundle=BUNDLE, expected=None):
     env = {**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
            'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']}
     if name == 'import' and OPTIONS.get('import_probe'):
-        result = run('python3', '-B', '/opt/acceptance/tests/offline_host_diagnostics.py',
-                     '--observe-import', env=env, pass_fds=(diagnostics.INSTALLER_MARKER_FD,))
+        with os.fdopen(os.dup(sys.stdout.fileno()), 'wb') as progress:
+            result = run('python3', '-B', '/opt/acceptance/tests/offline_host_diagnostics.py',
+                         '--observe-import', progress.fileno(), env=env,
+                         pass_fds=(diagnostics.INSTALLER_MARKER_FD, progress.fileno()))
     else:
         result = run('python3', '-B', bundle / 'scripts/offline.py', name, env=env)
     if TRACK_INSTALLER_EXIT:
