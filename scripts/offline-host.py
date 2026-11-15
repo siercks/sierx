@@ -30,7 +30,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs', 'offline-browser-navigation.mjs',
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
-               'offline_host_diagnostics.py', 'kernel_network_evidence.py', 'offline-kernel-observer.py')
+               'offline_host_diagnostics.py', 'offline_apply_trace.py',
+               'kernel_network_evidence.py', 'offline-kernel-observer.py')
 
 
 def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False,
@@ -500,6 +501,13 @@ def main(args):
             (tests/name).chmod(0o644)
         if suite_digest(tests,tests) != args.suite_sha256:
             raise ValueError('Acceptance inputs changed while constructing the immutable guest snapshot')
+        if transition_probe:
+            trace = tests / 'deploy-trace'
+            trace.mkdir()
+            trace.chmod(0o755)
+            customize = trace / 'sitecustomize.py'
+            shutil.copyfile(tests / 'offline_apply_trace.py', customize)
+            customize.chmod(0o644)
         stage(args,'host-unpack-delivery')
         staged=root/'opt/.delivery-input'
         delivered=offline_archive.unpack(args.archive,staged,args.archive_sha256,args.expected_sha256,arch)

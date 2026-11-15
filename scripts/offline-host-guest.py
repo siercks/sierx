@@ -88,6 +88,8 @@ def run(*args, env=None, pass_fds=()):
         detail=diagnostics.guest_command_failure(args,stderr)
         error.fixture_command=detail.get('guest_command')
         error.fixture_command_detail=detail.get('guest_command_detail')
+        if env is not None and env.get('SIERX_DIAGNOSTIC_DEPLOY'):
+            error.deploy_failure = diagnostics.deploy_stderr_failure(stderr)
         raise error
     return result.stdout.decode().strip()
 
@@ -103,6 +105,9 @@ def operation(name, bundle=BUNDLE, expected=None):
     diagnostics.emit_resources()
     env = {**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
            'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']}
+    if name == 'apply' and OPTIONS.get('transition_probe'):
+        env['SIERX_DIAGNOSTIC_DEPLOY'] = str(bundle / 'scripts/deploy.py')
+        env['PYTHONPATH'] = '/opt/acceptance/tests/deploy-trace'
     if name == 'import' and OPTIONS.get('import_probe'):
         with os.fdopen(os.dup(sys.stdout.fileno()), 'wb') as progress:
             result = run('python3', '-B', '/opt/acceptance/tests/offline_host_diagnostics.py',

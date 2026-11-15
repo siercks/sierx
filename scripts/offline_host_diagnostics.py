@@ -11,6 +11,7 @@ import sys
 import traceback
 from kernel_network_evidence import SCHED_PROCESS_EXIT
 from network_observer import safe_failure_fields
+import offline_apply_trace
 
 INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
 INSTALLER_MARKER_FD = 4
@@ -52,15 +53,16 @@ GUEST_COMMAND_DETAILS = {'storage-configuration','database-lock','permission-den
                          'connection-refused','manifest-unknown','other'}
 HOST_PHASES = {'host-verify-inputs','host-extract-os','host-configure-os','host-unpack-delivery',
                'host-create-filesystem','host-launch','host-read-evidence'}
+DEPLOY_FAILURE_PHASES = {'actual-plan-apply', 'two-release-apply-previous',
+                         'two-release-update-candidate', 'two-release-rollback',
+                         'two-release-reapply-candidate'}
 FAILURE_PHASES = {'initialization', 'import', 'rootless-database', 'migration-bootstrap',
                   'actual-plan-apply', 'https-data-check', 'repeat-apply', 'restart',
                   'network-negative-controls', 'negative-app', 'negative-gateway',
                   'negative-database', 'negative-installer', 'negative-dns-ipv-six',
                   'delivered-browser-workflows', 'invalid-deliveries', 'two-approved-releases',
                   'failed-health-rollback', 'bounded-runtime', 'explicit-opt-in-acquisition', 'complete',
-                  'network-audit','two-release-stress-1','two-release-stress-2',
-                  'two-release-apply-previous','two-release-update-candidate',
-                  'two-release-rollback','two-release-reapply-candidate'} | HOST_PHASES | {
+                  'network-audit','two-release-stress-1','two-release-stress-2'} | HOST_PHASES | DEPLOY_FAILURE_PHASES | {
     'invalid-delivery-'+name for name in ('snapshot-before','missing-image','altered-archive',
         'wrong-architecture','wrong-digest','missing-certificate','empty-store-config',
         'empty-store-info','empty-store-plan','snapshot-after')} | {
@@ -82,6 +84,10 @@ def sanitize_failure(value):
     code = value.get('command_exit_code')
     if type(code) is int and -128 <= code <= 255:
         result['command_exit_code'] = code
+    if result['phase'] in DEPLOY_FAILURE_PHASES and result.get('command_exit_code') == 1:
+        deploy = sanitize_deploy_failure(value.get('deploy_failure'))
+        if deploy is not None:
+            result['deploy_failure'] = deploy
     command=value.get('guest_command')
     if isinstance(command,str) and command in GUEST_COMMANDS:
         result['guest_command']=command
@@ -215,6 +221,30 @@ def guest_command_failure(args, stderr):
     return {'guest_command':'podman-'+operation,'guest_command_detail':detail}
 
 
+def sanitize_deploy_failure(record):
+    if not isinstance(record, dict):
+        return None
+    terminal = offline_apply_trace.sanitize_exception(record.get('terminal'))
+    if terminal is None:
+        return None
+    result = {'terminal': terminal}
+    context = offline_apply_trace.sanitize_exception(record.get('context'))
+    if context is not None:
+        result['context'] = context
+    return result
+
+
+def deploy_stderr_failure(stderr):
+    prefix = offline_apply_trace.MARKER.encode('ascii')
+    markers = [line.removeprefix(prefix) for line in stderr.splitlines() if line.startswith(prefix)]
+    if len(markers) != 1 or len(markers[0]) > 1024:
+        return None
+    try:
+        return sanitize_deploy_failure(json.loads(markers[0]))
+    except (ValueError, UnicodeError):
+        return None
+
+
 def failure_record(error, phase):
     suite_dir = Path(__file__).parent
     frames = []
@@ -229,6 +259,7 @@ def failure_record(error, phase):
              'last_operation':getattr(error, 'last_operation', None),
              'reported_import_stage':getattr(error, 'reported_import_stage', None),
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
+             'deploy_failure':getattr(error, 'deploy_failure', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
              'host_detail':getattr(error,'host_detail',None),

@@ -2,7 +2,9 @@
 import json
 import contextlib
 import io
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -10,9 +12,47 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'scripts'))
 import offline_host_diagnostics as diagnostics
+import offline_apply_trace
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_apply_subprocess_capture_retains_failure_and_context_without_private_data(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            deploy = root / 'deploy.py'
+            deploy.write_text(
+                'import subprocess\n'
+                'def apply():\n'
+                '    try:\n'
+                '        raise TimeoutError(110, "private URL")\n'
+                '    except OSError:\n'
+                '        raise subprocess.CalledProcessError(31, ["systemctl", "--user", "stop", "private unit"])\n'
+                'try:\n'
+                '    apply()\n'
+                'except subprocess.CalledProcessError:\n'
+                '    raise SystemExit(1)\n'
+            )
+            customize = root / 'sitecustomize.py'
+            customize.write_bytes(Path(offline_apply_trace.__file__).read_bytes())
+            env = {**os.environ, 'PYTHONPATH': str(root), 'SIERX_DIAGNOSTIC_DEPLOY': str(deploy)}
+            result = subprocess.run([sys.executable, '-B', str(deploy), 'apply'],
+                                    env=env, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, b'')
+            report = diagnostics.deploy_stderr_failure(result.stderr)
+            self.assertEqual(report, {
+                'terminal': {'kind': 'CalledProcessError', 'lines': [8, 6], 'command': 'stop-services', 'exit_code': 31},
+                'context': {'kind': 'TimeoutError', 'lines': [4], 'errno': 110},
+            })
+            self.assertNotIn(b'private', result.stderr)
+            self.assertIsNone(diagnostics.deploy_stderr_failure(result.stderr + result.stderr))
+            envelope = {'result':'failed', 'failure_type':'RuntimeError', 'phase':'actual-plan-apply',
+                        'command_exit_code':1, 'deploy_failure':report}
+            self.assertEqual(diagnostics.sanitize_failure(envelope), envelope)
+            for change in ({'command_exit_code': 0}, {'phase':'import'}):
+                self.assertNotIn('deploy_failure', diagnostics.sanitize_failure({**envelope, **change}))
+            self.assertIsNone(diagnostics.sanitize_deploy_failure({'terminal': {'kind':'OSError', 'lines':[True]}}))
+
     def test_import_console_progress_is_ordered_and_only_reported_at_the_import_deadline(self):
         first = 'sierx-trace-installer[42]: SIERX_IMPORT_STAGE: verify-bundle\r\n'
         second = 'SIERX_IMPORT_STAGE: load-app\n'
