@@ -19,6 +19,57 @@ import offline_apply_trace
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_apply_exception_captures_service_result_before_rollback_without_raw_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / 'systemctl'
+            executable.write_text(
+                '#!/usr/bin/python3\nimport os,sys\nfrom pathlib import Path\n'
+                'state=Path(os.environ["TEST_STATE"])\n'
+                'if sys.argv[2]=="restart":\n'
+                '    print("Job for sierx.service failed because a timeout was exceeded.",file=sys.stderr)\n'
+                '    print("private command output",file=sys.stderr)\n'
+                '    sys.exit(1)\n'
+                'elif sys.argv[2]=="show":\n'
+                '    assert not state.exists()\n'
+                '    print("Id=sierx.service\\nResult=timeout\\nActiveState=failed\\nSubState=failed\\n"\n'
+                '          "ExecMainCode=2\\nExecMainStatus=15\\nDescription=private\\n\\n"\n'
+                '          "Id=sierx-caddy.service\\nResult=success\\nActiveState=active\\nSubState=running\\n"\n'
+                '          "ExecMainCode=0\\nExecMainStatus=0")\n'
+                'elif sys.argv[2]=="stop": state.touch()\n'
+            )
+            executable.chmod(0o700)
+            helper = root / 'deploy.py'
+            helper.write_text(
+                'import subprocess,sys\n'
+                'def main():\n'
+                '    try:\n'
+                '        subprocess.check_output(["systemctl","--user","restart","sierx.service","sierx-caddy.service"],stderr=subprocess.PIPE)\n'
+                '    except Exception:\n'
+                '        subprocess.run(["systemctl","--user","stop","sierx.service"],check=True)\n'
+                '        raise\n'
+                'try: main()\n'
+                'except subprocess.CalledProcessError: sys.exit(1)\n'
+            )
+            (root / 'sitecustomize.py').write_bytes(Path(offline_apply_trace.__file__).read_bytes())
+            state = root / 'rolled-back'
+            env = {**os.environ, 'PYTHONPATH': str(root), 'SIERX_DIAGNOSTIC_DEPLOY': str(helper),
+                   'PATH':str(root)+os.pathsep+os.environ['PATH'], 'TEST_STATE':str(state)}
+            result = subprocess.run([sys.executable, '-B', str(helper), 'apply'],
+                                    env=env, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue(state.exists())
+            report = diagnostics.deploy_stderr_failure(result.stderr)['terminal']
+            self.assertEqual(report['command'], 'restart-services')
+            self.assertEqual(report['service_job_failures'], {'app':'timeout'})
+            self.assertEqual(report['service_states']['app'], {
+                'Result':'timeout', 'ActiveState':'failed', 'SubState':'failed',
+                'ExecMainCode':2, 'ExecMainStatus':15})
+            self.assertEqual(report['service_states']['gateway']['Result'], 'success')
+            self.assertNotIn('private', json.dumps(report))
+            self.assertEqual(offline_apply_trace.sanitize_service_states({
+                'app':{'Result':['private'], 'ExecMainStatus':True, 'unknown':'private'}}), {})
+
     def test_preparation_failure_keeps_only_fixed_stage_status_and_last_build_label(self):
         lines = ['RUN printf private command\n', 'SIERX_HOST_BUILD_STAGE: os-packages\n',
                  'SIERX_HOST_BUILD_STAGE: browser-install\r\n',
