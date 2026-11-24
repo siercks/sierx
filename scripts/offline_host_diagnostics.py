@@ -383,9 +383,10 @@ def observer_errors(text):
               ('operation not permitted','permission-denied'),('no child processes','no-child'),
               ('unexpected wait','unexpected-wait'))
     for line in text.splitlines():
-        if not line.startswith('strace: '):continue
-        if re.fullmatch(r'strace: Process [0-9]+ (?:attached|detached)',line):continue
-        selected={flag for pattern,flag in patterns if pattern in line.lower()}
+        message = re.fullmatch(r'(?:strace|/usr/bin/strace): (.*)', line)
+        if not message:continue
+        if re.fullmatch(r'Process [0-9]+ (?:attached|detached)',message[1]):continue
+        selected={flag for pattern,flag in patterns if pattern in message[1].lower()}
         flags.update(selected or {'other-error'})
     return sorted(flags)
 

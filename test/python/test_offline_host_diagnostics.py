@@ -348,6 +348,19 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertFalse((home/'failure.json').exists())
             self.assertNotIn('private',console.getvalue()+json.dumps(result))
 
+    def test_observer_errors_accepts_the_absolute_executable_prefix_without_disclosing_text(self):
+        for prefix in ('strace: ', '/usr/bin/strace: '):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(diagnostics.observer_errors(
+                    prefix+'Process 42 attached\n'+
+                    prefix+'ptrace(PTRACE_SYSCALL, private): Input/output error\n'+
+                    prefix+'wait: No child processes\n'),
+                    ['io-error', 'no-child', 'ptrace', 'wait'])
+                self.assertEqual(diagnostics.observer_errors(prefix+'private credential\n'),
+                                 ['other-error'])
+        self.assertEqual(diagnostics.observer_errors(
+            '/private/strace: ptrace: Input/output error\nprivate credential\n'), [])
+
     def test_root_journal_retains_only_known_source_locations_and_exception_classes(self):
         journal=('Traceback (most recent call last):\n'
             '  File "/opt/acceptance/tests/offline-host-guest.py", line 344, in private_function\n'
