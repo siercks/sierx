@@ -1,5 +1,9 @@
 name: tracer-termination-diagnostic
 on:
+  push:
+    branches: ["codex/phase-3-foundation"]
+    paths:
+      - ".github/workflows/tracer-termination-diagnostic.yml"
   workflow_dispatch:
     inputs:
       arch:
@@ -14,11 +18,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   diagnose:
-    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     timeout-minutes: 30
     env:
-      ARCH: ${{ inputs.arch }}
-      SIERX_TRACER_DIAGNOSTIC_STATE: ${{ github.workspace }}/dist/tracer-race-${{ inputs.arch }}
+      ARCH: ${{ inputs.arch || 'arm64' }}
+      SIERX_TRACER_DIAGNOSTIC_STATE: ${{ github.workspace }}/dist/tracer-race-${{ inputs.arch || 'arm64' }}
       SIERX_DIAGNOSTIC_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,6 +74,6 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: tracer-termination-diagnostic-${{ inputs.arch }}
-          path: dist/tracer-termination-diagnostic-${{ inputs.arch }}.json
+          name: tracer-termination-diagnostic-${{ inputs.arch || 'arm64' }}
+          path: dist/tracer-termination-diagnostic-${{ inputs.arch || 'arm64' }}.json
           if-no-files-found: error
