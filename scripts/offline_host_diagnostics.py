@@ -43,7 +43,7 @@ FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionErro
                  'BrokenPipeError', 'ServiceExit'}
 FRAME_FILES = {'offline-host-guest.py','offline-host-scenarios.py','offline-local-registry.py',
                'offline_host_diagnostics.py','offline_host_inputs.py','offline_host_evidence.py',
-               'offline-network-controls.py','offline.py'}
+               'offline-network-controls.py','offline.py','offline_guest_tracer.py'}
 OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-child',
                   'unexpected-wait','other-error'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}

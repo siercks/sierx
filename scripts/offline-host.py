@@ -25,13 +25,14 @@ import network_observer
 import offline_archive
 import offline_host_diagnostics as diagnostics
 import kernel_network_evidence
+import offline_guest_tracer
 
 ROOT = Path(__file__).resolve().parent.parent
 SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs', 'offline-browser-navigation.mjs',
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
                'offline_host_diagnostics.py', 'offline_apply_trace.py',
-               'kernel_network_evidence.py', 'offline-kernel-observer.py')
+               'kernel_network_evidence.py', 'offline-kernel-observer.py', 'offline_guest_tracer.py')
 
 
 def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False,
@@ -487,6 +488,8 @@ def main(args):
         # traversable by its actual non-root system services and test account.
         root.chmod(0o755)
         stage(args,'host-configure-os')
+        tracer = offline_guest_tracer.load_receipt(root / offline_guest_tracer.RECEIPT.relative_to('/'),
+                                                  root / offline_guest_tracer.BINARY.relative_to('/'))
         setup(root, args)
         tests = root / 'opt/acceptance/tests'
         tests.mkdir(parents=True, exist_ok=True)
@@ -666,6 +669,8 @@ def main(args):
                 print('offline-host: development runtime probe passed; no closeout claim',flush=True)
                 return
             stress=result.pop('transition_stress',None) if getattr(args,'transition_stress',False) else None
+            if result.get('tracer') != tracer:
+                raise ValueError('Guest observer identity differs from the independently checked OS fixture')
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             result['network'] = audit_network(disk, result, report, arch, args.suite_sha256,
                                              data['release']['revision'], mode)

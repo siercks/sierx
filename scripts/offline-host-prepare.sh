@@ -49,6 +49,7 @@ node_id=$(podman image inspect --format '{{.Id}}' "$node")
 stage=build-inputs
 scratch=$(mktemp -d)
 cp deploy/ci/Containerfile.offline-host "$scratch/Containerfile"
+cp scripts/offline_guest_tracer.py test/diagnostics/tracer-termination/termination-fix.json "$scratch/"
 cp web/package.json web/package-lock.json "$scratch/"
 image=localhost/sierx-offline-host:$profile-$arch
 stage=build-os

@@ -3,6 +3,7 @@ import re
 import math
 import json
 from network_observer import CONTROLS, PROCESSES
+import offline_guest_tracer
 
 SCHEMA = 2
 SUITE = 'offline-host-v2'
@@ -141,6 +142,7 @@ def validate(report, bundle, expected, suite_sha256):
             or type(report.get('isolation',{}).get('network_devices')) is not int
             or not re.fullmatch(r'(?:ubuntu-24\.04|rocky-10(?:\.[0-9]+)?)', report.get('profile', ''))):
         raise ValueError('Missing, incomplete or mismatched real rootless-installer evidence')
+    offline_guest_tracer.validate_receipt(report.get('tracer'))
     validate_browser(report.get('browser'))
     versions=report.get('host_versions',{})
     if (set(versions)!={'kernel','systemd','podman','selinux'}

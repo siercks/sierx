@@ -2,6 +2,17 @@
 ARG HOST_IMAGE
 ARG NODE_IMAGE
 FROM ${NODE_IMAGE} AS node
+# Build against the existing Debian browser-tooling base, keeping the pinned
+# decoder independent of newer Rocky development headers. Both guest runtimes
+# are checked against the resulting binary and its exact receipt.
+FROM ${NODE_IMAGE} AS tracer
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential patch python3 curl ca-certificates xz-utils
+WORKDIR /build
+COPY offline_guest_tracer.py termination-fix.json ./
+RUN curl -fsSL https://github.com/strace/strace/releases/download/v6.8/strace-6.8.tar.xz -o strace-6.8.tar.xz && \
+    python3 -B offline_guest_tracer.py --archive strace-6.8.tar.xz --patch termination-fix.json --output /out
 FROM ${HOST_IMAGE}
 USER root
 COPY --from=node /usr/local/bin/ /usr/local/bin/
@@ -25,6 +36,10 @@ RUN printf 'SIERX_HOST_BUILD_STAGE: os-packages\n' && if command -v apt-get >/de
       dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-10-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm" && \
       dnf install -y postgresql18; \
     fi
+# Use the same narrow, source-pinned termination correction on every guest.
+# The source builder and compiler remain outside the exported acceptance OS.
+COPY --from=tracer /out/strace /usr/bin/strace
+COPY --from=tracer /out/tracer.json /usr/share/sierx-offline/tracer.json
 WORKDIR /opt/acceptance
 COPY package.json package-lock.json ./
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright

@@ -17,6 +17,7 @@ import importlib.util
 import offline_host_inputs
 import ipaddress
 import offline_host_diagnostics as diagnostics
+import offline_guest_tracer
 
 HOME = Path(os.environ['HOME'])
 BUNDLE = Path('/opt/sierx-bundle')
@@ -173,6 +174,7 @@ def main():
     if TRACK_INSTALLER_EXIT:
         os.set_inheritable(diagnostics.INSTALLER_MARKER_FD, False)
         diagnostics.mark_installer('sierx-installer-start')
+    tracer = offline_guest_tracer.load_receipt()
     evidence.validate_node(run('/usr/local/bin/node', '--version'))
     require(Path('/proc/1/comm').read_text().strip() == 'systemd', 'Guest system manager is not real systemd')
     require(any(line in {'0::/', '0::/init.scope'} for line in Path('/proc/1/cgroup').read_text().splitlines()),
@@ -398,7 +400,7 @@ def main():
             'coverage':'closeout' if OPTIONS['closeout'] else 'development','browser':browser,
             'virtual_cpus':os.cpu_count(),
             'lifecycle_check_timeout_seconds':timeout_seconds,
-            'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions,
+            'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions,'tracer':tracer,
             **({'transition_stress':stress} if stress else {})}
 
 

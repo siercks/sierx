@@ -1,5 +1,6 @@
 """Complete synthetic reports for rejection tests, never acceptance artifacts."""
 import offline_host_evidence as evidence
+import offline_guest_tracer
 from network_observer import CONTROLS, PROCESSES
 
 
@@ -9,6 +10,7 @@ def full_host_report(bundle,expected,suite,profile,previous):
         'checks':evidence.CHECKS+evidence.CLOSEOUT_CHECKS,'isolation':evidence.ISOLATION,
         'virtual_cpu':'kvm','virtual_cpus':2,'lifecycle_check_timeout_seconds':1,'rootfs_sha256':'c'*64,'kernel_sha256':'d'*64,'archive_sha256':'e'*64,
         'host_versions':{'kernel':'6.8.0-fixture','systemd':'systemd 255','podman':'podman version 4.9.3','selinux':'disabled'},
+        'tracer':{**offline_guest_tracer.PINS,'binary_sha256':'f'*64},
         'browser':{'result':'passed','playwright':'1.63.0','driver':{'node':'v24.22.1','policy':'seccomp-deny-io-uring',
             'policy_verified':True,'external_fetch_control':True,'ipv4_only_verified':True,'timing_mode':'standard','recovery_read_retries':0},'browsers':[
             {'engine':engine,'version':'1.0.0','checks':evidence.BROWSER_CHECKS,'external_requests':0,
