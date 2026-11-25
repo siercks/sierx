@@ -45,7 +45,7 @@ def installer(helper):
     return subprocess.run((*PYTHON, '--helper', helper), pass_fds=(MARKER,)).returncode
 
 
-def probe(bundle, expected, uid):
+def probe(bundle, expected, uid, *, query_observed=False):
     if os.geteuid() != 0 or uid < 1000:
         raise ValueError('Native import requires root in a fresh loopback-only namespace and an unprivileged runner')
     # /sys can be mounted from the parent netns. Verify the namespace directly.
@@ -108,6 +108,12 @@ def probe(bundle, expected, uid):
                       ('tracer', 'installer', 'import-helper'), observed_zero))
         observation = {key:value for key,value in status.items() if key not in
                        {'result','phase','failure_type','failure_source'}}
+        query = None
+        if query_observed:
+            from native_tracer_diagnostic import query_failure_fields
+            raw = directory/'installer.stderr'
+            query = (query_failure_fields(raw.read_text(errors='replace')) if raw.stat().st_size<=65536
+                     else {'capture':'invalid-or-truncated'})
     kernel = os.uname().release
     if not re.fullmatch(r'[a-zA-Z0-9.+_-]{1,128}', kernel):
         raise ValueError('Invalid native kernel release')
@@ -117,7 +123,7 @@ def probe(bundle, expected, uid):
             'podman_sha256':offline.digest(Path('/usr/bin/podman')),
             'fresh_rootless_overlay':True, 'loopback_only':True, 'installer_trace_mode':'ordinary-ptrace',
             'result':'passed' if passed else 'failed', 'tracer_returncode':result.returncode,
-            'observation':observation}
+            'observation':observation, **({'query_observation':query} if query_observed else {})}
 
 
 if __name__ == '__main__':
@@ -129,10 +135,10 @@ if __name__ == '__main__':
     elif mode == '--helper' and os.geteuid() != 0:
         os.set_inheritable(MARKER, False)
         diagnostics.observe_import(*args)
-    elif mode == '--probe':
+    elif mode in {'--probe','--probe-query'}:
         bundle, digest, uid, output = args
         try:
-            report = probe(Path(bundle).resolve(), digest, int(uid))
+            report = probe(Path(bundle).resolve(), digest, int(uid), query_observed=mode=='--probe-query')
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
             sys.exit('offline-native-import: native setup or evidence collection failed')
         output = Path(output)

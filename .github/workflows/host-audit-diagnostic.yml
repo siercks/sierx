@@ -32,6 +32,10 @@ on:
         description: Compare the exact historical cold import directly on native ARM64
         type: boolean
         default: false
+      native_tracer_compare:
+        description: Compare pinned old/fixed tracers on one original import; requires native_import
+        type: boolean
+        default: false
       single_tcg:
         description: Use one emulation thread for the four-CPU historical guest import
         type: boolean
@@ -65,6 +69,7 @@ jobs:
       SIERX_HOST_TRANSITION_PROBE: ${{ github.event_name == 'push' || inputs.transition_probe }}
       SIERX_HOST_IMPORT_PROBE: ${{ inputs.import_probe }}
       SIERX_HOST_NATIVE_IMPORT: ${{ inputs.native_import }}
+      SIERX_HOST_NATIVE_TRACER_COMPARE: ${{ inputs.native_tracer_compare }}
       SIERX_HOST_SINGLE_TCG: ${{ github.event_name == 'push' || inputs.single_tcg }}
       SIERX_HOST_FILTERED_IMPORT_TRACE: ${{ inputs.filtered_import_trace }}
       SIERX_HOST_FILTERED_TRANSITION_TRACE: ${{ github.event_name == 'push' || inputs.filtered_transition_trace }}
@@ -93,7 +98,20 @@ jobs:
         if: env.SIERX_HOST_NATIVE_IMPORT == 'true'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq podman uidmap strace iproute2
+          sudo apt-get install -y -qq podman uidmap strace iproute2 build-essential python3 curl patch
+      - name: Prepare matched query-observed tracer controls
+        if: env.SIERX_HOST_NATIVE_TRACER_COMPARE == 'true'
+        run: |
+          test "$SIERX_HOST_NATIVE_IMPORT" = true
+          test "$SIERX_HOST_HISTORICAL_REPLAY" = true
+          umask 077
+          export SIERX_TRACER_DIAGNOSTIC_STATE="$GITHUB_WORKSPACE/dist/tracer-race-$ARCH"
+          mkdir -p "$SIERX_TRACER_DIAGNOSTIC_STATE"
+          curl --fail --location --silent --show-error \
+            https://github.com/strace/strace/releases/download/v6.8/strace-6.8.tar.xz \
+            --output "$SIERX_TRACER_DIAGNOSTIC_STATE/strace-6.8.tar.xz"
+          python3 -B scripts/diagnostic-native-tracer-build.py \
+            >"$SIERX_TRACER_DIAGNOSTIC_STATE/query-prepare.private.log" 2>&1
       - run: make release-binaries release-image sbom offline-candidate-prepare
         if: env.SIERX_HOST_HISTORICAL_REPLAY != 'true'
         env:
@@ -134,6 +152,9 @@ jobs:
             fi
             if [[ $SIERX_HOST_NATIVE_IMPORT == true ]]; then
               replay_args+=(--native-import)
+            fi
+            if [[ $SIERX_HOST_NATIVE_TRACER_COMPARE == true ]]; then
+              replay_args+=(--native-tracer-compare)
             fi
             if [[ $SIERX_HOST_SINGLE_TCG == true ]]; then
               replay_args+=(--single-tcg)

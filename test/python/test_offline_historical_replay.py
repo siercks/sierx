@@ -19,6 +19,34 @@ def metadata():
 
 
 class HistoricalReplayTests(unittest.TestCase):
+    def test_matched_tracer_comparison_requires_native_import_before_input_read(self):
+        with patch.object(replay,'verify_input') as verify:
+            for mode in ({},{'transition_stress':True},{'import_probe':True},{'transition_probe':True}):
+                with self.subTest(mode=mode),self.assertRaisesRegex(ValueError,'requires the native import'):
+                    replay.main(native_tracer_compare=True,**mode)
+            verify.assert_not_called()
+
+    def test_matched_tracer_comparison_keeps_original_input_and_owned_outer_namespace(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            approval=root/'deploy/ci/previous-offline-release.json';approval.parent.mkdir(parents=True)
+            approval.write_text('{"architectures":{"arm64":{}}}')
+            dist=root/'dist';dist.mkdir();(dist/'historical-run.json').write_text(json.dumps(metadata()))
+            bundle=dist/'sierx-offline-arm64'
+            with patch.object(replay,'ROOT',root),patch.object(replay.offline,'native_arch',return_value='arm64'), \
+                    patch.object(replay.offline,'digest',return_value=replay.RETAINED_APPROVAL_SHA256), \
+                    patch.object(replay,'verify_input',return_value=bundle) as verify, \
+                    patch.object(replay.subprocess,'run',return_value=Mock(returncode=1)) as invoke:
+                self.assertEqual(replay.main(native_import=True,native_tracer_compare=True),1)
+            verify.assert_called_once_with(dist,metadata())
+            command=invoke.call_args.args[0]
+            self.assertIn(str(root/'scripts/diagnostic-native-import-compare.py'),command)
+            self.assertIn(str(bundle),command);self.assertIn(replay.BUNDLE_SHA256,command)
+            self.assertTrue({'--mount','--net','--pid','--kill-child','--mount-proc'}.issubset(command))
+            proof=json.loads((dist/'historical-replay-input.json').read_text())
+            self.assertIs(proof['native_import'],True);self.assertIs(proof['native_tracer_compare'],True)
+            self.assertIs(proof['release_acceptance'],False)
+
     def test_wrong_run_or_revision_never_reaches_bundle_verification(self):
         for key,value in (('id',1),('head_sha','0'*40),('path','other'),('event','push'),
                           ('status','in_progress'),('conclusion','success')):

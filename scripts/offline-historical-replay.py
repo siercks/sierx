@@ -3,6 +3,7 @@ import argparse
 import importlib.util
 import json
 import os
+import pwd
 from pathlib import Path
 import subprocess
 import sys
@@ -44,7 +45,10 @@ def verify_input(directory,run):
 
 
 def main(transition_stress=False, transition_probe=False, import_probe=False, native_import=False,
-         single_tcg=False, filtered_import_trace=False, filtered_transition_trace=False):
+         single_tcg=False, filtered_import_trace=False, filtered_transition_trace=False,
+         native_tracer_compare=False):
+    if native_tracer_compare and not native_import:
+        raise ValueError('Matched tracer comparison requires the native import diagnostic')
     if sum((transition_stress, transition_probe, import_probe, native_import)) > 1:
         raise ValueError('Select a single historical diagnostic')
     if single_tcg and not (import_probe or transition_probe):
@@ -76,6 +80,18 @@ def main(transition_stress=False, transition_probe=False, import_probe=False, na
            'installer_trace_mode':'ordinary-ptrace' if ordinary_trace else 'seccomp-bpf',
            'release_acceptance':False}
     (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
+    if native_tracer_compare:
+        from native_tracer_diagnostic import OBSERVATION_SHA256
+        proof.update(native_tracer_compare=True,query_observation_sha256=OBSERVATION_SHA256)
+        (directory/'historical-replay-input.json').write_text(json.dumps(proof,indent=2)+'\n')
+        return subprocess.run(('sudo','env',
+            'SIERX_TRACER_DIAGNOSTIC_STATE='+str(directory/'tracer-race-arm64'),
+            'SIERX_TRACER_DIAGNOSTIC_USER='+pwd.getpwuid(os.getuid()).pw_name,
+            'unshare','--mount','--net','--pid','--fork','--kill-child','--mount-proc',
+            '--propagation','private','sh','-eu','-c',
+            'mountpoint -q /sys/kernel/tracing || mount -t tracefs tracefs /sys/kernel/tracing\nexec "$@"',
+            'native-tracer-compare','/usr/bin/python3','-B',str(ROOT/'scripts/diagnostic-native-import-compare.py'),
+            '--bundle',str(bundle),'--sha256',BUNDLE_SHA256,'--uid',str(os.getuid()))).returncode
     if native_import:
         return subprocess.run(('sudo', 'unshare', '--mount', '--net', '--pid', '--fork', '--kill-child',
             '--mount-proc', '--propagation', 'private', 'sh', '-eu', '-c',
@@ -117,9 +133,10 @@ if __name__=='__main__':
     parser.add_argument('--single-tcg', action='store_true')
     parser.add_argument('--filtered-import-trace', action='store_true')
     parser.add_argument('--filtered-transition-trace', action='store_true')
+    parser.add_argument('--native-tracer-compare', action='store_true')
     args = parser.parse_args()
     try:sys.exit(main(args.transition_stress, args.transition_probe, args.import_probe,
                       args.native_import, args.single_tcg, args.filtered_import_trace,
-                      args.filtered_transition_trace))
+                      args.filtered_transition_trace,args.native_tracer_compare))
     except (ValueError,OSError,TypeError,KeyError,IndexError,tarfile.TarError):
         raise SystemExit('offline-historical-replay: missing or mismatched input; no diagnostic pass') from None
