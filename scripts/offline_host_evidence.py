@@ -27,16 +27,49 @@ ISOLATION = {'network':'loopback-only', 'system_manager':'private-vm', 'user_man
              'rootless_network':'slirp4netns','browser_address_families':['AF_UNIX','AF_INET','AF_NETLINK']}
 
 
-def browser_failure_diagnostic(text):
-    """Extract only fixed failure labels; private messages/stack traces stay private."""
-    phases = {'launch','driver-policy','firefox-network-launch'} | {
+BROWSER_FAILURE_PHASES = {'launch','driver-policy','firefox-network-launch'} | {
         engine+'-'+stage for engine in ('chromium','firefox') for stage in (
             'launch','context-setup','new-page','login','create-project','edit-project','create-edit-transition-comment-link',
             'login-navigation','login-fields','login-submit','login-ready',
             'create-item','create-item-submit','create-item-response','create-item-ready',
             'edit-item','transition','comment','create-link-target','link',
             'search-reload-bootstrap','guard-controls','network-control')}
-    errors = {'Error','TimeoutError','AssertionError','TypeError','ProtocolError','TargetClosedError'}
+BROWSER_FAILURE_ERRORS = {'Error','TimeoutError','AssertionError','TypeError','ProtocolError','TargetClosedError'}
+BROWSER_FAILURE_REASONS = {'ambiguous-locator','wait-timeout','assertion-failed','operation-failed','recovery-unavailable'}
+BROWSER_FAILURE_MATCHERS = {'toBeVisible','toBeHidden','toHaveValue','toHaveURL','toContainText','toHaveCount','toEqual'}
+
+
+def sanitize_browser_failure(value):
+    if (not isinstance(value,dict) or not isinstance(value.get('phase'),str)
+            or value['phase'] not in BROWSER_FAILURE_PHASES or not isinstance(value.get('error'),str)
+            or value['error'] not in BROWSER_FAILURE_ERRORS):
+        return None
+    result = {key:value[key] for key in ('phase','error')}
+    for key,allowed in (('reason',BROWSER_FAILURE_REASONS),('matcher',BROWSER_FAILURE_MATCHERS)):
+        if isinstance(value.get(key),str) and value[key] in allowed:result[key]=value[key]
+    statuses=value.get('http_statuses')
+    if isinstance(statuses,list):
+        safe=sorted({status for status in statuses if type(status) is int and 400<=status<=599})[:10]
+        if safe:result['http_statuses']=safe
+    return result
+
+
+def browser_failure_fields(text):
+    """Small structured failure survives repeated sanitization; never messages."""
+    for phase,error in re.findall(r'^offline-browser: failed at ([a-z-]+) \(([A-Za-z]+)\); no passing report$',text,re.MULTILINE):
+        value={'phase':phase,'error':error}
+        for key in ('reason','matcher'):
+            match=re.search(r'^offline-browser: '+key+r' ([A-Za-z-]+)$',text,re.MULTILINE)
+            if match:value[key]=match[1]
+        value['http_statuses']=[int(status) for status in re.findall(r'^offline-browser: http-status ([45][0-9]{2})$',text,re.MULTILINE)]
+        safe=sanitize_browser_failure(value)
+        if safe is not None:return safe
+    return None
+
+
+def browser_failure_diagnostic(text):
+    """Extract only fixed failure labels; private messages/stack traces stay private."""
+    phases,errors = BROWSER_FAILURE_PHASES,BROWSER_FAILURE_ERRORS
     for phase, error in re.findall(r'^offline-browser: failed at ([a-z-]+) \(([A-Za-z]+)\); no passing report$', text, re.MULTILINE):
         if phase in phases and error in errors:
             result = phase+' ('+error+')'

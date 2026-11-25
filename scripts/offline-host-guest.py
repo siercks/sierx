@@ -87,6 +87,8 @@ def run(*args, env=None, pass_fds=()):
             private.seek(max(stderr_start,stderr_end-8192))
             stderr=private.read(min(8192,stderr_end-stderr_start))
         detail=diagnostics.guest_command_failure(args,stderr)
+        if PHASE == 'delivered-browser-workflows':
+            error.browser_failure=evidence.browser_failure_fields(stderr.decode(errors='replace'))
         error.fixture_command=detail.get('guest_command')
         error.fixture_command_detail=detail.get('guest_command_detail')
         if env is not None and env.get('SIERX_DIAGNOSTIC_DEPLOY'):
@@ -343,10 +345,9 @@ def main():
              '--property=SystemCallErrorNumber=ENOSYS',
              '--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK']
     browser_exit_path = HOME / 'browser-exit.json'
-    if OPTIONS.get('transition_stress'):
-        command.append('--property=ExecStopPost=/usr/bin/python3 '
-                       '/opt/acceptance/tests/offline_host_diagnostics.py --browser-exit '
-                       '/home/acceptance/browser-exit.json')
+    command.append('--property=ExecStopPost=/usr/bin/python3 '
+                   '/opt/acceptance/tests/offline_host_diagnostics.py --browser-exit '
+                   '/home/acceptance/browser-exit.json')
     for name in ('HOME','PATH','PLAYWRIGHT_BROWSERS_PATH','SIERX_BASE_URL','SSL_CERT_FILE','NODE_EXTRA_CA_CERTS',
                  'SIERX_BOOTSTRAP_ADMIN_EMAIL','SIERX_BOOTSTRAP_ADMIN_PASSWORD','SIERX_TEST_SERVER_CERT','SIERX_TEST_EMULATED'):
         command.append('--setenv='+name+'='+ENV[name])
@@ -354,8 +355,7 @@ def main():
         browser = json.loads(run(*command,'/usr/local/bin/node','/opt/acceptance/tests/offline-browser.mjs'))
         evidence.validate_browser(browser)
     except Exception as error:
-        if OPTIONS.get('transition_stress'):
-            error.browser_service_exit = diagnostics.read_browser_exit(browser_exit_path)
+        error.browser_service_exit = diagnostics.read_browser_exit(browser_exit_path)
         raise
     scenarios = {}
     stress=[]

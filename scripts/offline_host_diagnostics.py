@@ -15,6 +15,7 @@ import urllib.error
 from kernel_network_evidence import SCHED_PROCESS_EXIT
 from network_observer import safe_failure_fields
 import offline_apply_trace
+import offline_host_evidence
 
 INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
 INSTALLER_MARKER_FD = 4
@@ -140,6 +141,8 @@ def sanitize_failure(value):
         observer = safe_failure_fields(value.get('observer'))
         if observer: result['observer'] = observer
     if result['phase'] == 'delivered-browser-workflows':
+        browser = offline_host_evidence.sanitize_browser_failure(value.get('browser_failure'))
+        if browser is not None:result['browser_failure']=browser
         browser_exit = value.get('browser_service_exit')
         if valid_service_exit(browser_exit):
             result['browser_service_exit'] = browser_exit
@@ -341,6 +344,7 @@ def failure_record(error, phase):
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),
              'host_detail':getattr(error,'host_detail',None),
              'browser_service_exit':getattr(error,'browser_service_exit',None),
+             'browser_failure':getattr(error,'browser_failure',None),
              'guest_command':getattr(error,'fixture_command',None),
              'guest_command_detail':getattr(error,'fixture_command_detail',None)}
     if isinstance(error, json.JSONDecodeError):

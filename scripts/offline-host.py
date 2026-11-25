@@ -364,6 +364,9 @@ def record_failure(report, result, log, arch, suite, revision):
     detail = failure_detail(failure['phase'], log)
     if detail:
         failure['detail'] = detail
+    if failure['phase'] == 'delivered-browser-workflows':
+        browser = evidence.browser_failure_fields(log[-65536:].decode(errors='replace'))
+        if browser is not None:failure['browser_failure']=browser
     summary = {'schema':1, 'suite':'offline-host-failure-v1', 'suite_sha256':suite,
                'arch':arch, 'revision':revision, **failure}
     path = Path(report).with_suffix('.failure.json')
