@@ -1,0 +1,81 @@
+# One bounded causal comparison; never release or promotion coverage.
+name: historical-import-compare
+on:
+  push:
+    branches: ["codex/**"]
+    paths: [".github/workflows/historical-import-compare.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: historical-import-compare-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    name: Historical ARM64 import under matched tracers in TCG
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 210
+    env:
+      ARCH: arm64
+      PROFILE: ubuntu24
+      SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install disposable comparison prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman uidmap strace iproute2 build-essential python3 curl patch qemu-system-arm e2fsprogs
+      - name: Prepare matched passive tracer controls
+        run: |
+          umask 077
+          export SIERX_TRACER_DIAGNOSTIC_STATE="$GITHUB_WORKSPACE/dist/tracer-race-arm64"
+          mkdir -p "$SIERX_TRACER_DIAGNOSTIC_STATE"
+          curl --fail --location --silent --show-error \
+            https://github.com/strace/strace/releases/download/v6.8/strace-6.8.tar.xz \
+            --output "$SIERX_TRACER_DIAGNOSTIC_STATE/strace-6.8.tar.xz"
+          python3 -B scripts/diagnostic-native-tracer-build.py \
+            >"$SIERX_TRACER_DIAGNOSTIC_STATE/query-prepare.private.log" 2>&1
+      - name: Retrieve exact original failed release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/42413538496" > dist/historical-run.json
+          gh run download 42413538496 --repo "$GITHUB_REPOSITORY" --name offline-delivery-arm64 --dir dist
+      - run: make offline-host-prepare
+        env:
+          SIERX_HOST_PREPARE_DIAGNOSTIC: '1'
+      - name: Compare original import in the isolated guest
+        run: sudo python3 -B scripts/diagnostic-guest-import-compare.py
+      - name: Package only bounded diagnostic evidence
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import offline_host_diagnostics as diagnostics
+          root=Path('dist');root.mkdir(exist_ok=True)
+          value={'suite':'historical-import-comparison-diagnostic-v1',
+                 'revision':os.environ['GITHUB_SHA'],'release_acceptance':False}
+          for key,name in (('replay_input','historical-replay-input.json'),
+                           ('guest_comparison','historical-guest-import-arm64.json'),
+                           ('preparation_failure','host-preparation-failure.json')):
+              path=root/name
+              if path.is_file():
+                  if path.stat().st_size>65536:raise ValueError('Diagnostic report exceeded its bound')
+                  item=json.loads(path.read_text())
+                  if key=='preparation_failure':
+                      item=diagnostics.sanitize_preparation_failure(item)
+                      if item is None:continue
+                  value[key]=item
+          (root/'historical-import-comparison-arm64.json').write_text(json.dumps(value,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: diagnostic-historical-import-comparison-arm64
+          path: dist/historical-import-comparison-arm64.json
+          if-no-files-found: error

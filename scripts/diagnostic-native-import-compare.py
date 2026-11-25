@@ -14,6 +14,9 @@ def run(args):
     if {row['ifname'] for row in json.loads(subprocess.check_output(['ip','-j','link','show']))}!={'lo'}:
         raise ValueError('Comparison requires a no-NIC namespace')
     os.umask(0o077)
+    emulated=getattr(args,'guest_tcg',False)
+    if emulated and len(os.sched_getaffinity(0))!=4:
+        raise ValueError('Guest comparison requires the four declared virtual CPUs')
     os.sched_setaffinity(0,set(sorted(os.sched_getaffinity(0))[:4]))
     build=json.loads((state/'query-build.json').read_text())
     validate_build(build)
@@ -44,10 +47,11 @@ def run(args):
                 '--propagation','private','sh','-eu','-c',
                 'mount --bind "$1" /usr/bin/strace\nshift\nexec "$@"',
                 'native-tracer-import',str(binary),sys.executable,'-B',str(ROOT/'scripts/offline-native-import.py'),
-                '--probe-query',str(bundle),args.sha256,str(args.uid),str(report_path)]
+                '--probe-query-emulated' if emulated else '--probe-query',
+                str(bundle),args.sha256,str(args.uid),str(report_path)]
             with (state/('native-'+mode+'.private.log')).open('wb') as private:
                 process=subprocess.Popen(command,stdout=private,stderr=subprocess.STDOUT,start_new_session=True)
-                try:code=process.wait(timeout=300)
+                try:code=process.wait(timeout=4900 if emulated else 300)
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=10)
                     raise ValueError('Bounded native import comparison timed out') from None
@@ -80,6 +84,7 @@ if __name__=='__main__':
     parser.add_argument('--bundle',required=True)
     parser.add_argument('--sha256',required=True)
     parser.add_argument('--uid',type=int,required=True)
+    parser.add_argument('--guest-tcg',action='store_true',help='Owned four-vCPU emulated diagnostic guest only')
     try:code=run(parser.parse_args())
     except (OSError,ValueError,KeyError,TypeError,subprocess.SubprocessError) as error:
         output=ROOT/'dist/historical-native-import-arm64.json'

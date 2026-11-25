@@ -45,7 +45,7 @@ def installer(helper):
     return subprocess.run((*PYTHON, '--helper', helper), pass_fds=(MARKER,)).returncode
 
 
-def probe(bundle, expected, uid, *, query_observed=False):
+def probe(bundle, expected, uid, *, query_observed=False, emulated=False):
     if os.geteuid() != 0 or uid < 1000:
         raise ValueError('Native import requires root in a fresh loopback-only namespace and an unprivileged runner')
     # /sys can be mounted from the parent netns. Verify the namespace directly.
@@ -87,7 +87,7 @@ def probe(bundle, expected, uid, *, query_observed=False):
                     args = (*PYTHON, '--trace', str(instance), temporary, user.pw_name,
                             str(bundle / 'scripts/offline.py'))
                     result = subprocess.run(args, env=env, cwd=bundle, stdout=private,
-                                            stderr=stderr, timeout=180)
+                                            stderr=stderr, timeout=4800 if emulated else 180)
                 capture = diagnostics.read_installer_exit_trace(instance)
             finally:
                 if instance.exists():
@@ -135,10 +135,11 @@ if __name__ == '__main__':
     elif mode == '--helper' and os.geteuid() != 0:
         os.set_inheritable(MARKER, False)
         diagnostics.observe_import(*args)
-    elif mode in {'--probe','--probe-query'}:
+    elif mode in {'--probe','--probe-query','--probe-query-emulated'}:
         bundle, digest, uid, output = args
         try:
-            report = probe(Path(bundle).resolve(), digest, int(uid), query_observed=mode=='--probe-query')
+            report = probe(Path(bundle).resolve(), digest, int(uid),
+                           query_observed=mode!='--probe', emulated=mode=='--probe-query-emulated')
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
             sys.exit('offline-native-import: native setup or evidence collection failed')
         output = Path(output)
