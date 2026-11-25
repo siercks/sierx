@@ -64,6 +64,14 @@ def valid_query_counts(query):
 
 
 def expected_old_failure(report):
+    return expected_tracer_failure(report, ('installer','import-helper'))
+
+
+def expected_transition_failure(report):
+    return expected_tracer_failure(report, ('installer',))
+
+
+def expected_tracer_failure(report, tracees):
     observation=report.get('observation',{})
     query=report.get('query_observation',{})
     errors=observation.get('tracer_syscall_errors',[])
@@ -74,7 +82,7 @@ def expected_old_failure(report):
                     and type(row.get('age_ms')) is int and 0<=row['age_ms']<=2000 for row in (first,second))
                     and first.get('errno')==3 and second.get('errno')==5
                     and first['age_ms']>=second['age_ms']):pairs.append((first,second))
-    expected={role:{'task_exited':True} for role in ('installer','import-helper')}
+    expected={role:{'task_exited':True} for role in tracees}
     expected['tracer']={'task_exited':True,'requested_exit_code':1}
     return (report.get('result')=='failed' and type(report.get('tracer_returncode')) is int
         and report['tracer_returncode']==1 and query.get('capture')=='observed'

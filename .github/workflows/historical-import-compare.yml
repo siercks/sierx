@@ -5,6 +5,12 @@ on:
     branches: ["codex/**"]
     paths: [".github/workflows/historical-import-compare.yml"]
   workflow_dispatch:
+    inputs:
+      workload:
+        description: Original cold import or first complete update and rollback
+        type: choice
+        options: [import, transition]
+        default: import
 permissions:
   contents: read
   actions: read
@@ -20,6 +26,7 @@ jobs:
       ARCH: arm64
       PROFILE: ubuntu24
       SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
+      COMPARISON_WORKLOAD: ${{ inputs.workload || 'import' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -47,8 +54,17 @@ jobs:
       - run: make offline-host-prepare
         env:
           SIERX_HOST_PREPARE_DIAGNOSTIC: '1'
+      - run: make offline-previous-prepare
+        if: env.COMPARISON_WORKLOAD == 'transition'
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Compare original import in the isolated guest
-        run: sudo python3 -B scripts/diagnostic-guest-import-compare.py
+        run: |
+          if [[ $COMPARISON_WORKLOAD == transition ]]; then
+            sudo python3 -B scripts/diagnostic-transition-tracer-compare.py
+          else
+            sudo python3 -B scripts/diagnostic-guest-import-compare.py
+          fi
       - name: Package only bounded diagnostic evidence
         if: always()
         run: |
@@ -58,10 +74,12 @@ jobs:
           sys.path.insert(0,'scripts')
           import offline_host_diagnostics as diagnostics
           root=Path('dist');root.mkdir(exist_ok=True)
-          value={'suite':'historical-import-comparison-diagnostic-v1',
+          workload=os.environ['COMPARISON_WORKLOAD'];assert workload in {'import','transition'}
+          value={'suite':f'historical-{workload}-comparison-diagnostic-v1',
                  'revision':os.environ['GITHUB_SHA'],'release_acceptance':False}
           for key,name in (('replay_input','historical-replay-input.json'),
                            ('guest_comparison','historical-guest-import-arm64.json'),
+                           ('transition_comparison','historical-transition-tracers-arm64.json'),
                            ('preparation_failure','host-preparation-failure.json')):
               path=root/name
               if path.is_file():
@@ -71,11 +89,11 @@ jobs:
                       item=diagnostics.sanitize_preparation_failure(item)
                       if item is None:continue
                   value[key]=item
-          (root/'historical-import-comparison-arm64.json').write_text(json.dumps(value,indent=2)+'\n')
+          (root/f'historical-{workload}-comparison-arm64.json').write_text(json.dumps(value,indent=2)+'\n')
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: diagnostic-historical-import-comparison-arm64
-          path: dist/historical-import-comparison-arm64.json
+          name: diagnostic-historical-${{ env.COMPARISON_WORKLOAD }}-comparison-arm64
+          path: dist/historical-${{ env.COMPARISON_WORKLOAD }}-comparison-arm64.json
           if-no-files-found: error
