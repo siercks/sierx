@@ -1,0 +1,75 @@
+name: tracer-termination-diagnostic
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: Native diagnostic architecture; never release acceptance
+        type: choice
+        options: [arm64, amd64]
+        default: arm64
+permissions:
+  contents: read
+concurrency:
+  group: tracer-termination-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    env:
+      ARCH: ${{ inputs.arch }}
+      SIERX_TRACER_DIAGNOSTIC_STATE: ${{ github.workspace }}/dist/tracer-race-${{ inputs.arch }}
+      SIERX_DIAGNOSTIC_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install disposable diagnostic prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential strace python3 curl patch iproute2
+      - name: Prepare the pinned matched tracer builds
+        run: |
+          umask 077
+          mkdir -p "$SIERX_TRACER_DIAGNOSTIC_STATE"
+          curl --fail --location --silent --show-error \
+            https://github.com/strace/strace/releases/download/v6.8/strace-6.8.tar.xz \
+            --output "$SIERX_TRACER_DIAGNOSTIC_STATE/strace-6.8.tar.xz"
+          python3 -B scripts/diagnostic-tracer-build.py \
+            >"$SIERX_TRACER_DIAGNOSTIC_STATE/prepare.private.log" 2>&1
+      - name: Compare the mechanism in an owned no-NIC namespace
+        run: |
+          umask 077
+          sudo env SIERX_TRACER_DIAGNOSTIC_STATE="$SIERX_TRACER_DIAGNOSTIC_STATE" \
+            SIERX_TRACER_DIAGNOSTIC_USER="$(id -un)" SIERX_DIAGNOSTIC_REVISION="$SIERX_DIAGNOSTIC_REVISION" \
+            SIERX_DIAGNOSTIC_ARCH="$ARCH" \
+            unshare --mount --net --pid --fork --kill-child --mount-proc --propagation private \
+            sh -eu -c '
+              mountpoint -q /sys/kernel/tracing || mount -t tracefs tracefs /sys/kernel/tracing
+              exec "$@"
+            ' tracer-diagnostic python3 -B scripts/diagnostic-tracer-run.py
+      - name: Retain only the fixed diagnostic envelope
+        if: always()
+        run: |
+          python3 -B - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          arch=os.environ['ARCH'];revision=os.environ['GITHUB_SHA']
+          assert arch in {'arm64','amd64'} and re.fullmatch('[a-f0-9]{40}',revision)
+          path=Path('dist')/f'tracer-termination-diagnostic-{arch}.json'
+          if not path.is_file():
+              path.parent.mkdir(exist_ok=True)
+              path.write_text(json.dumps({'schema':1,'suite':'tracer-termination-diagnostic-v1',
+                  'revision':revision,'arch':arch,'result':'failed','release_acceptance':False,
+                  'historical_cause_proven':False,'failure_stage':'prepare-or-launch'})+'\n')
+          value=json.loads(path.read_text())
+          assert value['suite']=='tracer-termination-diagnostic-v1' and value['revision']==revision
+          assert value['arch']==arch and value['release_acceptance'] is False
+          if value['result']!='passed':raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: tracer-termination-diagnostic-${{ inputs.arch }}
+          path: dist/tracer-termination-diagnostic-${{ inputs.arch }}.json
+          if-no-files-found: error
