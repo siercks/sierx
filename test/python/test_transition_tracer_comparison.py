@@ -34,7 +34,7 @@ class TransitionTracerComparisonTests(unittest.TestCase):
             binary=root/'control';binary.write_bytes(b'old control');expected=hashlib.sha256(binary.read_bytes()).hexdigest()
             wrapper=root/'usr/sbin/sierx-trace-installer'
             def original(path,args):wrapper.write_text('#!/bin/sh\nexec /usr/bin/strace -q -f\n')
-            args=SimpleNamespace(development=True,transition_probe=True,ordinary_installer_trace=True,acceleration='tcg',single_tcg=False)
+            args=SimpleNamespace(development=True,transition_probe=True,ordinary_installer_trace=False,acceleration='tcg',single_tcg=False)
             driver.prepare_installer(root,args,original,binary,expected)
             self.assertEqual(parent.read_bytes(),b'parent');self.assertEqual(receipt.read_text(),'fixed receipt')
             self.assertIn('/usr/bin/python3 /opt/transition-tracer/exec.py',wrapper.read_text())
@@ -43,9 +43,21 @@ class TransitionTracerComparisonTests(unittest.TestCase):
             self.assertFalse((root/'usr/sbin/sierx-trace-manager').exists())
 
     def test_accepting_or_other_modes_cannot_prepare_selected_tracer(self):
-        args=SimpleNamespace(development=True,transition_probe=True,ordinary_installer_trace=True,acceleration='tcg',single_tcg=False)
-        for key,value in (('development',False),('transition_probe',False),('ordinary_installer_trace',False),
+        args=SimpleNamespace(development=True,transition_probe=True,ordinary_installer_trace=False,acceleration='tcg',single_tcg=False)
+        for key,value in (('development',False),('transition_probe',False),('ordinary_installer_trace',True),
                           ('acceleration','kvm'),('single_tcg',True)):
             options=copy.copy(args);setattr(options,key,value)
             with self.subTest(key=key),self.assertRaises(ValueError):
                 driver.prepare_installer(Path('/unused'),options,lambda *a:None,Path('/unused'),'a'*64)
+
+    def test_transition_uses_the_existing_release_filter_without_changing_guest_requirements(self):
+        historical=driver.load('filtered_test_original','offline-historical-replay.py')
+        args=driver.probe_arguments(Path('/bundle'),historical,Path('/os.tar'),'a'*64,Path('/report'))
+        self.assertTrue(args.development and args.transition_probe)
+        self.assertFalse(args.ordinary_installer_trace or args.single_tcg)
+        self.assertEqual(args.acceleration,'tcg')
+        host=driver.load('filtered_test_host','offline-host.py')
+        wrapper=host.tracer_wrapper('installer','?socket,?sendmsg',report_exits=True,
+            ordinary_installer_trace=args.ordinary_installer_trace)
+        self.assertIn('--seccomp-bpf',wrapper)
+        self.assertIn('trace=?socket,?sendmsg',wrapper)

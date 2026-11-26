@@ -26,7 +26,7 @@ def shim(binary_hash):
 
 
 def prepare_installer(root,args,original_setup,binary,binary_hash):
-    if not (args.development and args.transition_probe and args.ordinary_installer_trace
+    if not (args.development and args.transition_probe and not args.ordinary_installer_trace
             and args.acceleration=='tcg' and not args.single_tcg):
         raise ValueError('Matched transition tracer requires the nonaccepting four-CPU TCG probe')
     if binary.is_symlink() or offline.digest(binary)!=binary_hash:raise ValueError('Control binary changed')
@@ -53,7 +53,7 @@ def probe_arguments(bundle,retained,rootfs,rootfs_hash,report):
         previous_evidence=str(ROOT/'dist/previous/offline-acceptance-arm64.json'),development=True,
         transition_probe=True,import_probe=False,runtime_probe=False,acquisition_probe=False,
         transition_stress=False,transition_before_browser=False,single_tcg=False,
-        ordinary_installer_trace=True,acceleration='tcg',soak_seconds=120)
+        ordinary_installer_trace=False,acceleration='tcg',soak_seconds=120)
 
 
 def main():
@@ -83,7 +83,7 @@ def main():
         'virtual_cpus':4,'tcg_thread_mode':'multi','build':public_build(build),'result':'inconclusive','cases':[]}
     replay={key:result[key] for key in ('release','archive_sha256','bundle_sha256','retained_approval_sha256',
         'rootfs_sha256','kernel_sha256','suite_sha256','virtual_cpu','virtual_cpus','tcg_thread_mode','release_acceptance')}
-    replay.update(run_id=historical.RUN_ID,workload='transition',transition_probe=True,installer_trace_mode='ordinary-ptrace')
+    replay.update(run_id=historical.RUN_ID,workload='transition',transition_probe=True,installer_trace_mode='seccomp-bpf')
     (dist/'historical-replay-input.json').write_text(json.dumps(replay,indent=2)+'\n')
     (dist/'historical-replay-input.json').chmod(0o644)
     try:
