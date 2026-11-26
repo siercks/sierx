@@ -1,5 +1,5 @@
 """Native OS-container causal comparison; never VM audit/release acceptance."""
-import hashlib,importlib.util,json,os,re,shutil,signal,subprocess,sys,tarfile,tempfile
+import errno,hashlib,importlib.util,json,os,re,shutil,signal,subprocess,sys,tarfile,tempfile,time
 from pathlib import Path
 from types import SimpleNamespace
 import offline,offline_archive,offline_guest_tracer
@@ -8,6 +8,18 @@ from native_tracer_diagnostic import validate_build,public_build,query_failure_f
 
 ROOT=Path(__file__).resolve().parent.parent
 TRACE_PATHS=(Path('/sys/kernel/tracing/instances/sierx-offline'),diagnostics.INSTALLER_EXIT_TRACE)
+DATABASE_ERRORS={
+    'tools-not-executable':'restore executable permissions on bin/goose and bin/sierxctl',
+    'unit-not-found':'unit sierx-postgres.service not found',
+    'keyring-error':'keyring',
+    'start-job-failed':'job for sierx-postgres.service failed',
+    'readiness-failed':'postgres did not become ready',
+    'permission-denied':'permission denied','operation-not-permitted':'operation not permitted',
+    'read-only-filesystem':'read-only file system','namespace-clone':'cannot clone',
+    'uid-map-failed':'newuidmap:','gid-map-failed':'newgidmap:',
+    'runtime-error':'oci runtime error','runtime-crun-error':'crun: ',
+    'unsupported-key':'unsupported key','unrecognized-key':'unrecognized key',
+    'storage-full':'no space left on device','mount-failed':'failed to mount'}
 
 
 def load(name,filename):
@@ -23,6 +35,7 @@ def command(root,machine,cpus):
     return ['systemd-nspawn','--quiet','--settings=no','--register=no','--directory='+str(root),
         '--machine='+machine,'--private-network','--private-users=no','--link-journal=no',
         '--resolv-conf=off','--timezone=off','--capability=CAP_SYS_ADMIN,CAP_SYS_PTRACE',
+        '--kill-signal=SIGKILL',
         '--cpu-affinity='+','.join(map(str,cpus)),
         '--bind=/sys/kernel/tracing:/sys/kernel/tracing','--console=pipe','--boot','--',
         'systemd.unit=sierx-acceptance.target']
@@ -41,9 +54,11 @@ def prepare(root,host,args,binary,binary_hash):
         shutil.copyfile(ROOT/'web'/name,tests/name);(tests/name).chmod(0o644)
     if host.suite_digest(tests,tests)!=args.suite_sha256:raise ValueError('Native snapshot changed')
     trace=tests/'deploy-trace';trace.mkdir(mode=0o755)
+    trace.chmod(0o755)
     shutil.copyfile(tests/'offline_apply_trace.py',trace/'sitecustomize.py')
     (trace/'sitecustomize.py').chmod(0o644)
     directory=root/'opt/transition-tracer';directory.mkdir(mode=0o755)
+    directory.chmod(0o755)
     shutil.copyfile(binary,directory/'strace');(directory/'strace').chmod(0o755)
     # Reuse the exact reviewed hash-checking shim, not a receipt bypass.
     shim=load('native_transition_shim','diagnostic-transition-tracer-compare.py').shim(binary_hash)
@@ -55,6 +70,21 @@ def prepare(root,host,args,binary,binary_hash):
     # No host credential, user bus, home, store or network enters the OS.
     # Its root observers retain the same selected calls and independent trace.
     return before
+
+
+def cleanup_instances(paths=TRACE_PATHS,timeout=30):
+    for path in reversed(paths):
+        if not path.exists():continue
+        (path/'tracing_on').write_text('0')
+        end=time.monotonic()+timeout
+        while True:
+            try:path.rmdir();break
+            except FileNotFoundError:break
+            except OSError as error:
+                # Forced namespace shutdown can briefly leave an open marker
+                # descriptor while the kernel tears down the owned tasks.
+                if error.errno!=errno.EBUSY or time.monotonic()>=end:raise
+                time.sleep(0.1)
 
 
 def launch(root,machine,cpus,log,deadline=1900):
@@ -71,12 +101,21 @@ def launch(root,machine,cpus,log,deadline=1900):
         return process.returncode,forced
     finally:
         if process is not None and process.poll() is None:
-            os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=30)
+            forced=True;os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=30)
         # Only our two previously absent instances can have been created.
         # Never touch the default tracer or any unrelated instance.
-        for path in reversed(TRACE_PATHS):
-            if path.exists():
-                (path/'tracing_on').write_text('0');path.rmdir()
+        cleanup_instances()
+
+
+def database_diagnostic(path):
+    """Fixed error-pattern presence only; never journal lines or credentials."""
+    try:
+        if path.is_symlink() or not path.is_file():return {'capture':'unavailable'}
+        size=path.stat().st_size
+        raw=diagnostics.private_tail(path,65536).lower()
+    except OSError:return {'capture':'unavailable'}
+    return {'capture':'observed','tail_truncated':size>65536,
+        'categories':sorted(key for key,pattern in DATABASE_ERRORS.items() if pattern in raw)}
 
 
 def checked_failure(root):
@@ -143,6 +182,8 @@ def execute_case(host,args,binary,binary_hash,mode,cpus,rootfs,archive,previous,
             'parent_observer_unchanged':True,'native_launcher_exit':status,'forced_termination':forced,
             'query_observation':query,'transition_completed':completed}
         if failure is not None:case['failure']=failure
+        if failure is not None and failure['phase']=='rootless-database':
+            case['database_diagnostic']=database_diagnostic(root/'home/acceptance/diagnostics.log')
         if transition is not None:case['host_report']=transition
         case['expected_old_cause_observed']=cause_matches(failure,query,forced)
     case['scratch_cleanup_verified']=not scratch.exists()

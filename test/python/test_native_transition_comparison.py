@@ -1,5 +1,6 @@
-import copy,importlib.util,json,sys,tempfile,unittest
+import copy,errno,importlib.util,json,os,sys,tempfile,unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT/'scripts'))
 spec=importlib.util.spec_from_file_location('native_transition_comparison',ROOT/'scripts/diagnostic-native-transition-compare.py')
@@ -7,10 +8,51 @@ native=importlib.util.module_from_spec(spec);spec.loader.exec_module(native)
 
 
 class NativeTransitionTests(unittest.TestCase):
+    def test_private_launcher_umask_does_not_hide_public_diagnostic_code_from_tracee(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'usr/bin').mkdir(parents=True);(root/'usr/bin/strace').write_bytes(b'parent')
+            (root/'usr/sbin').mkdir();(root/'usr/sbin/sierx-trace-installer').write_text('exec /usr/bin/strace --seccomp-bpf\n')
+            (root/'opt/acceptance').mkdir(parents=True)
+            binary=root/'control';binary.write_bytes(b'control')
+            host=SimpleNamespace(setup=lambda *_:None,SUITE_FILES=('offline_apply_trace.py',),suite_digest=lambda *_:'suite')
+            args=SimpleNamespace(development=True,transition_probe=True,virtual_cpu='native',ordinary_installer_trace=False,suite_sha256='suite')
+            before=os.umask(0o077)
+            try:native.prepare(root,host,args,binary,native.offline.digest(binary))
+            finally:os.umask(before)
+            for name in ('opt/acceptance/tests','opt/acceptance/tests/deploy-trace','opt/transition-tracer'):
+                self.assertEqual((root/name).stat().st_mode&0o777,0o755)
+            self.assertEqual((root/'usr/bin/strace').read_bytes(),b'parent')
+
+    def test_cleanup_waits_only_for_busy_owned_instance_teardown(self):
+        path=mock.MagicMock();path.exists.return_value=True
+        path.rmdir.side_effect=[OSError(errno.EBUSY,'private'),None]
+        with mock.patch.object(native.time,'sleep') as pause:native.cleanup_instances((path,))
+        self.assertEqual(path.rmdir.call_count,2);pause.assert_called_once_with(0.1)
+        for number in (errno.EPERM,errno.EBUSY):
+            path.rmdir.side_effect=OSError(number,'private')
+            with self.assertRaises(OSError):native.cleanup_instances((path,),timeout=0)
+
+    def test_database_error_categories_never_copy_journal_message_path_or_credentials(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'private.log'
+            self.assertEqual(native.database_diagnostic(path),{'capture':'unavailable'})
+            path.write_bytes(b'postgres://private-user:credential@private-host\nJob for sierx-postgres.service failed\ncrun: private/path: Operation not permitted\n')
+            value=native.database_diagnostic(path)
+            self.assertEqual(value,{'capture':'observed','tail_truncated':False,
+                'categories':['operation-not-permitted','runtime-crun-error','start-job-failed']})
+            self.assertNotIn('private',str(value));self.assertNotIn('credential',str(value))
+            path.write_bytes(b'permission denied'+b'x'*65536)
+            self.assertEqual(native.database_diagnostic(path),{'capture':'observed','tail_truncated':True,'categories':[]})
+            target=path.with_name('private-target');target.write_text('permission denied credential')
+            path.unlink();path.symlink_to(target)
+            self.assertEqual(native.database_diagnostic(path),{'capture':'unavailable'})
+            path.unlink();path.write_text('offline: Restore executable permissions on bin/goose and bin/sierxctl\ncrun: create keyring: Operation not permitted\n')
+            self.assertEqual(native.database_diagnostic(path)['categories'],['keyring-error','operation-not-permitted','runtime-crun-error','tools-not-executable'])
+
     def test_launcher_keeps_private_namespaces_no_network_or_host_identity_integration(self):
         value=native.command(Path('/owned/root'),'sierx-native-control-old',[0,1,2,3])
         for argument in ('--private-network','--private-users=no','--register=no','--settings=no','--link-journal=no',
-                '--cpu-affinity=0,1,2,3','--bind=/sys/kernel/tracing:/sys/kernel/tracing'):
+                '--cpu-affinity=0,1,2,3','--bind=/sys/kernel/tracing:/sys/kernel/tracing','--kill-signal=SIGKILL'):
             self.assertIn(argument,value)
         self.assertFalse(any(argument.startswith(('--network-veth','--bind-user','--port=')) for argument in value))
         for name,cpus in (('operator',[0,1,2,3]),('sierx-native-x',[0,1]),('sierx-native-x',[0,1,2,2])):
