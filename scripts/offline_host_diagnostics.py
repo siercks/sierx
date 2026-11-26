@@ -38,7 +38,7 @@ SERVICE_RESULTS = {'success', 'resources', 'timeout', 'exit-code', 'signal',
                    'exec-condition', 'protocol', 'unknown'}
 EXIT_KINDS = {'exited', 'killed', 'dumped', 'unknown'}
 SIGNALS = {entry.name.removeprefix('SIG') for entry in signal.Signals}
-FAILURE_TYPES = {'TimeoutExpired', 'ValueError', 'RuntimeError', 'PermissionError',
+FAILURE_TYPES = {'TimeoutExpired', 'TimeoutError', 'ValueError', 'RuntimeError', 'PermissionError',
                  'FileNotFoundError', 'JSONDecodeError', 'UnicodeDecodeError',
                  'TypeError', 'KeyError', 'AttributeError', 'AssertionError', 'OSError',
                  'NetworkObservationError', 'HostCommandError', 'HostLaunchError', 'IndexError',
@@ -289,6 +289,8 @@ def sanitize_https_failure(value):
         number = value.get('errno')
         if type(number) is int and 1 <= number <= 4095:
             result['errno'] = number
+    io=value.get('io_stage')
+    if isinstance(io,str) and io in offline_smoke_trace.IO_STAGES:result['io_stage']=io
     return result
 
 
@@ -325,7 +327,10 @@ def classify_https_failure(error, step):
     kind = next((label for subtype, label in HTTPS_TRANSPORT_ERRORS if isinstance(reason, subtype)), None)
     if kind is None and isinstance(error, urllib.error.URLError):
         kind = 'url-error'
-    return sanitize_https_failure({'step': step, 'kind': kind, 'errno': getattr(reason, 'errno', None)})
+    value={'step': step, 'kind': kind, 'errno': getattr(reason, 'errno', None)}
+    io=offline_smoke_trace.io_stage(error,error.__traceback__)
+    if io!='unknown':value['io_stage']=io
+    return sanitize_https_failure(value)
 
 
 def failure_record(error, phase):

@@ -24,15 +24,28 @@ class SmokeTraceTests(unittest.TestCase):
         host,port=self.stalled_peer();client=http.client.HTTPConnection(host,port,timeout=0.05)
         self.addCleanup(client.close);client.request('GET','/private-credential')
         try:client.getresponse()
-        except TimeoutError as error:self.assertEqual(smoke.io_stage(error,error.__traceback__),'response-headers')
+        except TimeoutError as error:
+            self.assertEqual(smoke.io_stage(error,error.__traceback__),'response-headers')
+            self.assertEqual(diagnostics.classify_https_failure(error,'login')['io_stage'],'response-headers')
         else:self.fail('Controlled peer unexpectedly supplied an HTTP response')
 
     def test_real_tls_handshake_timeout_is_distinct_from_an_http_response_timeout(self):
         address=self.stalled_peer();connection=socket.create_connection(address,timeout=0.05)
         self.addCleanup(connection.close)
         try:ssl.create_default_context().wrap_socket(connection,server_hostname='localhost')
-        except TimeoutError as error:self.assertEqual(smoke.io_stage(error,error.__traceback__),'tls-handshake')
+        except TimeoutError as error:
+            self.assertEqual(smoke.io_stage(error,error.__traceback__),'tls-handshake')
+            self.assertEqual(diagnostics.classify_https_failure(error,'login')['io_stage'],'tls-handshake')
         else:self.fail('Controlled peer unexpectedly supplied a TLS handshake')
+
+    def test_direct_login_failure_preserves_only_safe_stage_and_known_timeout_class(self):
+        failure={'result':'failed','phase':'https-data-check','failure_type':'TimeoutError',
+            'https_failure':{'step':'login','kind':'timeout','io_stage':'tls-handshake','private':'credential'}}
+        safe=diagnostics.sanitize_failure(diagnostics.sanitize_failure(failure))
+        self.assertEqual(safe['failure_type'],'TimeoutError')
+        self.assertEqual(safe['https_failure'],{'step':'login','kind':'timeout','io_stage':'tls-handshake'})
+        self.assertNotIn('credential',json.dumps(safe))
+        self.assertNotIn('io_stage',diagnostics.sanitize_https_failure({**failure['https_failure'],'io_stage':'private-credential'}))
 
     def test_request_routes_reduce_to_fixed_labels(self):
         for path,label in (('/api/v1/auth/login','login'),('/api/v1/me','account'),
