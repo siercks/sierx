@@ -16,6 +16,7 @@ from kernel_network_evidence import SCHED_PROCESS_EXIT
 from network_observer import safe_failure_fields
 import offline_apply_trace
 import offline_host_evidence
+import offline_smoke_trace
 
 INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
 INSTALLER_MARKER_FD = 4
@@ -100,6 +101,9 @@ def sanitize_failure(value):
     code = value.get('command_exit_code')
     if type(code) is int and -128 <= code <= 255:
         result['command_exit_code'] = code
+    if result.get('command_exit_code')==1:
+        smoke=offline_smoke_trace.sanitize(value.get('smoke_failure'))
+        if smoke is not None:result['smoke_failure']=smoke
     if result['phase'] in DEPLOY_FAILURE_PHASES and result.get('command_exit_code') == 1:
         deploy = sanitize_deploy_failure(value.get('deploy_failure'))
         if deploy is not None:
@@ -339,6 +343,7 @@ def failure_record(error, phase):
              'reported_import_stage':getattr(error, 'reported_import_stage', None),
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'deploy_failure':getattr(error, 'deploy_failure', None),
+             'smoke_failure':getattr(error, 'smoke_failure', None),
              'https_failure':getattr(error, 'https_failure', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),

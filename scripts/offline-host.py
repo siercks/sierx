@@ -32,7 +32,7 @@ SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidenc
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
                'offline_host_diagnostics.py', 'offline_apply_trace.py',
-               'kernel_network_evidence.py', 'offline-kernel-observer.py', 'offline_guest_tracer.py')
+               'kernel_network_evidence.py', 'offline-kernel-observer.py', 'offline_guest_tracer.py', 'offline_smoke_trace.py')
 
 
 def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False,

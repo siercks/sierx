@@ -176,3 +176,12 @@ def install():
 
 if __name__ == 'sitecustomize':
     install()
+    if os.environ.get('SIERX_DIAGNOSTIC_SMOKE'):
+        # This copied startup hook loads only its suite-hashed sibling from
+        # the immutable diagnostic snapshot. No private import paths escape.
+        import importlib.util
+        from pathlib import Path
+        path=Path(__file__).parent.parent/'offline_smoke_trace.py'
+        spec=importlib.util.spec_from_file_location('sierx_smoke_trace',path)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        module.install()

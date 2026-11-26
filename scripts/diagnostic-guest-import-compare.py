@@ -14,7 +14,7 @@ GUEST_OPTIONS=GUEST_ROOT/'guest-input.json'
 SCRIPTS=('diagnostic-guest-import-compare.py','diagnostic-native-import-compare.py',
     'offline-native-import.py','native_tracer_diagnostic.py','tracer_diagnostic.py',
     'offline.py','offline_archive.py','offline_host_diagnostics.py','offline_guest_tracer.py',
-    'kernel_network_evidence.py','network_observer.py','offline_apply_trace.py','offline_host_evidence.py')
+    'kernel_network_evidence.py','network_observer.py','offline_apply_trace.py','offline_host_evidence.py','offline_smoke_trace.py')
 
 
 def load(name,filename):

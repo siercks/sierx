@@ -18,6 +18,7 @@ import offline_host_inputs
 import ipaddress
 import offline_host_diagnostics as diagnostics
 import offline_guest_tracer
+import offline_smoke_trace
 
 HOME = Path(os.environ['HOME'])
 BUNDLE = Path('/opt/sierx-bundle')
@@ -93,6 +94,8 @@ def run(*args, env=None, pass_fds=()):
         error.fixture_command_detail=detail.get('guest_command_detail')
         if env is not None and env.get('SIERX_DIAGNOSTIC_DEPLOY'):
             error.deploy_failure = diagnostics.deploy_stderr_failure(stderr)
+        if env is not None and env.get('SIERX_DIAGNOSTIC_SMOKE'):
+            error.smoke_failure = offline_smoke_trace.stderr_failure(stderr)
         raise error
     return result.stdout.decode().strip()
 
@@ -110,6 +113,9 @@ def operation(name, bundle=BUNDLE, expected=None):
            'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']}
     if name == 'apply' and OPTIONS.get('transition_probe'):
         env['SIERX_DIAGNOSTIC_DEPLOY'] = str(bundle / 'scripts/deploy.py')
+        env['PYTHONPATH'] = '/opt/acceptance/tests/deploy-trace'
+    if name == 'smoke' and OPTIONS.get('transition_probe'):
+        env['SIERX_DIAGNOSTIC_SMOKE'] = str(bundle / 'scripts/release-smoke.py')
         env['PYTHONPATH'] = '/opt/acceptance/tests/deploy-trace'
     if name == 'import' and OPTIONS.get('import_probe'):
         with os.fdopen(os.dup(sys.stdout.fileno()), 'wb') as progress:
