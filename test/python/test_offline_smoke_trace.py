@@ -1,5 +1,5 @@
 """Smoke errors retain fixed source/status evidence, never credentials or paths."""
-import importlib.util,json,os,subprocess,sys,tempfile,unittest
+import http.client,importlib.util,json,os,socket,ssl,subprocess,sys,tempfile,threading,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT/'scripts'))
 import offline_smoke_trace as smoke
@@ -7,6 +7,33 @@ import offline_host_diagnostics as diagnostics
 
 
 class SmokeTraceTests(unittest.TestCase):
+    def stalled_peer(self):
+        listener=socket.socket();listener.bind(('127.0.0.1',0));listener.listen(1);listener.settimeout(2)
+        stop=threading.Event()
+        def hold():
+            try:
+                connection,_=listener.accept()
+                with connection:stop.wait(2)
+            except OSError:pass
+        thread=threading.Thread(target=hold);thread.start()
+        self.addCleanup(lambda:thread.join(timeout=3))
+        self.addCleanup(listener.close);self.addCleanup(stop.set)
+        return listener.getsockname()
+
+    def test_real_http_timeout_is_classified_before_response_headers(self):
+        host,port=self.stalled_peer();client=http.client.HTTPConnection(host,port,timeout=0.05)
+        self.addCleanup(client.close);client.request('GET','/private-credential')
+        try:client.getresponse()
+        except TimeoutError as error:self.assertEqual(smoke.io_stage(error,error.__traceback__),'response-headers')
+        else:self.fail('Controlled peer unexpectedly supplied an HTTP response')
+
+    def test_real_tls_handshake_timeout_is_distinct_from_an_http_response_timeout(self):
+        address=self.stalled_peer();connection=socket.create_connection(address,timeout=0.05)
+        self.addCleanup(connection.close)
+        try:ssl.create_default_context().wrap_socket(connection,server_hostname='localhost')
+        except TimeoutError as error:self.assertEqual(smoke.io_stage(error,error.__traceback__),'tls-handshake')
+        else:self.fail('Controlled peer unexpectedly supplied a TLS handshake')
+
     def test_request_routes_reduce_to_fixed_labels(self):
         for path,label in (('/api/v1/auth/login','login'),('/api/v1/me','account'),
             ('/api/v1/items/PRIVATE-42','item'),('/PRIVATE-42','item-document'),
@@ -15,7 +42,7 @@ class SmokeTraceTests(unittest.TestCase):
 
     def test_sanitization_and_double_failure_pipeline_drop_private_fields(self):
         value={'step':'login','kind':'HTTPError','lines':[24,27],'http_status':503,
-            'transport':'other','private':'credential','url':'https://private','headers':{'key':'secret'}}
+            'transport':'other','io_stage':'response-headers','private':'credential','url':'https://private','headers':{'key':'secret'}}
         safe=smoke.sanitize(value)
         failure={'result':'failed','phase':'two-release-apply-previous','failure_type':'RuntimeError',
             'command_exit_code':1,'smoke_failure':value}

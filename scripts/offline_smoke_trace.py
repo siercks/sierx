@@ -7,6 +7,7 @@ KINDS={'HTTPError','URLError','SSLCertVerificationError','SSLError','TimeoutErro
     'ConnectionRefusedError','ConnectionResetError','RemoteDisconnected','HTTPException',
     'OSError','ValueError','KeyError','JSONDecodeError','UnicodeDecodeError','IncompleteRead'}
 TRANSPORTS={'timeout','certificate','tls','connection','http-protocol','transport','other'}
+IO_STAGES={'dns','tcp-connect','tls-handshake','request-send','response-headers','response-body','http-status','unknown'}
 
 
 def request_step(path):
@@ -26,18 +27,44 @@ def sanitize(record):
     value={key:record[key] for key in ('step','kind','lines')}
     transport=record.get('transport')
     if isinstance(transport,str) and transport in TRANSPORTS:value['transport']=transport
+    io=record.get('io_stage')
+    if isinstance(io,str) and io in IO_STAGES:value['io_stage']=io
     for field,low,high in (('errno',1,4095),('http_status',100,599)):
         number=record.get(field)
         if type(number) is int and low<=number<=high:value[field]=number
     return value
 
 
+def io_stage(error,traceback):
+    if isinstance(error,urllib.error.HTTPError):return 'http-status'
+    locations=set()
+    reason=getattr(error,'reason',None)
+    traces=[traceback]
+    if isinstance(reason,BaseException):traces.append(reason.__traceback__)
+    for entry in traces:
+        while entry is not None:
+            frame=entry.tb_frame;module=frame.f_globals.get('__name__')
+            if isinstance(module,str) and module in {'socket','ssl','http.client','urllib.request'}:
+                locations.add((module,frame.f_code.co_name))
+            entry=entry.tb_next
+    # Classify only public standard-library function boundaries. Never inspect
+    # socket data, request headers/URLs, exception text or private frame locals.
+    if ('socket','getaddrinfo') in locations:return 'dns'
+    if ('ssl','do_handshake') in locations:return 'tls-handshake'
+    if any(('http.client',name) in locations for name in ('getresponse','begin','_read_status')):return 'response-headers'
+    if any(('http.client',name) in locations for name in ('read','readinto','_safe_read')):return 'response-body'
+    if ('socket','create_connection') in locations or ('http.client','connect') in locations:return 'tcp-connect'
+    if any(('http.client',name) in locations for name in ('send','_send_output','_send_request')):return 'request-send'
+    return 'unknown'
+
+
 def summarize(error,traceback,source,step):
+    io=io_stage(error,traceback)
     lines=[]
     while traceback is not None:
         if traceback.tb_frame.f_code.co_filename==source:lines.append(traceback.tb_lineno)
         traceback=traceback.tb_next
-    value={'step':step,'kind':type(error).__name__,'lines':lines[-8:]}
+    value={'step':step,'kind':type(error).__name__,'lines':lines[-8:],'io_stage':io}
     reason=getattr(error,'reason',error)
     kinds=((TimeoutError,'timeout'),(ssl.SSLCertVerificationError,'certificate'),(ssl.SSLError,'tls'),
         (ConnectionError,'connection'),(http.client.HTTPException,'http-protocol'),(OSError,'transport'))
