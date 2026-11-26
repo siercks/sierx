@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       workload:
-        description: Original cold import or first complete update and rollback
+        description: Original import or transition in TCG or native OS container
         type: choice
-        options: [import, transition]
+        options: [import, transition, native-transition]
         default: import
 permissions:
   contents: read
@@ -34,7 +34,7 @@ jobs:
       - name: Install disposable comparison prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq podman uidmap strace iproute2 build-essential python3 curl patch qemu-system-arm e2fsprogs
+          sudo apt-get install -y -qq podman uidmap strace iproute2 build-essential python3 curl patch qemu-system-arm e2fsprogs systemd-container
       - name: Prepare matched passive tracer controls
         run: |
           umask 077
@@ -55,12 +55,14 @@ jobs:
         env:
           SIERX_HOST_PREPARE_DIAGNOSTIC: '1'
       - run: make offline-previous-prepare
-        if: env.COMPARISON_WORKLOAD == 'transition'
+        if: env.COMPARISON_WORKLOAD == 'transition' || env.COMPARISON_WORKLOAD == 'native-transition'
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Compare original import in the isolated guest
         run: |
-          if [[ $COMPARISON_WORKLOAD == transition ]]; then
+          if [[ $COMPARISON_WORKLOAD == native-transition ]]; then
+            sudo unshare --mount --propagation private python3 -B scripts/diagnostic-native-transition-compare.py
+          elif [[ $COMPARISON_WORKLOAD == transition ]]; then
             sudo python3 -B scripts/diagnostic-transition-tracer-compare.py
           else
             sudo python3 -B scripts/diagnostic-guest-import-compare.py
@@ -74,12 +76,13 @@ jobs:
           sys.path.insert(0,'scripts')
           import offline_host_diagnostics as diagnostics
           root=Path('dist');root.mkdir(exist_ok=True)
-          workload=os.environ['COMPARISON_WORKLOAD'];assert workload in {'import','transition'}
+          workload=os.environ['COMPARISON_WORKLOAD'];assert workload in {'import','transition','native-transition'}
           value={'suite':f'historical-{workload}-comparison-diagnostic-v1',
                  'revision':os.environ['GITHUB_SHA'],'release_acceptance':False}
           for key,name in (('replay_input','historical-replay-input.json'),
                            ('guest_comparison','historical-guest-import-arm64.json'),
                            ('transition_comparison','historical-transition-tracers-arm64.json'),
+                           ('native_transition_comparison','historical-native-transition-tracers-arm64.json'),
                            ('preparation_failure','host-preparation-failure.json')):
               path=root/name
               if path.is_file():
