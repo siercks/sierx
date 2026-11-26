@@ -291,6 +291,8 @@ def sanitize_https_failure(value):
             result['errno'] = number
     io=value.get('io_stage')
     if isinstance(io,str) and io in offline_smoke_trace.IO_STAGES:result['io_stage']=io
+    activity=offline_smoke_trace.sanitize_activity(value.get('activity'))
+    if activity is not None:result['activity']=activity
     return result
 
 
@@ -320,16 +322,19 @@ def preparation_failure(stage, status, build_log):
     return sanitize_preparation_failure(value)
 
 
-def classify_https_failure(error, step):
+def classify_https_failure(error, step, activity=None):
     if isinstance(error, urllib.error.HTTPError):
-        return sanitize_https_failure({'step': step, 'kind': 'http-status', 'http_status': error.code})
-    reason = error.reason if isinstance(error, urllib.error.URLError) else error
-    kind = next((label for subtype, label in HTTPS_TRANSPORT_ERRORS if isinstance(reason, subtype)), None)
-    if kind is None and isinstance(error, urllib.error.URLError):
-        kind = 'url-error'
-    value={'step': step, 'kind': kind, 'errno': getattr(reason, 'errno', None)}
-    io=offline_smoke_trace.io_stage(error,error.__traceback__)
-    if io!='unknown':value['io_stage']=io
+        value={'step': step, 'kind': 'http-status', 'http_status': error.code}
+    else:
+        reason = error.reason if isinstance(error, urllib.error.URLError) else error
+        kind = next((label for subtype, label in HTTPS_TRANSPORT_ERRORS if isinstance(reason, subtype)), None)
+        if kind is None and isinstance(error, urllib.error.URLError):
+            kind = 'url-error'
+        value={'step': step, 'kind': kind, 'errno': getattr(reason, 'errno', None)}
+        io=offline_smoke_trace.io_stage(error,error.__traceback__)
+        if io!='unknown':value['io_stage']=io
+    if activity is not None:
+        value['activity']=offline_smoke_trace.activity_summary(activity,offline_smoke_trace.activity_snapshot())
     return sanitize_https_failure(value)
 
 

@@ -7,6 +7,61 @@ import offline_host_diagnostics as diagnostics
 
 
 class SmokeTraceTests(unittest.TestCase):
+    def process_stat(self,root,pid,name,started,ticks):
+        directory=root/str(pid);directory.mkdir(exist_ok=True)
+        fields=['S']+['0']*19;fields[11]=str(ticks);fields[19]=str(started)
+        (directory/'stat').write_text(str(pid)+' ('+name+') '+' '.join(fields)+'\n')
+
+    def test_activity_matches_identity_and_does_not_join_reused_pid_or_private_processes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            self.process_stat(root,1,'sierx',100,10)
+            self.process_stat(root,2,'caddy',101,20)
+            self.process_stat(root,3,'postgres',102,30)
+            self.process_stat(root,4,'private-credential',103,40)
+            first=smoke.activity_snapshot(root)
+            self.process_stat(root,1,'sierx',100,25)
+            self.process_stat(root,2,'caddy',999,35)
+            (root/'3/stat').unlink();(root/'3').rmdir()
+            last=smoke.activity_snapshot(root)
+            safe=smoke.activity_summary(first,last)
+            self.assertEqual(safe['capture'],'observed')
+            self.assertEqual(safe['roles']['app']['cpu_ms'],15000//first['hz'])
+            self.assertEqual(safe['roles']['gateway'],{'start_tasks':1,'end_tasks':1,'matched_tasks':0,'gone_tasks':1,'new_tasks':1,'cpu_ms':0})
+            self.assertEqual(safe['roles']['database']['gone_tasks'],1)
+            encoded=json.dumps(safe)
+            self.assertNotIn('private',encoded);self.assertNotIn('999',encoded);self.assertNotIn('pid',encoded)
+
+    def test_activity_does_not_claim_observed_for_malformed_lost_or_regressing_counters(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);self.process_stat(root,1,'sierx',100,10)
+            first=smoke.activity_snapshot(root)
+            self.process_stat(root,1,'sierx',100,9)
+            self.assertEqual(smoke.activity_summary(first,smoke.activity_snapshot(root)),{'capture':'inconsistent'})
+            (root/'1/stat').write_text('private malformed data')
+            self.assertEqual(smoke.activity_snapshot(root),{'capture':'unavailable'})
+            self.assertEqual(smoke.activity_summary(first,{'capture':'unavailable'}),{'capture':'unavailable'})
+            self.assertEqual(smoke.activity_summary(first,{'capture':'limit-exceeded'}),{'capture':'limit-exceeded'})
+
+    def test_activity_survives_both_failure_sanitizers_without_identities_or_extra_fields(self):
+        roles={role:{'start_tasks':1,'end_tasks':1,'matched_tasks':1,'gone_tasks':0,'new_tasks':0,'cpu_ms':123,'pid':55}
+            for role in ('app','gateway','database')}
+        activity={'capture':'observed','elapsed_ms':20000,'raced_entries':0,'roles':roles,'path':'private'}
+        for field,extra in (('smoke_failure',{'step':'login','kind':'TimeoutError','lines':[25]}),
+                ('https_failure',{'step':'login','kind':'timeout'})):
+            failure={'result':'failed','phase':'https-data-check','failure_type':'RuntimeError','command_exit_code':1,
+                field:{**extra,'activity':activity}}
+            safe=diagnostics.sanitize_failure(diagnostics.sanitize_failure(failure))[field]['activity']
+            self.assertNotIn('private',json.dumps(safe));self.assertNotIn('pid',json.dumps(safe))
+            self.assertEqual(safe,smoke.sanitize_activity(activity))
+        for bad in ({'elapsed_ms':True},{'elapsed_ms':600001},{'roles':{'private':{}}}):
+            self.assertIsNone(smoke.sanitize_activity({**activity,**bad}))
+        maximum={role:{'start_tasks':4096,'end_tasks':4096,'matched_tasks':4096,'gone_tasks':0,'new_tasks':0,'cpu_ms':2147483647}
+            for role in roles}
+        record=smoke.sanitize({'step':'login','kind':'TimeoutError','lines':[54,35,27,25],
+            'transport':'timeout','io_stage':'response-headers','activity':{**activity,'roles':maximum}})
+        self.assertLessEqual(len(json.dumps(record,separators=(',',':')).encode()),1024)
+
     def stalled_peer(self):
         listener=socket.socket();listener.bind(('127.0.0.1',0));listener.listen(1);listener.settimeout(2)
         stop=threading.Event()
