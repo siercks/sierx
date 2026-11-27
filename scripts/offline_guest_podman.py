@@ -25,13 +25,16 @@ FILES = {'podman': '/usr/bin/podman', 'quadlet': '/usr/libexec/podman/quadlet',
 GENERATORS = ('/usr/lib/systemd/system-generators/podman-system-generator',
               '/usr/lib/systemd/user-generators/podman-user-generator')
 RECEIPT = Path('/usr/share/sierx-offline/podman.json')
+POLICY_RECEIPT = Path('/usr/share/sierx-offline/podman-policy.json')
+SYSTEM_POLICY = Path('/etc/containers/policy.json')
+PACKAGED_POLICY = Path('/usr/share/containers/policy.json')
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def validate_receipt(value):
+def validate_build_receipt(value):
     if (not isinstance(value, dict) or set(value) != set(PINS) | {'artifacts_sha256'}
             or any(value.get(key) != expected for key, expected in PINS.items())
             or value.get('cgo_enabled') is not True):
@@ -45,14 +48,81 @@ def validate_receipt(value):
     return value
 
 
+def validate_policy_receipt(value):
+    if (not isinstance(value, dict) or set(value) != {'source', 'sha256'}
+            or not isinstance(value.get('source'), str)
+            or value['source'] not in {'existing-system', 'packaged-default-link'}
+            or not isinstance(value.get('sha256'), str) or not re.fullmatch('[a-f0-9]{64}', value['sha256'])):
+        raise ValueError('Missing preserved signature policy identity')
+    return value
+
+
+def validate_receipt(value):
+    if not isinstance(value, dict) or 'signature_policy' not in value:
+        raise ValueError('Missing installed runtime signature policy binding')
+    validate_build_receipt({key: item for key, item in value.items() if key != 'signature_policy'})
+    validate_policy_receipt(value['signature_policy'])
+    return value
+
+
 def verify_files(value, paths):
-    validate_receipt(value)
+    validate_build_receipt(value)
     if set(paths) != set(FILES):
         raise ValueError('Every runtime/helper/configuration artifact must be checked')
     for name, path in paths.items():
         path = Path(path)
         if path.is_symlink() or not path.is_file() or digest(path) != value['artifacts_sha256'][name]:
             raise ValueError('Runtime or matching helper differs from its build receipt')
+    return value
+
+
+def policy_bytes(path, root):
+    path, root = Path(path), Path(root).resolve()
+    if (path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root)
+            or not 0 < path.stat().st_size <= 65536):
+        raise ValueError('Missing bounded regular signature policy in the fixture')
+    return path.read_bytes()
+
+
+def preserve_signature_policy(root):
+    """Keep every packaged rule and existing system override byte for byte."""
+    root = Path(root)
+    effective = root / SYSTEM_POLICY.relative_to('/')
+    packaged = root / PACKAGED_POLICY.relative_to('/')
+    if effective.is_symlink():
+        if str(effective.readlink()) != str(PACKAGED_POLICY):
+            raise ValueError('Existing signature policy link must not be replaced')
+        raw, source = policy_bytes(packaged, root), 'packaged-default-link'
+    elif effective.exists():
+        raw, source = policy_bytes(effective, root), 'existing-system'
+    else:
+        raw, source = policy_bytes(packaged, root), 'packaged-default-link'
+        effective.parent.mkdir(parents=True, exist_ok=True)
+        effective.symlink_to(PACKAGED_POLICY)
+    value = {'source': source, 'sha256': hashlib.sha256(raw).hexdigest()}
+    validate_policy_receipt(value)
+    packet = root / POLICY_RECEIPT.relative_to('/')
+    packet.parent.mkdir(parents=True, exist_ok=True)
+    packet.write_text(json.dumps(value, sort_keys=True) + '\n')
+    packet.chmod(0o644)
+    return value
+
+
+def verify_signature_policy(root):
+    root = Path(root)
+    packet = root / POLICY_RECEIPT.relative_to('/')
+    if packet.is_symlink():
+        raise ValueError('Signature policy receipt must be a regular fixture file')
+    value = validate_policy_receipt(json.loads(packet.read_text()))
+    effective = root / SYSTEM_POLICY.relative_to('/')
+    if value['source'] == 'packaged-default-link':
+        if not effective.is_symlink() or str(effective.readlink()) != str(PACKAGED_POLICY):
+            raise ValueError('Packaged signature policy compatibility link changed')
+        raw = policy_bytes(root / PACKAGED_POLICY.relative_to('/'), root)
+    else:
+        raw = policy_bytes(effective, root)
+    if hashlib.sha256(raw).hexdigest() != value['sha256']:
+        raise ValueError('Signature policy rules differ from the preserved fixture policy')
     return value
 
 
@@ -79,7 +149,8 @@ def load_fixture(root=Path('/')):
     profile = fixture_profile(root)
     packet = root / RECEIPT.relative_to('/')
     if profile == 'ubuntu-24.04':
-        if packet.exists() or packet.is_symlink():
+        policy_packet = root / POLICY_RECEIPT.relative_to('/')
+        if packet.exists() or packet.is_symlink() or policy_packet.exists() or policy_packet.is_symlink():
             raise ValueError('Ubuntu must retain its ordinary distribution runtime')
         return None
     if packet.is_symlink():
@@ -90,7 +161,7 @@ def load_fixture(root=Path('/')):
         path = root / Path(generator).relative_to('/')
         if not path.is_symlink() or str(path.readlink()) != FILES['quadlet']:
             raise ValueError('System and user managers require the matching Quadlet generator')
-    return value
+    return validate_receipt({**value, 'signature_policy': verify_signature_policy(root)})
 
 
 def validate_report(report):
@@ -128,6 +199,7 @@ def install(source, root=Path('/')):
     packet.parent.mkdir(parents=True, exist_ok=True)
     packet.write_text(json.dumps(value, sort_keys=True) + '\n')
     packet.chmod(0o644)
+    preserve_signature_policy(root)
     return load_fixture(root)
 
 
@@ -169,7 +241,7 @@ def build(archive, output):
         shutil.copyfile(config, output / 'containers.conf')
         (output / 'containers.conf').chmod(0o644)
         value = {**PINS, 'artifacts_sha256': {name: digest(output / name) for name in FILES}}
-        validate_receipt(value)
+        validate_build_receipt(value)
         (output / 'podman.json').write_text(json.dumps(value, sort_keys=True) + '\n')
         return value
 

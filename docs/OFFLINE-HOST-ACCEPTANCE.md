@@ -27,7 +27,12 @@ CGO and seccomp/systemd/libsubid build features. The compiler and development
 packages stay outside the exported OS. Preboot and guest checks verify all
 runtime/helper/configuration hashes and both systemd generator links; the host
 report binds the same receipt and actual version. Ubuntu keeps its distribution
-runtime. This preparation changes only the disposable acceptance OS. Refresh
+runtime. Current Rocky packages place the signature policy under
+`/usr/share/containers/policy.json`; the compatible runtime searches the legacy
+system path. When that path is absent, preparation links it to the packaged file
+and records its exact hash. Existing system overrides are preserved, and both
+preboot and guest checks reject changed rules or links. No fallback policy is
+invented. This preparation changes only the disposable acceptance OS. Refresh
 the source and compiler pins together with their security review and rerun the
 complete host matrix when updating this baseline.
 

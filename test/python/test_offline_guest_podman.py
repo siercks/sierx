@@ -15,7 +15,7 @@ from offline_host_fixture import full_host_report
 
 
 def receipt():
-    return {**copy.deepcopy(runtime.PINS), 'artifacts_sha256': {
+    return {**copy.deepcopy(runtime.PINS), 'signature_policy': {'source': 'packaged-default-link', 'sha256': 'e' * 64}, 'artifacts_sha256': {
         name: runtime.CONFIG_SHA256 if name == 'containers.conf' else 'a' * 64
         for name in runtime.FILES}}
 
@@ -29,7 +29,7 @@ def os_release(root, profile='rocky'):
 class GuestPodmanTests(unittest.TestCase):
     def test_missing_old_or_incomplete_build_and_security_identity_is_rejected(self):
         for defect in ('missing', 'version', 'compiler', 'source', 'cgo', 'boolean',
-                       'seccomp', 'systemd', 'subid', 'prefix', 'helper', 'hash', 'config', 'extra'):
+                       'seccomp', 'systemd', 'subid', 'prefix', 'helper', 'hash', 'config', 'policy', 'policy-hash', 'extra'):
             value = receipt()
             if defect == 'missing': value = None
             elif defect == 'version': value['version'] = '6.1.4'
@@ -43,6 +43,8 @@ class GuestPodmanTests(unittest.TestCase):
             elif defect == 'helper': del value['artifacts_sha256']['quadlet']
             elif defect == 'hash': value['artifacts_sha256']['rootlessport'] = True
             elif defect == 'config': value['artifacts_sha256']['containers.conf'] = 'c' * 64
+            elif defect == 'policy': del value['signature_policy']
+            elif defect == 'policy-hash': value['signature_policy']['sha256'] = True
             else: value['unverified_override'] = True
             with self.subTest(defect=defect), self.assertRaises(ValueError):
                 runtime.validate_receipt(value)
@@ -63,12 +65,16 @@ class GuestPodmanTests(unittest.TestCase):
             source = Path(temporary) / 'build'
             source.mkdir()
             os_release(root)
+            packaged = root / runtime.PACKAGED_POLICY.relative_to('/')
+            packaged.parent.mkdir(parents=True)
+            packaged.write_bytes(b'{"default":[{"type":"reject"}]}\n')
             for name in runtime.FILES:
                 (source / name).write_bytes(('synthetic fixture ' + name).encode())
             with patch.object(runtime, 'CONFIG_SHA256', runtime.digest(source / 'containers.conf')):
                 value = {**copy.deepcopy(runtime.PINS), 'artifacts_sha256': {
                     name: runtime.digest(source / name) for name in runtime.FILES}}
                 (source / 'podman.json').write_text(json.dumps(value))
+                value = {**value, 'signature_policy': {'source': 'packaged-default-link', 'sha256': runtime.digest(packaged)}}
                 self.assertEqual(runtime.install(source, root), value)
                 for name, destination in runtime.FILES.items():
                     target = root / Path(destination).relative_to('/')
@@ -86,6 +92,56 @@ class GuestPodmanTests(unittest.TestCase):
                     target.unlink()
                     target.symlink_to(runtime.FILES['quadlet'])
                 self.assertEqual(runtime.load_fixture(root), value)
+
+    def test_relocated_package_policy_is_preserved_exactly_and_tampering_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packaged = root / runtime.PACKAGED_POLICY.relative_to('/')
+            packaged.parent.mkdir(parents=True)
+            original = b'{ "default": [{ "type": "reject" }], "transports": {} }\n'
+            packaged.write_bytes(original)
+            value = runtime.preserve_signature_policy(root)
+            effective = root / runtime.SYSTEM_POLICY.relative_to('/')
+            self.assertTrue(effective.is_symlink())
+            self.assertEqual(str(effective.readlink()), str(runtime.PACKAGED_POLICY))
+            self.assertEqual(packaged.read_bytes(), original)
+            self.assertEqual(value, runtime.verify_signature_policy(root))
+            packaged.write_bytes(b'{"default":[{"type":"insecureAcceptAnything"}]}')
+            with self.assertRaises(ValueError): runtime.verify_signature_policy(root)
+            packaged.write_bytes(original)
+            effective.unlink()
+            effective.write_bytes(original)
+            with self.assertRaises(ValueError): runtime.verify_signature_policy(root)
+
+    def test_existing_stricter_system_override_is_never_replaced_by_packaged_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            effective = root / runtime.SYSTEM_POLICY.relative_to('/')
+            effective.parent.mkdir(parents=True)
+            original = b'{"default":[{"type":"reject"}]}\n'
+            effective.write_bytes(original)
+            value = runtime.preserve_signature_policy(root)
+            self.assertEqual(value['source'], 'existing-system')
+            self.assertFalse(effective.is_symlink())
+            self.assertEqual(effective.read_bytes(), original)
+            self.assertEqual(value, runtime.verify_signature_policy(root))
+            self.assertEqual(value, runtime.preserve_signature_policy(root))
+
+    def test_missing_oversized_or_unknown_policy_is_rejected_without_fallback_rules(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            effective = root / runtime.SYSTEM_POLICY.relative_to('/')
+            with self.assertRaises(ValueError): runtime.preserve_signature_policy(root)
+            self.assertFalse(effective.exists())
+            packaged = root / runtime.PACKAGED_POLICY.relative_to('/')
+            packaged.parent.mkdir(parents=True)
+            packaged.write_bytes(b'x' * 65537)
+            with self.assertRaises(ValueError): runtime.preserve_signature_policy(root)
+            self.assertFalse(effective.exists())
+            effective.parent.mkdir(parents=True)
+            effective.symlink_to('/unknown-policy')
+            with self.assertRaises(ValueError): runtime.preserve_signature_policy(root)
+            self.assertEqual(str(effective.readlink()), '/unknown-policy')
 
     def test_ubuntu_keeps_distribution_runtime_and_rejects_a_source_runtime_receipt(self):
         with tempfile.TemporaryDirectory() as temporary:

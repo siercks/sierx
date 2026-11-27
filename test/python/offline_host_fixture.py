@@ -13,7 +13,7 @@ def full_host_report(bundle,expected,suite,profile,previous):
         'host_versions':{'kernel':'6.8.0-fixture','systemd':'systemd 255',
             'podman':'podman version '+(offline_guest_podman.VERSION if profile.startswith('rocky-') else '4.9.3'),'selinux':'disabled'},
         'tracer':{**offline_guest_tracer.PINS,'binary_sha256':'f'*64},
-        'podman_build':({**offline_guest_podman.PINS,'artifacts_sha256':{
+        'podman_build':({**offline_guest_podman.PINS,'signature_policy':{'source':'packaged-default-link','sha256':'e'*64},'artifacts_sha256':{
             name:offline_guest_podman.CONFIG_SHA256 if name=='containers.conf' else 'a'*64
             for name in offline_guest_podman.FILES}} if profile.startswith('rocky-') else None),
         'browser':{'result':'passed','playwright':'1.63.0','driver':{'node':'v24.22.1','policy':'seccomp-deny-io-uring',
