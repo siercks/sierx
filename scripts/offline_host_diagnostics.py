@@ -17,6 +17,7 @@ from kernel_network_evidence import SCHED_PROCESS_EXIT
 from network_observer import safe_failure_fields
 import offline_apply_trace
 import offline_host_evidence
+import offline_import_trace
 import offline_smoke_trace
 
 INSTALLER_EXIT_TRACE = Path('/sys/kernel/tracing/instances/sierx-installer-exit')
@@ -46,7 +47,8 @@ FAILURE_TYPES = {'TimeoutExpired', 'TimeoutError', 'ValueError', 'RuntimeError',
                  'BrokenPipeError', 'ServiceExit'}
 FRAME_FILES = {'offline-host-guest.py','offline-host-scenarios.py','offline-local-registry.py',
                'offline_host_diagnostics.py','offline_host_inputs.py','offline_host_evidence.py',
-               'offline-network-controls.py','offline.py','offline_guest_tracer.py','offline_guest_podman.py'}
+               'offline-network-controls.py','offline.py','offline_guest_tracer.py','offline_guest_podman.py',
+               'offline_import_trace.py'}
 OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-child',
                   'unexpected-wait','other-error'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
@@ -132,6 +134,9 @@ def sanitize_failure(value):
     if result.get('command_exit_code')==1:
         smoke=offline_smoke_trace.sanitize(value.get('smoke_failure'))
         if smoke is not None:result['smoke_failure']=smoke
+        if result['phase'] == 'import':
+            imported = offline_import_trace.sanitize(value.get('import_failure'))
+            if imported is not None:result['import_failure']=imported
     if result['phase'] in DEPLOY_FAILURE_PHASES and result.get('command_exit_code') == 1:
         deploy = sanitize_deploy_failure(value.get('deploy_failure'))
         if deploy is not None:
@@ -638,6 +643,7 @@ def failure_record(error, phase):
              'command_exit_code':getattr(error, 'fixture_exit_code', None),
              'deploy_failure':getattr(error, 'deploy_failure', None),
              'smoke_failure':getattr(error, 'smoke_failure', None),
+             'import_failure':getattr(error, 'import_failure', None),
              'https_failure':getattr(error, 'https_failure', None),
              'observer':getattr(error, 'observer_details', None),
              'host_tool':getattr(error,'host_tool',None),'host_errno':getattr(error,'errno',None),

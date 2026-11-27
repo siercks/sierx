@@ -13,7 +13,7 @@ GUEST_REPORT=GUEST_ROOT/'dist/historical-native-import-arm64.json'
 GUEST_OPTIONS=GUEST_ROOT/'guest-input.json'
 SCRIPTS=('diagnostic-guest-import-compare.py','diagnostic-native-import-compare.py',
     'offline-native-import.py','native_tracer_diagnostic.py','tracer_diagnostic.py',
-    'offline.py','offline_archive.py','offline_host_diagnostics.py','offline_guest_tracer.py','offline_guest_podman.py',
+    'offline.py','offline_archive.py','offline_host_diagnostics.py','offline_guest_tracer.py','offline_guest_podman.py','offline_import_trace.py',
     'kernel_network_evidence.py','network_observer.py','offline_apply_trace.py','offline_host_evidence.py','offline_smoke_trace.py')
 
 

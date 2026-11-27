@@ -34,7 +34,7 @@ SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidenc
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
                'offline_host_diagnostics.py', 'offline_apply_trace.py',
                'kernel_network_evidence.py', 'offline-kernel-observer.py', 'offline_guest_tracer.py',
-               'offline_guest_podman.py', 'offline_smoke_trace.py')
+               'offline_guest_podman.py', 'offline_smoke_trace.py', 'offline_import_trace.py')
 
 
 def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False,
@@ -291,6 +291,7 @@ After=basic.target
     options = {'bundle_sha256': args.expected_sha256, 'previous_sha256': args.previous_sha256,
                'soak_seconds': args.soak_seconds, 'suite_sha256': args.suite_sha256,
                'closeout':not args.development,'virtual_cpu':args.virtual_cpu,
+               'observe_import_failure':getattr(args,'diagnostic_report',False),
                'runtime_probe':getattr(args,'runtime_probe',False),
                'transition_stress':getattr(args,'transition_stress',False),
                'transition_before_browser':getattr(args,'transition_before_browser',False),
@@ -538,6 +539,13 @@ def main(args):
             trace.chmod(0o755)
             customize = trace / 'sitecustomize.py'
             shutil.copyfile(tests / 'offline_apply_trace.py', customize)
+            customize.chmod(0o644)
+        if getattr(args, 'diagnostic_report', False):
+            trace = tests / 'import-trace'
+            trace.mkdir()
+            trace.chmod(0o755)
+            customize = trace / 'sitecustomize.py'
+            shutil.copyfile(tests / 'offline_import_trace.py', customize)
             customize.chmod(0o644)
         stage(args,'host-unpack-delivery')
         staged=root/'opt/.delivery-input'

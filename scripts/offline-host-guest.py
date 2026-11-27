@@ -20,6 +20,7 @@ import offline_host_diagnostics as diagnostics
 import offline_guest_tracer
 import offline_guest_podman
 import offline_smoke_trace
+import offline_import_trace
 
 HOME = Path(os.environ['HOME'])
 BUNDLE = Path('/opt/sierx-bundle')
@@ -97,6 +98,8 @@ def run(*args, env=None, pass_fds=()):
             error.deploy_failure = diagnostics.deploy_stderr_failure(stderr)
         if env is not None and env.get('SIERX_DIAGNOSTIC_SMOKE'):
             error.smoke_failure = offline_smoke_trace.stderr_failure(stderr)
+        if env is not None and env.get('SIERX_DIAGNOSTIC_IMPORT'):
+            error.import_failure = offline_import_trace.stderr_failure(stderr)
         raise error
     return result.stdout.decode().strip()
 
@@ -112,6 +115,9 @@ def operation(name, bundle=BUNDLE, expected=None):
     diagnostics.emit_resources()
     env = {**ENV, 'SIERX_OFFLINE_BUNDLE': str(bundle),
            'SIERX_OFFLINE_SHA256': expected or OPTIONS['bundle_sha256']}
+    if name == 'import' and OPTIONS.get('observe_import_failure'):
+        env['SIERX_DIAGNOSTIC_IMPORT'] = str(bundle / 'scripts/offline.py')
+        env['PYTHONPATH'] = '/opt/acceptance/tests/import-trace'
     if name == 'apply' and OPTIONS.get('transition_probe'):
         env['SIERX_DIAGNOSTIC_DEPLOY'] = str(bundle / 'scripts/deploy.py')
         env['PYTHONPATH'] = '/opt/acceptance/tests/deploy-trace'

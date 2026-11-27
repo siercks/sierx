@@ -11,7 +11,7 @@ NATURAL_SHA='4cce0574bc3cc7b4904c0905a70c34a3dbc11ee33ed7c97a79ef15ccc86ca737'
 WORKER_FLAGS=['-O2','-pthread']
 SUITE=('diagnostic-import-thread-stress.py','offline-native-import.py','native_tracer_diagnostic.py',
     'tracer_diagnostic.py','offline.py','offline_host_diagnostics.py','offline_apply_trace.py',
-    'kernel_network_evidence.py','network_observer.py','offline_host_evidence.py','offline_guest_podman.py','offline_smoke_trace.py')
+    'kernel_network_evidence.py','network_observer.py','offline_host_evidence.py','offline_guest_podman.py','offline_import_trace.py','offline_smoke_trace.py')
 
 
 def load(name,filename):
