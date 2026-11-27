@@ -30,6 +30,7 @@ def safe_failure_fields(value):
     for key, allowed in (('role', PROCESSES | {'other'}), ('call', NETWORK_CALLS),
                          ('descriptor', DESCRIPTOR_KINDS),
                          ('fd_family', {'AF_INET', 'AF_INET6', 'AF_UNIX', 'AF_NETLINK', 'unknown'}),
+                         ('terminal_record', {'unfinished', 'pseudo-return', 'other'}),
                          ('header', {'structure', 'pointer', 'null', 'other', 'not-message'})):
         item = value.get(key)
         if isinstance(item, str) and item in allowed: result[key] = item
@@ -199,15 +200,28 @@ class Attempt:
     protocol: str
 
 
+def terminal_pseudo_return(body):
+    """strace print_event_exit's exact unknown result, never a restart/error."""
+    return re.search(r'\)\s*=\s*\?\s*$', body) is not None
+
+
 def records(lines, unfinished=None):
     """Join unfinished calls with timestamps needed for descriptor ownership.
 
     Forks replay at entry so inherited/shared tables exist before a child sends
     a reply. A blocking recvmsg installs its received descriptors at return;
     replaying them at entry can let an intervening close of the old descriptor
-    erase the new receipt. Incomplete outgoing entries still count as attempts.
+    erase the new receipt. strace can close a dying task's entry with just
+    ``) = ?`` instead of leaving an unfinished marker, including after resume.
+    Preserve that terminal entry for the SAME independent non-execution proof;
+    the rendering alone never permits an exclusion. Restart/error suffixes do
+    not qualify. Incomplete outgoing entries still count as attempts.
     """
     pending, result = {}, []
+    def append(entry):
+        result.append(entry)
+        if unfinished is not None and terminal_pseudo_return(entry[3]):
+            unfinished.add((entry[0], re.match(r'([a-z0-9_]+)\(',entry[3])[1], entry[2]))
     pattern = re.compile(r'^(\d+)(?:<([^>]+)>)?\s+([0-9]+\.[0-9]+)\s+(.*)$')
     for raw in lines:
         line = pattern.match(raw.strip())
@@ -238,7 +252,7 @@ def records(lines, unfinished=None):
             entry=pending.pop((pid,resumed[1]),None)
             if entry is None:raise ValueError('Trace is missing a resumed syscall entry')
             replay_time=float(timestamp) if resumed[1]=='recvmsg' else entry[2]
-            result.append((entry[0],entry[1],replay_time,entry[3]+resumed[2]))
+            append((entry[0],entry[1],replay_time,entry[3]+resumed[2]))
             continue
         call=re.match(r'([a-z0-9_]+)\(',body)
         if not call:continue
@@ -246,7 +260,7 @@ def records(lines, unfinished=None):
         if '<unfinished ...>' in body:
             if (pid,call[1]) in pending:raise ValueError('Duplicate unfinished syscall entry')
             pending[(pid,call[1])]=entry
-        else:result.append(entry)
+        else:append(entry)
     if unfinished is not None:
         unfinished.update((entry[0], re.match(r'([a-z0-9_]+)\(', entry[3])[1], entry[2])
                           for entry in pending.values())
@@ -513,6 +527,8 @@ def parse(lines,stats=None,kernel=None):
                 raise NetworkObservationError({'pid':int(pid), 'role':role, 'call':name,
                     'fd':key[1], 'table_owner':int(owner[0] if isinstance(owner,tuple) else owner), 'returned':returned,
                     'descriptor':descriptor if descriptor in DESCRIPTOR_KINDS else 'other',
+                    'terminal_record':'pseudo-return' if terminal_pseudo_return(body) else
+                        'unfinished' if (pid,name,timestamp) in unfinished else 'other',
                     'fd_family':family if family in {'AF_INET','AF_INET6','AF_UNIX','AF_NETLINK'} else 'unknown',
                     'header':'not-message' if name != 'sendmsg' else 'null' if header == 'NULL' else
                         'structure' if header and header.startswith('{') else

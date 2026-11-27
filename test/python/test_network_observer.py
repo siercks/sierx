@@ -43,7 +43,8 @@ class NetworkObserverTests(unittest.TestCase):
             observer.parse([line])
         fields=caught.exception.observer_details
         self.assertEqual(fields,{'pid':3421,'fd':14,'table_owner':3421,'returned':None,
-            'role':'chromium','call':'sendmsg','descriptor':'anon_inode','fd_family':'unknown','header':'pointer'})
+            'role':'chromium','call':'sendmsg','descriptor':'anon_inode','fd_family':'unknown',
+            'header':'pointer','terminal_record':'unfinished'})
         self.assertNotIn('0xffff1234',str(caught.exception))
         self.assertNotIn('eventpoll',str(caught.exception))
         self.assertEqual(observer.safe_failure_fields({'pid':True,'fd':-1,'table_owner':10**30,

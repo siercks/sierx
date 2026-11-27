@@ -214,10 +214,16 @@ The buffer reserves 64 MiB per virtual CPU inside the existing 4 GiB guest.
 Guest root snapshots and syncs the capture before emitting the completion marker.
 No host kernel tracing is enabled.
 
-Only an unresolved terminal ptrace entry whose own kernel evidence proves no
-network syscall entry or return anywhere in that thread's captured lifetime may avoid destination
-decoding. PID reuse, an observed kernel call, a completed unknown send, missing
-death evidence, clock uncertainty or trace loss preserve rejection. Explicit
+Only an unresolved terminal ptrace entry whose own complete kernel ledger proves
+non-execution may avoid destination decoding. Every earlier network call in that
+thread must match exactly one kernel entry and return by syscall, descriptor,
+normalized result, order and bounded time, before the terminal uncertainty window.
+The terminal call must have no unmatched kernel entry or return. strace's exact
+terminal `) = ?` rendering qualifies for this same proof, including after an
+unfinished/resumed pair; it does not itself prove cancellation. Restart markers,
+unavailable results and other unknown suffixes do not qualify. PID reuse, an
+executed opaque send, missing or extra history, missing death evidence, clock
+uncertainty or trace loss preserve rejection. Explicit
 external attempts remain counted even when unfinished. Public reports contain
 fixed control results and per-role `cancelled_before_kernel_entry` counts;
 raw kernel records and pointers remain private. Every prior external negative

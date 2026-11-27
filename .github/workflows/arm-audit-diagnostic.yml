@@ -1,0 +1,57 @@
+name: arm-audit-diagnostic
+on:
+  push:
+    branches: ["codex/**"]
+    paths: [".github/workflows/arm-audit-diagnostic.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arm-audit-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: github.event_name == 'workflow_dispatch'
+    name: Exact staged ARM64 audit correction diagnostic (no release acceptance)
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 210
+    env:
+      PROFILE: ubuntu24
+      ARCH: arm64
+      SIERX_HOST_DISCARD_BUILD_IMAGE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install disposable VM preparation prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman python3 curl qemu-system-x86 qemu-system-arm e2fsprogs
+          if ! sudo modprobe kvm; then
+            echo 'KVM unavailable; diagnostic retains bounded native emulation.'
+          fi
+      - name: Retrieve the exact failed staged ARM64 delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/46019157095" > dist/arm-audit-original-run.json
+          gh run download 46019157095 --repo "$GITHUB_REPOSITORY" --name offline-delivery-arm64 --dir dist
+      - run: make offline-previous-prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: make offline-host-prepare
+        env:
+          SIERX_HOST_PREPARE_DIAGNOSTIC: '1'
+      - name: Run all normal scenarios and strict independent audit
+        run: python3 -B scripts/diagnostic-arm-audit-replay.py
+      - name: Package only sanitized nonpromotable evidence
+        if: always()
+        run: python3 -B scripts/diagnostic-arm-audit-replay.py --package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: diagnostic-arm-audit-arm64
+          path: dist/arm-audit-diagnostic-arm64.json
+          if-no-files-found: error
