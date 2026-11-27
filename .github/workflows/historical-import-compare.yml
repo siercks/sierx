@@ -9,7 +9,7 @@ on:
       workload:
         description: Original import or transition in TCG or native OS container
         type: choice
-        options: [import, transition, native-transition]
+        options: [import, transition, native-transition, native-import-stress]
         default: import
 permissions:
   contents: read
@@ -45,6 +45,9 @@ jobs:
             --output "$SIERX_TRACER_DIAGNOSTIC_STATE/strace-6.8.tar.xz"
           python3 -B scripts/diagnostic-native-tracer-build.py \
             >"$SIERX_TRACER_DIAGNOSTIC_STATE/query-prepare.private.log" 2>&1
+          if [[ $COMPARISON_WORKLOAD == native-import-stress ]]; then
+            python3 -B scripts/diagnostic-import-thread-stress.py --prepare
+          fi
       - name: Retrieve exact original failed release inputs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,6 +55,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/42413538496" > dist/historical-run.json
           gh run download 42413538496 --repo "$GITHUB_REPOSITORY" --name offline-delivery-arm64 --dir dist
       - run: make offline-host-prepare
+        if: env.COMPARISON_WORKLOAD != 'native-import-stress'
         env:
           SIERX_HOST_PREPARE_DIAGNOSTIC: '1'
       - run: make offline-previous-prepare
@@ -60,7 +64,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Compare original import in the isolated guest
         run: |
-          if [[ $COMPARISON_WORKLOAD == native-transition ]]; then
+          if [[ $COMPARISON_WORKLOAD == native-import-stress ]]; then
+            export SIERX_TRACER_DIAGNOSTIC_STATE="$GITHUB_WORKSPACE/dist/tracer-race-arm64"
+            python3 -B scripts/diagnostic-import-thread-stress.py --historical
+          elif [[ $COMPARISON_WORKLOAD == native-transition ]]; then
             sudo unshare --mount --propagation private python3 -B scripts/diagnostic-native-transition-compare.py
           elif [[ $COMPARISON_WORKLOAD == transition ]]; then
             sudo python3 -B scripts/diagnostic-transition-tracer-compare.py
@@ -76,13 +83,14 @@ jobs:
           sys.path.insert(0,'scripts')
           import offline_host_diagnostics as diagnostics
           root=Path('dist');root.mkdir(exist_ok=True)
-          workload=os.environ['COMPARISON_WORKLOAD'];assert workload in {'import','transition','native-transition'}
+          workload=os.environ['COMPARISON_WORKLOAD'];assert workload in {'import','transition','native-transition','native-import-stress'}
           value={'suite':f'historical-{workload}-comparison-diagnostic-v1',
                  'revision':os.environ['GITHUB_SHA'],'release_acceptance':False}
           for key,name in (('replay_input','historical-replay-input.json'),
                            ('guest_comparison','historical-guest-import-arm64.json'),
                            ('transition_comparison','historical-transition-tracers-arm64.json'),
                            ('native_transition_comparison','historical-native-transition-tracers-arm64.json'),
+                           ('native_import_stress','historical-native-import-thread-stress-arm64.json'),
                            ('preparation_failure','host-preparation-failure.json')):
               path=root/name
               if path.is_file():
