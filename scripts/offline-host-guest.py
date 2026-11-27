@@ -427,6 +427,14 @@ if __name__ == '__main__':
             log.write('\nFailed phase: ' + PHASE + '\n' + type(error).__name__ + ': ' + str(error) + '\n')
         result = diagnostics.failure_record(error, PHASE)
         diagnostics.checkpoint_failure(HOME, result)
+        if PHASE == 'rootless-database':
+            # Keep the original failed checkpoint authoritative before any
+            # optional manager/journal read. Never restart or retry the unit.
+            try:
+                result['database_failure'] = diagnostics.database_service_failure()
+                result = diagnostics.checkpoint_failure(HOME, result)
+            except Exception:
+                pass
         diagnostics.emit_resources()
         for name in ('sierx-postgres.service','sierx.service','sierx-caddy.service'):
             with LOG.open('ab') as log:

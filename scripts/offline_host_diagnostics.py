@@ -10,6 +10,7 @@ import signal
 import ssl
 import subprocess
 import sys
+import tempfile
 import traceback
 import urllib.error
 from kernel_network_evidence import SCHED_PROCESS_EXIT
@@ -68,6 +69,21 @@ GUEST_COMMAND_DETAILS = {'storage-configuration','database-lock','permission-den
                          'storage-full','resource-unavailable','namespace-clone',
                          'reexec','deadline','unexpected-eof','tls-verification',
                          'connection-refused','manifest-unknown','other'}
+DATABASE_ERROR_PATTERNS = {
+    'unit-not-found':b'unit sierx-postgres.service not found',
+    'start-job-failed':b'job for sierx-postgres.service failed',
+    'readiness-failed':b'postgres did not become ready',
+    'keyring-error':b'keyring', 'permission-denied':b'permission denied',
+    'operation-not-permitted':b'operation not permitted',
+    'read-only-filesystem':b'read-only file system', 'namespace-clone':b'cannot clone',
+    'uid-map-failed':b'newuidmap:', 'gid-map-failed':b'newgidmap:',
+    'runtime-error':b'oci runtime error', 'runtime-crun-error':b'crun: ',
+    'unsupported-key':b'unsupported key', 'unrecognized-key':b'unrecognized key',
+    'storage-full':b'no space left on device', 'mount-failed':b'failed to mount',
+    'address-in-use':b'address already in use', 'cgroup-error':b'cgroup',
+    'postgres-fatal':b'fatal:', 'selinux-denial':b'avc:  denied',
+    'out-of-memory':b'out of memory',
+}
 HOST_PHASES = {'host-verify-inputs','host-extract-os','host-configure-os','host-unpack-delivery',
                'host-create-filesystem','host-launch','host-read-evidence'}
 DEPLOY_FAILURE_PHASES = {'actual-plan-apply', 'two-release-apply-previous',
@@ -112,6 +128,10 @@ def sanitize_failure(value):
         https = sanitize_https_failure(value.get('https_failure'))
         if https is not None:
             result['https_failure'] = https
+    if result['phase'] == 'rootless-database':
+        database = sanitize_database_failure(value.get('database_failure'))
+        if database is not None:
+            result['database_failure'] = database
     command=value.get('guest_command')
     if isinstance(command,str) and command in GUEST_COMMANDS:
         result['guest_command']=command
@@ -223,6 +243,84 @@ def sanitize_failure(value):
                 if selected:safe[name]=selected
         if safe:result['observer_errors']=safe
     return result
+
+
+def sanitize_database_failure(value):
+    """Current service state and fixed journal patterns are diagnostics, not cause proof."""
+    if not isinstance(value, dict):
+        return None
+    captures = {'observed', 'unavailable', 'invalid'}
+    result = {key: value[key] if isinstance(value.get(key), str) and value[key] in captures else 'invalid'
+              for key in ('state_capture', 'journal_capture')}
+    if result['state_capture'] == 'observed':
+        state = value.get('state')
+        selected = {}
+        if isinstance(state, dict):
+            for key, allowed in offline_apply_trace.SERVICE_PROPERTIES.items():
+                if isinstance(state.get(key), str) and state[key] in allowed:
+                    selected[key] = state[key]
+            for key, maximum in (('ExecMainCode', 3), ('ExecMainStatus', 255), ('NRestarts', 10**6)):
+                number = state.get(key)
+                if type(number) is int and 0 <= number <= maximum:
+                    selected[key] = number
+        if selected:
+            result['state'] = selected
+        else:
+            result['state_capture'] = 'invalid'
+    if result['journal_capture'] == 'observed':
+        categories = value.get('categories')
+        truncated = value.get('journal_tail_truncated')
+        if (type(truncated) is bool and isinstance(categories, list)
+                and len(categories) <= len(DATABASE_ERROR_PATTERNS)
+                and all(isinstance(item, str) and item in DATABASE_ERROR_PATTERNS for item in categories)):
+            result.update(categories=sorted(set(categories)), journal_tail_truncated=truncated)
+        else:
+            result['journal_capture'] = 'invalid'
+    return result
+
+
+def database_service_failure():
+    """Read only the fixed database unit after the original failed checkpoint exists."""
+    def bounded(args, limit):
+        try:
+            with tempfile.TemporaryFile() as output:
+                response = subprocess.run(args, stdout=output, stderr=subprocess.DEVNULL, timeout=8)
+                if response.returncode:
+                    return None
+                size = output.tell()
+                output.seek(max(0, size-limit))
+                return output.read(limit), size > limit
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    result = {'state_capture':'unavailable', 'journal_capture':'unavailable'}
+    properties = ('Id', *offline_apply_trace.SERVICE_PROPERTIES, 'ExecMainCode', 'ExecMainStatus', 'NRestarts')
+    response = bounded(('systemctl','--user','show','--no-pager',
+                        '--property='+','.join(properties),'sierx-postgres.service'), 8192)
+    if response is not None:
+        raw, truncated = response
+        result['state_capture'] = 'invalid'
+        try:
+            rows = [line.split('=', 1) for line in raw.decode('ascii').splitlines() if line]
+            if (not truncated and all(len(row)==2 for row in rows)
+                    and len({row[0] for row in rows})==len(rows)):
+                state = dict(rows)
+                if state.pop('Id', None) == 'sierx-postgres.service':
+                    for key in ('ExecMainCode','ExecMainStatus','NRestarts'):
+                        number = state.get(key)
+                        if isinstance(number, str) and number.isascii() and number.isdecimal():
+                            state[key] = int(number) if len(number) <= 7 else -1
+                    result.update(state_capture='observed', state=state)
+        except UnicodeDecodeError:
+            pass
+    response = bounded(('journalctl','--user','--no-pager','--all','--output=cat',
+                        '-u','sierx-postgres.service','-n','40'), 65536)
+    if response is not None:
+        raw, truncated = response
+        result.update(journal_capture='observed', journal_tail_truncated=truncated,
+                      categories=sorted(key for key, pattern in DATABASE_ERROR_PATTERNS.items()
+                                        if pattern in raw.lower()))
+    return sanitize_database_failure(result)
 
 
 def guest_command_failure(args, stderr):

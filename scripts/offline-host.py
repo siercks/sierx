@@ -76,6 +76,14 @@ def transition_stress_envelope(report,cycles):
             'revision':report['release']['revision'],'transition_cycles':cycles,'host_report':report}
 
 
+def write_closeout_report(path, result, diagnostic=False):
+    # Mark diagnostics before writing any completed raw report. Normal release
+    # evidence retains exactly the validated fields; the checks above still run.
+    value = {**result, 'release_acceptance':False} if diagnostic else result
+    path.write_text(json.dumps(value, indent=2) + '\n')
+    path.chmod(0o644)
+
+
 def suite_digest(scripts=None, packages=None):
     digest = hashlib.sha256()
     scripts = scripts or ROOT / 'scripts'
@@ -690,8 +698,7 @@ def main(args):
                 report.chmod(0o644)
                 print('offline-host: transition stress diagnostic passed; no release acceptance',flush=True)
                 return
-            report.write_text(json.dumps(result, indent=2) + '\n')
-            report.chmod(0o644)  # Sanitized evidence is readable by the artifact uploader.
+            write_closeout_report(report, result, getattr(args, 'diagnostic_report', False))
             print('offline-host: real isolated rootless installer passed on ' + result['profile'], flush=True)
         finally:
             if process is not None and process.poll() is None:
@@ -742,6 +749,8 @@ if __name__ == '__main__':
     parser.add_argument('--previous-sha256')
     parser.add_argument('--previous-evidence')
     parser.add_argument('--development',action='store_true',help='Limited fixture development; never valid for promotion')
+    parser.add_argument('--diagnostic-report',action='store_true',
+                        help='Mark the completed raw full report as nonpromotable after all checks')
     parser.add_argument('--runtime-probe',action='store_true',help='Development-only runtime/timer diagnosis; omits closeout scenarios')
     parser.add_argument('--acquisition-probe',action='store_true',help='Development-only acquisition diagnosis in the real guest; never release acceptance')
     parser.add_argument('--transition-probe', action='store_true',
