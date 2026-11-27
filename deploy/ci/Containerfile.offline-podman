@@ -1,0 +1,15 @@
+# Connected builder only; the compiler/development packages never enter the VM.
+ARG HOST_IMAGE
+ARG GO_IMAGE
+FROM ${GO_IMAGE} AS compiler
+FROM ${HOST_IMAGE}
+USER root
+COPY --from=compiler /usr/local/go/ /usr/local/go/
+ENV PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off CGO_ENABLED=1 GOMAXPROCS=4 GOFLAGS=-p=4
+RUN dnf --enablerepo=crb install -y gcc make git pkgconf-pkg-config systemd-devel \
+      libseccomp-devel glib2-devel shadow-utils-subid-devel python3 curl-minimal ca-certificates && dnf clean all
+WORKDIR /build
+COPY offline_guest_podman.py ./
+RUN curl -fsSL "$(python3 -B offline_guest_podman.py --source-url)" -o podman.tar.gz && \
+    python3 -B offline_guest_podman.py --archive podman.tar.gz --output /out

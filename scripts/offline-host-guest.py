@@ -18,6 +18,7 @@ import offline_host_inputs
 import ipaddress
 import offline_host_diagnostics as diagnostics
 import offline_guest_tracer
+import offline_guest_podman
 import offline_smoke_trace
 
 HOME = Path(os.environ['HOME'])
@@ -183,6 +184,7 @@ def main():
         os.set_inheritable(diagnostics.INSTALLER_MARKER_FD, False)
         diagnostics.mark_installer('sierx-installer-start')
     tracer = offline_guest_tracer.load_receipt()
+    podman_build = offline_guest_podman.load_fixture()
     evidence.validate_node(run('/usr/local/bin/node', '--version'))
     require(Path('/proc/1/comm').read_text().strip() == 'systemd', 'Guest system manager is not real systemd')
     require(any(line in {'0::/', '0::/init.scope'} for line in Path('/proc/1/cgroup').read_text().splitlines()),
@@ -409,6 +411,7 @@ def main():
             'virtual_cpus':os.cpu_count(),
             'lifecycle_check_timeout_seconds':timeout_seconds,
             'internal_addresses':sorted(internal),'scenarios':scenarios,'host_versions':versions,'tracer':tracer,
+            'podman_build':podman_build,
             **({'transition_stress':stress} if stress else {})}
 
 

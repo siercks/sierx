@@ -18,6 +18,19 @@ and report validation rejects evidence from an unpatched browser driver.
 After changing this pin, rerun `make ci-local-prepare` and
 `make offline-host-prepare`; existing prepared images do not update themselves.
 
+The connected Rocky fixture builder uses maintained Podman 5.8.11, with the
+matching Quadlet and rootlessport helpers and upstream configuration. Podman 6
+[removed slirp4netns support](https://github.com/podman-container-tools/podman/blob/v6.0.0/RELEASE_NOTES.md#600),
+which the no-NIC rootless database scenario explicitly requires. The builder
+checks the official source archive hash, immutable Go 1.27.4 compiler image,
+CGO and seccomp/systemd/libsubid build features. The compiler and development
+packages stay outside the exported OS. Preboot and guest checks verify all
+runtime/helper/configuration hashes and both systemd generator links; the host
+report binds the same receipt and actual version. Ubuntu keeps its distribution
+runtime. This preparation changes only the disposable acceptance OS. Refresh
+the source and compiler pins together with their security review and rerun the
+complete host matrix when updating this baseline.
+
 KVM runs have a 1,900-second workload limit. A host without nested virtualization
 uses native-architecture TCG with a bounded 10,800-second workload limit and
 1,800-second command limits (5,400 seconds for the complete browser command).

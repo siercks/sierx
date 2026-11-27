@@ -464,6 +464,7 @@ class EvidenceTests(unittest.TestCase):
                        'checks':evidence.CHECKS, 'isolation':evidence.ISOLATION,'virtual_cpus':2,'lifecycle_check_timeout_seconds':1}
         self.report['coverage']='development'
         self.report['tracer']={**offline_guest_tracer.PINS,'binary_sha256':'f'*64}
+        self.report['podman_build']=None
         self.report['host_versions']={'kernel':'6.8.0-fixture','systemd':'systemd 255','podman':'podman version 4.9.3','selinux':'disabled'}
         self.report['browser'] = {'result':'passed', 'playwright':'1.63.0', 'browsers':[
             {'engine':engine, 'version':'1.0', 'checks':evidence.BROWSER_CHECKS, 'external_requests':0,

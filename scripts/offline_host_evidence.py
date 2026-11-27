@@ -4,6 +4,7 @@ import math
 import json
 from network_observer import CONTROLS, PROCESSES
 import offline_guest_tracer
+import offline_guest_podman
 
 SCHEMA = 2
 SUITE = 'offline-host-v2'
@@ -182,6 +183,7 @@ def validate(report, bundle, expected, suite_sha256):
             or any(not isinstance(value,str) or not value or len(value)>256 or '\n' in value or '\r' in value for value in versions.values())
             or versions['selinux'] not in {'disabled','permissive','enforcing'}):
         raise ValueError('Missing actual host software/profile versions')
+    offline_guest_podman.validate_report(report)
 
 
 def validate_network(report):

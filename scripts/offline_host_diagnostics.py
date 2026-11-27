@@ -46,13 +46,14 @@ FAILURE_TYPES = {'TimeoutExpired', 'TimeoutError', 'ValueError', 'RuntimeError',
                  'BrokenPipeError', 'ServiceExit'}
 FRAME_FILES = {'offline-host-guest.py','offline-host-scenarios.py','offline-local-registry.py',
                'offline_host_diagnostics.py','offline_host_inputs.py','offline_host_evidence.py',
-               'offline-network-controls.py','offline.py','offline_guest_tracer.py'}
+               'offline-network-controls.py','offline.py','offline_guest_tracer.py','offline_guest_podman.py'}
 OBSERVER_FLAGS = {'ptrace','seccomp','wait','io-error','permission-denied','no-child',
                   'unexpected-wait','other-error'}
 HOST_TOOLS = {'tar','mkfs.ext4','debugfs','unknown'}
 HOST_DETAILS = {'storage-full','permission-denied','out-of-memory'}
 HOST_LAUNCH_REASONS = {'startup-deadline', 'vm-deadline', 'completion-suite-mismatch'}
 PREPARATION_STAGES = {'identify-fixture', 'pull-os', 'pull-node', 'inspect-images', 'build-inputs',
+                      'pull-runtime-compiler', 'build-compatible-runtime',
                       'build-os', 'create-export-container', 'export-os', 'hash-os', 'cleanup'}
 BUILD_STAGES = {'os-packages', 'postgres-client', 'npm-dependencies', 'browser-install',
                 'certificate-tools', 'guest-kernel', 'uid-mapping'}

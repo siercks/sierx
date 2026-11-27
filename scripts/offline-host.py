@@ -26,13 +26,15 @@ import offline_archive
 import offline_host_diagnostics as diagnostics
 import kernel_network_evidence
 import offline_guest_tracer
+import offline_guest_podman
 
 ROOT = Path(__file__).resolve().parent.parent
 SUITE_FILES = ('offline-host.py', 'offline-host-guest.py', 'offline_host_evidence.py', 'offline-browser.mjs', 'offline-browser-navigation.mjs',
                'network_observer.py', 'offline-network-controls.py', 'offline-host-scenarios.py',
                'offline_host_inputs.py', 'offline-local-registry.py', 'offline.py','offline_archive.py',
                'offline_host_diagnostics.py', 'offline_apply_trace.py',
-               'kernel_network_evidence.py', 'offline-kernel-observer.py', 'offline_guest_tracer.py', 'offline_smoke_trace.py')
+               'kernel_network_evidence.py', 'offline-kernel-observer.py', 'offline_guest_tracer.py',
+               'offline_guest_podman.py', 'offline_smoke_trace.py')
 
 
 def tracer_wrapper(name,trace_calls,directory=Path('/var/log/sierx-network'),report_exits=False,
@@ -515,6 +517,7 @@ def main(args):
         stage(args,'host-configure-os')
         tracer = offline_guest_tracer.load_receipt(root / offline_guest_tracer.RECEIPT.relative_to('/'),
                                                   root / offline_guest_tracer.BINARY.relative_to('/'))
+        podman_build = offline_guest_podman.load_fixture(root)
         setup(root, args)
         tests = root / 'opt/acceptance/tests'
         tests.mkdir(parents=True, exist_ok=True)
@@ -697,6 +700,8 @@ def main(args):
             stress=result.pop('transition_stress',None) if getattr(args,'transition_stress',False) else None
             if result.get('tracer') != tracer:
                 raise ValueError('Guest observer identity differs from the independently checked OS fixture')
+            if result.get('podman_build') != podman_build:
+                raise ValueError('Guest runtime identity differs from the independently checked OS fixture')
             evidence.validate(result, data, args.expected_sha256, args.suite_sha256)
             result['network'] = audit_network(disk, result, report, arch, args.suite_sha256,
                                              data['release']['revision'], mode)

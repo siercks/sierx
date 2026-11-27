@@ -6,6 +6,7 @@ diagnostic=${SIERX_HOST_PREPARE_DIAGNOSTIC:-0}
 stage=identify-fixture
 scratch=
 container=
+runtime_image=
 cleanup() {
   local status=$?
   if [[ $diagnostic == 1 && $status != 0 ]]; then
@@ -26,6 +27,7 @@ if record is not None:
 PY
   fi
   [[ -z $container ]] || podman rm "$container" >/dev/null
+  if [[ -n $runtime_image ]] && podman image exists "$runtime_image"; then podman rmi "$runtime_image" >/dev/null; fi
   [[ -z $scratch ]] || rm -rf "$scratch"
 }
 trap cleanup EXIT
@@ -48,12 +50,28 @@ base_id=$(podman image inspect --format '{{.Id}}' "$base")
 node_id=$(podman image inspect --format '{{.Id}}' "$node")
 stage=build-inputs
 scratch=$(mktemp -d)
+runtime_input=$base_id
+if [[ $profile == rocky10 ]]; then
+  stage=pull-runtime-compiler
+  compiler=$(python3 -B scripts/offline_guest_podman.py --compiler-image)
+  podman pull "$compiler"
+  compiler_id=$(podman image inspect --format '{{.Id}}' "$compiler")
+  stage=build-compatible-runtime
+  mkdir "$scratch/runtime"
+  cp deploy/ci/Containerfile.offline-podman "$scratch/runtime/Containerfile"
+  cp scripts/offline_guest_podman.py "$scratch/runtime/"
+  runtime_image=localhost/sierx-offline-podman:$(basename "$scratch")
+  podman build --pull=never --build-arg HOST_IMAGE="$base_id" --build-arg GO_IMAGE="$compiler_id" \
+    --tag "$runtime_image" "$scratch/runtime"
+  runtime_input=$(podman image inspect --format '{{.Id}}' "$runtime_image")
+fi
 cp deploy/ci/Containerfile.offline-host "$scratch/Containerfile"
-cp scripts/offline_guest_tracer.py test/diagnostics/tracer-termination/termination-fix.json "$scratch/"
+cp scripts/offline_guest_tracer.py scripts/offline_guest_podman.py test/diagnostics/tracer-termination/termination-fix.json "$scratch/"
 cp web/package.json web/package-lock.json "$scratch/"
 image=localhost/sierx-offline-host:$profile-$arch
 stage=build-os
-build_args=(--pull=never --build-arg HOST_IMAGE="$base_id" --build-arg NODE_IMAGE="$node_id" --tag "$image" "$scratch")
+build_args=(--pull=never --target "$profile" --build-arg HOST_IMAGE="$base_id" --build-arg NODE_IMAGE="$node_id" \
+  --build-arg PODMAN_IMAGE="$runtime_input" --tag "$image" "$scratch")
 if [[ $diagnostic == 1 ]]; then
   podman build "${build_args[@]}" 2>&1 | tee "$scratch/build.log"
 else

@@ -1,7 +1,9 @@
 # Connected preparation only. This test OS is never a shipped application image.
 ARG HOST_IMAGE
 ARG NODE_IMAGE
+ARG PODMAN_IMAGE
 FROM ${NODE_IMAGE} AS node
+FROM ${PODMAN_IMAGE} AS compatible_podman
 # Build against the existing Debian browser-tooling base, keeping the pinned
 # decoder independent of newer Rocky development headers. Both guest runtimes
 # are checked against the resulting binary and its exact receipt.
@@ -13,7 +15,7 @@ WORKDIR /build
 COPY offline_guest_tracer.py termination-fix.json ./
 RUN curl -fsSL https://github.com/strace/strace/releases/download/v6.8/strace-6.8.tar.xz -o strace-6.8.tar.xz && \
     python3 -B offline_guest_tracer.py --archive strace-6.8.tar.xz --patch termination-fix.json --output /out
-FROM ${HOST_IMAGE}
+FROM ${HOST_IMAGE} AS common
 USER root
 COPY --from=node /usr/local/bin/ /usr/local/bin/
 COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
@@ -27,7 +29,7 @@ RUN printf 'SIERX_HOST_BUILD_STAGE: os-packages\n' && if command -v apt-get >/de
       printf 'SIERX_HOST_BUILD_STAGE: postgres-client\n' && \
       apt-get update && apt-get install -y --no-install-recommends postgresql-client-18; \
     else \
-      dnf install -y systemd dbus-daemon podman shadow-utils slirp4netns iproute procps-ng \
+      dnf install -y systemd dbus-daemon podman shadow-utils shadow-utils-subid libseccomp slirp4netns iproute procps-ng \
         python3 curl-minimal ca-certificates openssl strace \
         alsa-lib atk at-spi2-atk at-spi2-core cups-libs libdrm gtk3 libX11 libXcomposite \
         libXdamage libXext libXfixes libXrandr libxcb libxkbcommon mesa-libgbm nss nspr \
@@ -60,3 +62,13 @@ RUN printf 'SIERX_HOST_BUILD_STAGE: guest-kernel\n' && if command -v apt-get >/d
 # rootless OCI export and ext4 population, which do not retain file capabilities.
 RUN printf 'SIERX_HOST_BUILD_STAGE: uid-mapping\n' && chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
 ENTRYPOINT ["/usr/lib/systemd/systemd"]
+# Ubuntu keeps its distribution runtime. Rocky 6.x packages removed the
+# slirp4netns backend required by these acceptance scenarios; install the
+# maintained source-pinned 5.8 runtime and its matching helpers only here.
+FROM common AS ubuntu24
+FROM common AS rocky10
+COPY --from=compatible_podman /out/ /opt/sierx-host-runtime/
+COPY offline_guest_podman.py /opt/sierx-host-runtime/install.py
+RUN python3 -B /opt/sierx-host-runtime/install.py --install /opt/sierx-host-runtime && \
+    test "$(/usr/bin/podman --version)" = 'podman version 5.8.11' && \
+    rm -rf /opt/sierx-host-runtime
