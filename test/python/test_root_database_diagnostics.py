@@ -29,6 +29,38 @@ FAILED={'result':'failed','phase':'rootless-database','failure_type':'RuntimeErr
 
 
 class RootDatabaseDiagnosticsTests(unittest.TestCase):
+    def test_upstream_removal_error_requires_exact_static_condition_and_retains_unit_correlation(self):
+        message='Error: slirp4netns support has been removed, use --network=pasta instead; private context'
+        for matched in (False,True):
+            record={'_UID':'1001','_COMM':'podman','MESSAGE':message}
+            if matched:record['_SYSTEMD_USER_UNIT']='sierx-postgres.service'
+            value=diagnostics.database_journal_records(json.dumps(record).encode(),False)
+            self.assertIn('slirp4netns-support-removed',value['journal_runtime_error_categories'])
+            self.assertEqual('slirp4netns-support-removed' in value['journal_database_unit_categories'],matched)
+            self.assertNotIn('private',json.dumps(value))
+        record={'_UID':'1001','_COMM':'podman','MESSAGE':'Error: pasta failed; slirp4netns helper not usable'}
+        value=diagnostics.database_journal_records(json.dumps(record).encode(),False)
+        self.assertNotIn('slirp4netns-support-removed',value['categories'])
+        planted={**value,'journal_database_unit_categories':['slirp4netns-support-removed']}
+        self.assertEqual(diagnostics.sanitize_database_failure(planted)['journal_capture'],'invalid')
+
+    def test_numeric_installed_podman_version_rejects_private_unbounded_and_failed_output(self):
+        for raw,code,expected in ((b'podman version 6.0.2\n',0,[6,0,2]),
+                (b'podman version 5.8.0-rc1\n',0,[5,8,0]),(b'private credential',0,None),
+                (b'podman version 6.0.2\nprivate',0,None),(b'x'*257,0,None),
+                (b'podman version 1000.0.0',0,None),(b'podman version 6.0.2',1,None)):
+            def run(args,*,stdout,stderr,timeout):
+                self.assertEqual(args,('/usr/bin/podman','--version'));self.assertEqual(timeout,3)
+                self.assertEqual(stderr,subprocess.DEVNULL);stdout.write(raw)
+                return subprocess.CompletedProcess(args,code)
+            with self.subTest(raw=raw[:20],code=code),patch.object(diagnostics.subprocess,'run',side_effect=run):
+                self.assertEqual(diagnostics.database_podman_version(),expected)
+        with patch.object(diagnostics.subprocess,'run',side_effect=subprocess.TimeoutExpired('private',3)):
+            self.assertIsNone(diagnostics.database_podman_version())
+        value=diagnostics.sanitize_database_failure({'state_capture':'unavailable','journal_capture':'unavailable',
+                                                    'journal_podman_version':[True,0,0]})
+        self.assertNotIn('journal_podman_version',value)
+
     def test_structured_counts_distinguish_empty_unclassified_and_scoped_runtime_errors(self):
         empty=diagnostics.database_journal_records(b'',False)
         self.assertEqual(empty['journal_capture'],'observed')
@@ -72,6 +104,10 @@ class RootDatabaseDiagnosticsTests(unittest.TestCase):
 
     def checkpoint(self,directory,response=None,error=None):
         def run(args,*,stdout,stderr,timeout):
+            if args==('/usr/bin/podman','--version'):
+                self.assertEqual(timeout,3)
+                stdout.write(b'podman version 6.0.2\n')
+                return subprocess.CompletedProcess(args,0)
             self.assertEqual(args,('journalctl','--no-pager','--all','--output=json','_UID=1001','-n','40'))
             self.assertEqual(stderr,subprocess.DEVNULL);self.assertEqual(timeout,8)
             if error:raise error
@@ -101,6 +137,7 @@ class RootDatabaseDiagnosticsTests(unittest.TestCase):
             self.assertEqual(merged['database_failure']['journal_scope'],'root-synthetic-user')
             self.assertEqual(merged['database_failure']['journal_records'],1)
             self.assertEqual(merged['database_failure']['journal_database_unit_records'],1)
+            self.assertEqual(merged['database_failure']['journal_podman_version'],[6,0,2])
             self.assertEqual(diagnostics.sanitize_failure(merged),merged)
             with self.assertRaises(ValueError):self.checkpoint(directory)
 

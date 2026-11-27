@@ -87,6 +87,9 @@ DATABASE_ERROR_PATTERNS = {
     'pasta-mentioned':b'pasta', 'conmon-mentioned':b'conmon',
     'executable-missing':b'executable file not found', 'unknown-flag':b'unknown flag',
     'overlay-helper-mentioned':b'fuse-overlayfs', 'network-namespace-mentioned':b'network namespace',
+    # Static error in upstream Podman 6 libpod/networking_linux.go and
+    # pkg/specgen/namespaces.go; do not infer removal from helper names alone.
+    'slirp4netns-support-removed':b'slirp4netns support has been removed',
 }
 DATABASE_RUNTIME_COMMANDS={'podman','crun','conmon','slirp4netns','pasta','netavark','fuse-overlayfs'}
 DATABASE_JOURNAL_SOURCES=DATABASE_RUNTIME_COMMANDS | {'systemd','other'}
@@ -269,6 +272,10 @@ def sanitize_database_failure(value):
     code=value.get('journal_exit_code')
     if type(code) is int and 0<=code<=255:
         result['journal_exit_code']=code
+    version=value.get('journal_podman_version')
+    if (isinstance(version,list) and len(version)==3
+            and all(type(part) is int and 0<=part<=999 for part in version)):
+        result['journal_podman_version']=version
     if result['state_capture'] == 'observed':
         state = value.get('state')
         selected = {}
@@ -297,14 +304,22 @@ def sanitize_database_failure(value):
         counts={key:value.get(key) for key in DATABASE_JOURNAL_COUNTS}
         sources=value.get('journal_sources')
         size=value.get('journal_bytes')
+        unit_categories=value.get('journal_database_unit_categories')
+        runtime_categories=value.get('journal_runtime_error_categories')
         if (all(type(number) is int and 0<=number<=40 for number in counts.values())
                 and isinstance(sources,dict) and set(sources)==DATABASE_JOURNAL_SOURCES
                 and all(type(number) is int and 0<=number<=40 for number in sources.values())
                 and sum(sources.values())==counts['journal_records']
                 and counts['journal_database_unit_records']<=counts['journal_records']
                 and counts['journal_unclassified_error_records']<=counts['journal_runtime_error_records']<=counts['journal_records']
-                and type(size) is int and 0<=size<=65536):
-            result.update(counts,journal_sources=sources,journal_bytes=size)
+                and type(size) is int and 0<=size<=65536
+                and all(isinstance(items,list) and len(items)<=len(DATABASE_ERROR_PATTERNS)
+                        and all(isinstance(item,str) and item in DATABASE_ERROR_PATTERNS for item in items)
+                        for items in (unit_categories,runtime_categories))
+                and set(result.get('categories',[]))==set(unit_categories)|set(runtime_categories)):
+            result.update(counts,journal_sources=sources,journal_bytes=size,
+                journal_database_unit_categories=sorted(set(unit_categories)),
+                journal_runtime_error_categories=sorted(set(runtime_categories)))
         else:
             result['journal_capture']='invalid'
             result.pop('categories',None)
@@ -320,7 +335,7 @@ def database_journal_records(raw,truncated):
         return result
     sources=dict.fromkeys(DATABASE_JOURNAL_SOURCES,0)
     count=unit_count=error_count=unclassified=0
-    categories=set()
+    categories=set();unit_categories=set();runtime_categories=set()
     try:
         for line in raw.splitlines():
             if not line.strip():continue
@@ -341,6 +356,8 @@ def database_journal_records(raw,truncated):
             if runtime_error:error_count+=1
             selected={key for key,pattern in DATABASE_ERROR_PATTERNS.items() if pattern in message} if unit or runtime_error else set()
             categories.update(selected)
+            if unit:unit_categories.update(selected)
+            if runtime_error:runtime_categories.update(selected)
             if runtime_error and not selected:unclassified+=1
     except (ValueError,UnicodeError):
         return result
@@ -348,10 +365,27 @@ def database_journal_records(raw,truncated):
     # that an error or record was absent.
     if truncated:return result
     result.update(journal_capture='observed',categories=sorted(categories),
+                  journal_database_unit_categories=sorted(unit_categories),
+                  journal_runtime_error_categories=sorted(runtime_categories),
                   journal_tail_truncated=False,journal_bytes=len(raw),journal_sources=sources,
                   journal_records=count,journal_database_unit_records=unit_count,
                   journal_runtime_error_records=error_count,journal_unclassified_error_records=unclassified)
     return sanitize_database_failure(result)
+
+
+def database_podman_version():
+    """Only the installed guest binary's numeric version, never command text."""
+    try:
+        with tempfile.TemporaryFile() as output:
+            response=subprocess.run(('/usr/bin/podman','--version'),stdout=output,
+                                    stderr=subprocess.DEVNULL,timeout=3)
+            if response.returncode or output.tell()>256:return None
+            output.seek(0)
+            match=re.fullmatch(r'podman version ([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})'
+                r'(?:[-+~][A-Za-z0-9._~+-]{1,64})?\s*',output.read(256).decode('ascii'))
+            return list(map(int,match.groups())) if match else None
+    except (OSError,UnicodeError,subprocess.SubprocessError):
+        return None
 
 
 def checkpoint_database_journal(result,directory):
@@ -387,6 +421,8 @@ def checkpoint_database_journal(result,directory):
         evidence['journal_failure']='timeout'
     except (OSError,subprocess.SubprocessError):
         evidence['journal_failure']='io-error'
+    version=database_podman_version()
+    if version is not None:evidence['journal_podman_version']=version
     value={'schema':1,'suite':'offline-database-failure-v1','suite_sha256':suite,
            'result':'failed','phase':'rootless-database',
            'database_failure':sanitize_database_failure(evidence)}
