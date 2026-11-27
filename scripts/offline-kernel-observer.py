@@ -149,6 +149,16 @@ def finish():
         suite = (DIRECTORY/'suite.sha256').read_text().strip()
         if result.get('result') not in {'passed','failed'} or not re.fullmatch('[a-f0-9]{64}',suite):
             raise ValueError('Guest completion identity is invalid')
+        # User journals can be unavailable with volatile guest logging. The
+        # existing root supervisor may read only this failed synthetic DB unit.
+        # Keep raw messages private and finish the original failure if optional
+        # evidence collection fails. No passing run performs this extra query.
+        if result['result']=='failed' and result.get('phase')=='rootless-database':
+            try:
+                import offline_host_diagnostics as diagnostics
+                diagnostics.checkpoint_database_journal(result,DIRECTORY)
+            except Exception:
+                pass
         print('SIERX_FINISHED: '+suite+' '+result['result'],flush=True)
 
 

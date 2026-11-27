@@ -339,6 +339,7 @@ def disk_file(disk, name):
     # Only fixed guest paths are accepted, never operator-provided debugfs commands.
     paths = {'result.json':'/home/acceptance/result.json', 'failure.json':'/home/acceptance/failure.json',
              'service-failure.json':'/var/log/sierx-network/service-failure.json',
+             'database-failure.json':'/var/log/sierx-network/database-failure.json',
              'diagnostics.log':'/home/acceptance/diagnostics.log',
              'manager.trace':'/var/log/sierx-network/manager.trace', 'manager.stderr':'/var/log/sierx-network/manager.stderr',
              'installer.trace':'/var/log/sierx-network/installer.trace', 'installer.stderr':'/var/log/sierx-network/installer.stderr',
@@ -383,6 +384,18 @@ def record_failure(report, result, log, arch, suite, revision):
     return failure
 
 
+def enrich_database_failure(disk,result,suite):
+    if not isinstance(result,dict) or result.get('result')!='failed' or result.get('phase')!='rootless-database':
+        return result
+    try:
+        raw=disk_file(disk,'database-failure.json')
+        if raw and len(raw)<=65536:
+            return diagnostics.merge_database_journal(result,json.loads(raw),suite)
+    except (ValueError,OSError,subprocess.SubprocessError):
+        pass
+    return result
+
+
 def retain_incomplete_failure(disk, report, arch, suite, revision):
     # A failed service can power off before the independent completion marker.
     # Recover only a failure diagnostic; a recovered pass must NEVER bypass the
@@ -401,6 +414,7 @@ def retain_incomplete_failure(disk, report, arch, suite, revision):
             break
     if result is None:
         return None
+    result=enrich_database_failure(disk,result,suite)
     # Do not let an unreadable private journal discard the primary diagnostic.
     try:
         log = disk_file(disk, 'diagnostics.log')
@@ -633,6 +647,7 @@ def main(args):
             if result.get('result')!=finished[1]:
                 raise ValueError('Guest result does not match its completion marker')
             if result.get('result') == 'failed':
+                result = enrich_database_failure(disk,result,args.suite_sha256)
                 failure = record_failure(report, result, disk_file(disk, 'diagnostics.log'),
                                          arch, args.suite_sha256, data['release']['revision'])
                 failed_phase = failure['phase']

@@ -252,6 +252,15 @@ def sanitize_database_failure(value):
     captures = {'observed', 'unavailable', 'invalid'}
     result = {key: value[key] if isinstance(value.get(key), str) and value[key] in captures else 'invalid'
               for key in ('state_capture', 'journal_capture')}
+    scope=value.get('journal_scope')
+    if isinstance(scope,str) and scope in {'guest-user','root-system-user-unit'}:
+        result['journal_scope']=scope
+    reason=value.get('journal_failure')
+    if isinstance(reason,str) and reason in {'command-exit','timeout','io-error'}:
+        result['journal_failure']=reason
+    code=value.get('journal_exit_code')
+    if type(code) is int and 0<=code<=255:
+        result['journal_exit_code']=code
     if result['state_capture'] == 'observed':
         state = value.get('state')
         selected = {}
@@ -277,6 +286,78 @@ def sanitize_database_failure(value):
         else:
             result['journal_capture'] = 'invalid'
     return result
+
+
+def checkpoint_database_journal(result,directory):
+    """Root-only, failed-only fixed guest unit query before its completion marker."""
+    if not isinstance(result,dict) or result.get('result')!='failed' or result.get('phase')!='rootless-database':
+        return None
+    if os.geteuid()!=0:
+        raise PermissionError('Database journal capture requires the guest root supervisor')
+    directory=Path(directory)
+    if directory.is_symlink() or not directory.is_dir() or directory.stat().st_mode & 0o077:
+        raise ValueError('Database journal checkpoint requires protected guest storage')
+    suite=(directory/'suite.sha256').read_text().strip()
+    if not re.fullmatch('[a-f0-9]{64}',suite):
+        raise ValueError('Missing database diagnostic suite identity')
+    evidence={'state_capture':'unavailable','journal_capture':'unavailable',
+              'journal_scope':'root-system-user-unit'}
+    try:
+        with tempfile.TemporaryFile() as output:
+            response=subprocess.run(('journalctl','--no-pager','--all','--output=cat',
+                '_UID=1001','_SYSTEMD_USER_UNIT=sierx-postgres.service','+',
+                '_UID=1001','USER_UNIT=sierx-postgres.service','-n','40'),
+                stdout=output,stderr=subprocess.DEVNULL,timeout=8)
+            if response.returncode:
+                evidence['journal_failure']='command-exit'
+                if 0<=response.returncode<=255:
+                    evidence['journal_exit_code']=response.returncode
+            else:
+                size=output.tell();output.seek(max(0,size-65536));raw=output.read(65536).lower()
+                evidence.update(journal_capture='observed',journal_tail_truncated=size>65536,
+                    categories=sorted(key for key,pattern in DATABASE_ERROR_PATTERNS.items() if pattern in raw))
+    except subprocess.TimeoutExpired:
+        evidence['journal_failure']='timeout'
+    except (OSError,subprocess.SubprocessError):
+        evidence['journal_failure']='io-error'
+    value={'schema':1,'suite':'offline-database-failure-v1','suite_sha256':suite,
+           'result':'failed','phase':'rootless-database',
+           'database_failure':sanitize_database_failure(evidence)}
+    target=directory/'database-failure.json'
+    if target.exists() or target.is_symlink():
+        raise ValueError('Database checkpoint already exists')
+    pending=directory/'database-failure.pending.json'
+    fd=os.open(pending,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+    with os.fdopen(fd,'w') as output:
+        json.dump(value,output);output.write('\n');output.flush();os.fsync(output.fileno())
+    pending.replace(target)
+    os.sync()
+    return value
+
+
+def merge_database_journal(result,checkpoint,suite):
+    """Only a bound failed root checkpoint may enrich an already failed DB result."""
+    if (not isinstance(result,dict) or result.get('result')!='failed'
+            or result.get('phase')!='rootless-database' or not isinstance(checkpoint,dict)
+            or set(checkpoint)!={'schema','suite','suite_sha256','result','phase','database_failure'}
+            or type(checkpoint['schema']) is not int or checkpoint['schema']!=1
+            or checkpoint['suite']!='offline-database-failure-v1'
+            or not isinstance(suite,str) or not re.fullmatch('[a-f0-9]{64}',suite) or checkpoint['suite_sha256']!=suite
+            or checkpoint['result']!='failed' or checkpoint['phase']!='rootless-database'):
+        return result
+    root=sanitize_database_failure(checkpoint['database_failure'])
+    if root is None or root!=checkpoint['database_failure'] or root.get('journal_scope')!='root-system-user-unit':
+        return result
+    current=sanitize_database_failure(result.get('database_failure')) or {
+        'state_capture':'unavailable','journal_capture':'unavailable'}
+    # Retain the guest's original current service state; this is journal metadata
+    # only. A failed optional read cannot replace already observed journal data.
+    if root['journal_capture']!='observed' and current['journal_capture']=='observed':
+        return result
+    for key in ('categories','journal_tail_truncated','journal_failure','journal_exit_code','journal_scope'):
+        current.pop(key,None)
+    current.update({key:value for key,value in root.items() if key.startswith('journal_') or key=='categories'})
+    return {**result,'database_failure':sanitize_database_failure(current)}
 
 
 def database_service_failure():
