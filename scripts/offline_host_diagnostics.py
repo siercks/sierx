@@ -83,7 +83,15 @@ DATABASE_ERROR_PATTERNS = {
     'address-in-use':b'address already in use', 'cgroup-error':b'cgroup',
     'postgres-fatal':b'fatal:', 'selinux-denial':b'avc:  denied',
     'out-of-memory':b'out of memory',
+    'network-helper-mentioned':b'slirp4netns', 'netavark-mentioned':b'netavark',
+    'pasta-mentioned':b'pasta', 'conmon-mentioned':b'conmon',
+    'executable-missing':b'executable file not found', 'unknown-flag':b'unknown flag',
+    'overlay-helper-mentioned':b'fuse-overlayfs', 'network-namespace-mentioned':b'network namespace',
 }
+DATABASE_RUNTIME_COMMANDS={'podman','crun','conmon','slirp4netns','pasta','netavark','fuse-overlayfs'}
+DATABASE_JOURNAL_SOURCES=DATABASE_RUNTIME_COMMANDS | {'systemd','other'}
+DATABASE_JOURNAL_COUNTS=('journal_records','journal_database_unit_records',
+                         'journal_runtime_error_records','journal_unclassified_error_records')
 HOST_PHASES = {'host-verify-inputs','host-extract-os','host-configure-os','host-unpack-delivery',
                'host-create-filesystem','host-launch','host-read-evidence'}
 DEPLOY_FAILURE_PHASES = {'actual-plan-apply', 'two-release-apply-previous',
@@ -253,7 +261,7 @@ def sanitize_database_failure(value):
     result = {key: value[key] if isinstance(value.get(key), str) and value[key] in captures else 'invalid'
               for key in ('state_capture', 'journal_capture')}
     scope=value.get('journal_scope')
-    if isinstance(scope,str) and scope in {'guest-user','root-system-user-unit'}:
+    if isinstance(scope,str) and scope in {'guest-user','root-system-user-unit','root-synthetic-user'}:
         result['journal_scope']=scope
     reason=value.get('journal_failure')
     if isinstance(reason,str) and reason in {'command-exit','timeout','io-error'}:
@@ -285,11 +293,69 @@ def sanitize_database_failure(value):
             result.update(categories=sorted(set(categories)), journal_tail_truncated=truncated)
         else:
             result['journal_capture'] = 'invalid'
+    if scope=='root-synthetic-user' and result['journal_capture']=='observed':
+        counts={key:value.get(key) for key in DATABASE_JOURNAL_COUNTS}
+        sources=value.get('journal_sources')
+        size=value.get('journal_bytes')
+        if (all(type(number) is int and 0<=number<=40 for number in counts.values())
+                and isinstance(sources,dict) and set(sources)==DATABASE_JOURNAL_SOURCES
+                and all(type(number) is int and 0<=number<=40 for number in sources.values())
+                and sum(sources.values())==counts['journal_records']
+                and counts['journal_database_unit_records']<=counts['journal_records']
+                and counts['journal_unclassified_error_records']<=counts['journal_runtime_error_records']<=counts['journal_records']
+                and type(size) is int and 0<=size<=65536):
+            result.update(counts,journal_sources=sources,journal_bytes=size)
+        else:
+            result['journal_capture']='invalid'
+            result.pop('categories',None)
+            result.pop('journal_tail_truncated',None)
     return result
 
 
+def database_journal_records(raw,truncated):
+    """Count trusted UID matches; disclose only fixed components and pattern labels."""
+    result={'state_capture':'unavailable','journal_capture':'invalid',
+            'journal_scope':'root-synthetic-user'}
+    if not isinstance(raw,bytes) or len(raw)>65536 or type(truncated) is not bool:
+        return result
+    sources=dict.fromkeys(DATABASE_JOURNAL_SOURCES,0)
+    count=unit_count=error_count=unclassified=0
+    categories=set()
+    try:
+        for line in raw.splitlines():
+            if not line.strip():continue
+            record=json.loads(line)
+            if (not isinstance(record,dict) or record.get('_UID')!='1001'
+                    or not isinstance(record.get('MESSAGE'),str)):
+                return result
+            count+=1
+            if count>40:return result
+            command=record.get('_COMM')
+            source=command if isinstance(command,str) and command in DATABASE_JOURNAL_SOURCES else 'other'
+            sources[source]+=1
+            unit=record.get('_SYSTEMD_USER_UNIT')=='sierx-postgres.service' or record.get('USER_UNIT')=='sierx-postgres.service'
+            unit_count+=int(unit)
+            message=record['MESSAGE'].encode('utf-8').lower()
+            runtime_error=(source in DATABASE_RUNTIME_COMMANDS
+                and (message.startswith(b'error:') or b'level=error' in message or message.startswith(b'fatal:')))
+            if runtime_error:error_count+=1
+            selected={key for key,pattern in DATABASE_ERROR_PATTERNS.items() if pattern in message} if unit or runtime_error else set()
+            categories.update(selected)
+            if runtime_error and not selected:unclassified+=1
+    except (ValueError,UnicodeError):
+        return result
+    # A partial/lost journal window is diagnostic uncertainty, never evidence
+    # that an error or record was absent.
+    if truncated:return result
+    result.update(journal_capture='observed',categories=sorted(categories),
+                  journal_tail_truncated=False,journal_bytes=len(raw),journal_sources=sources,
+                  journal_records=count,journal_database_unit_records=unit_count,
+                  journal_runtime_error_records=error_count,journal_unclassified_error_records=unclassified)
+    return sanitize_database_failure(result)
+
+
 def checkpoint_database_journal(result,directory):
-    """Root-only, failed-only fixed guest unit query before its completion marker."""
+    """Root-only failed synthetic-user journal metadata before completion."""
     if not isinstance(result,dict) or result.get('result')!='failed' or result.get('phase')!='rootless-database':
         return None
     if os.geteuid()!=0:
@@ -301,21 +367,22 @@ def checkpoint_database_journal(result,directory):
     if not re.fullmatch('[a-f0-9]{64}',suite):
         raise ValueError('Missing database diagnostic suite identity')
     evidence={'state_capture':'unavailable','journal_capture':'unavailable',
-              'journal_scope':'root-system-user-unit'}
+              'journal_scope':'root-synthetic-user'}
     try:
         with tempfile.TemporaryFile() as output:
-            response=subprocess.run(('journalctl','--no-pager','--all','--output=cat',
-                '_UID=1001','_SYSTEMD_USER_UNIT=sierx-postgres.service','+',
-                '_UID=1001','USER_UNIT=sierx-postgres.service','-n','40'),
+            # Volatile guest journals may omit user-unit matches. Keep this
+            # broader UID-only context explicit; count exact DB unit records
+            # separately and classify only those or fixed runtime error sources.
+            response=subprocess.run(('journalctl','--no-pager','--all','--output=json',
+                '_UID=1001','-n','40'),
                 stdout=output,stderr=subprocess.DEVNULL,timeout=8)
             if response.returncode:
                 evidence['journal_failure']='command-exit'
                 if 0<=response.returncode<=255:
                     evidence['journal_exit_code']=response.returncode
             else:
-                size=output.tell();output.seek(max(0,size-65536));raw=output.read(65536).lower()
-                evidence.update(journal_capture='observed',journal_tail_truncated=size>65536,
-                    categories=sorted(key for key,pattern in DATABASE_ERROR_PATTERNS.items() if pattern in raw))
+                size=output.tell();output.seek(max(0,size-65536))
+                evidence=database_journal_records(output.read(65536),size>65536)
     except subprocess.TimeoutExpired:
         evidence['journal_failure']='timeout'
     except (OSError,subprocess.SubprocessError):
@@ -346,7 +413,7 @@ def merge_database_journal(result,checkpoint,suite):
             or checkpoint['result']!='failed' or checkpoint['phase']!='rootless-database'):
         return result
     root=sanitize_database_failure(checkpoint['database_failure'])
-    if root is None or root!=checkpoint['database_failure'] or root.get('journal_scope')!='root-system-user-unit':
+    if root is None or root!=checkpoint['database_failure'] or root.get('journal_scope') not in {'root-system-user-unit','root-synthetic-user'}:
         return result
     current=sanitize_database_failure(result.get('database_failure')) or {
         'state_capture':'unavailable','journal_capture':'unavailable'}
@@ -354,7 +421,8 @@ def merge_database_journal(result,checkpoint,suite):
     # only. A failed optional read cannot replace already observed journal data.
     if root['journal_capture']!='observed' and current['journal_capture']=='observed':
         return result
-    for key in ('categories','journal_tail_truncated','journal_failure','journal_exit_code','journal_scope'):
+    for key in list(current):
+        if key!='categories' and not key.startswith('journal_'):continue
         current.pop(key,None)
     current.update({key:value for key,value in root.items() if key.startswith('journal_') or key=='categories'})
     return {**result,'database_failure':sanitize_database_failure(current)}

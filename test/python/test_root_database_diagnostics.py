@@ -29,14 +29,54 @@ FAILED={'result':'failed','phase':'rootless-database','failure_type':'RuntimeErr
 
 
 class RootDatabaseDiagnosticsTests(unittest.TestCase):
+    def test_structured_counts_distinguish_empty_unclassified_and_scoped_runtime_errors(self):
+        empty=diagnostics.database_journal_records(b'',False)
+        self.assertEqual(empty['journal_capture'],'observed')
+        self.assertEqual(empty['journal_records'],0)
+        self.assertEqual(empty['journal_bytes'],0)
+        self.assertEqual(empty['categories'],[])
+        records=[{'_UID':'1001','_COMM':'podman','MESSAGE':'Error: private opaque failure'},
+                 {'_UID':'1001','_COMM':'private-command','MESSAGE':'Error: permission denied private credential'},
+                 {'_UID':'1001','_COMM':'crun','MESSAGE':'Error: slirp4netns executable file not found'}]
+        raw=('\n'.join(json.dumps(record) for record in records)+'\n').encode()
+        value=diagnostics.database_journal_records(raw,False)
+        self.assertEqual(value['journal_scope'],'root-synthetic-user')
+        self.assertEqual(value['journal_records'],3)
+        self.assertEqual(value['journal_database_unit_records'],0)
+        self.assertEqual(value['journal_runtime_error_records'],2)
+        self.assertEqual(value['journal_unclassified_error_records'],1)
+        self.assertEqual(value['categories'],['executable-missing','network-helper-mentioned'])
+        self.assertEqual(value['journal_sources']['other'],1)
+        self.assertNotIn('private',json.dumps(value))
+        self.assertNotIn('permission-denied',value['categories'])
+
+    def test_wrong_uid_malformed_truncated_and_inconsistent_counts_are_inconclusive(self):
+        record={'_UID':'1001','_COMM':'podman','MESSAGE':'Error: private opaque'}
+        for raw,truncated in ((b'-- No entries --',False),(b'{broken private',False),
+              (json.dumps({**record,'_UID':'0'}).encode(),False),
+              (json.dumps({**record,'MESSAGE':[1,2]}).encode(),False),
+              ((json.dumps(record)+'\n').encode()*41,False),
+              (b'x'*65537,False),(json.dumps(record).encode(),True)):
+            with self.subTest(length=len(raw),truncated=truncated):
+                value=diagnostics.database_journal_records(raw,truncated)
+                self.assertEqual(value['journal_capture'],'invalid')
+                self.assertNotIn('categories',value)
+                self.assertNotIn('private',json.dumps(value))
+        valid=diagnostics.database_journal_records(json.dumps(record).encode(),False)
+        for key,item in (('journal_records',True),('journal_records',2),
+                         ('journal_database_unit_records',2),('journal_runtime_error_records',0),
+                         ('journal_unclassified_error_records',2),('journal_bytes',65537),
+                         ('journal_sources',{'private':1})):
+            planted={**valid,key:item}
+            self.assertEqual(diagnostics.sanitize_database_failure(planted)['journal_capture'],'invalid')
+
     def checkpoint(self,directory,response=None,error=None):
         def run(args,*,stdout,stderr,timeout):
-            self.assertEqual(args,('journalctl','--no-pager','--all','--output=cat',
-                '_UID=1001','_SYSTEMD_USER_UNIT=sierx-postgres.service','+',
-                '_UID=1001','USER_UNIT=sierx-postgres.service','-n','40'))
+            self.assertEqual(args,('journalctl','--no-pager','--all','--output=json','_UID=1001','-n','40'))
             self.assertEqual(stderr,subprocess.DEVNULL);self.assertEqual(timeout,8)
             if error:raise error
-            stdout.write(b'private credential crun: keyring: Operation not permitted\n')
+            stdout.write((json.dumps({'_UID':'1001','_COMM':'podman','_SYSTEMD_USER_UNIT':'sierx-postgres.service',
+                'MESSAGE':'Error: private credential crun: keyring: Operation not permitted'})+'\n').encode())
             return subprocess.CompletedProcess(args,response or 0)
         with patch.object(diagnostics.os,'geteuid',return_value=0), \
                 patch.object(diagnostics.subprocess,'run',side_effect=run):
@@ -58,7 +98,9 @@ class RootDatabaseDiagnosticsTests(unittest.TestCase):
                              ['keyring-error','operation-not-permitted','runtime-crun-error'])
             self.assertEqual(merged['command_exit_code'],1)
             self.assertEqual(merged['result'],'failed')
-            self.assertEqual(merged['database_failure']['journal_scope'],'root-system-user-unit')
+            self.assertEqual(merged['database_failure']['journal_scope'],'root-synthetic-user')
+            self.assertEqual(merged['database_failure']['journal_records'],1)
+            self.assertEqual(merged['database_failure']['journal_database_unit_records'],1)
             self.assertEqual(diagnostics.sanitize_failure(merged),merged)
             with self.assertRaises(ValueError):self.checkpoint(directory)
 
